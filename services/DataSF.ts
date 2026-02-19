@@ -151,11 +151,8 @@ export interface DevelopmentProject {
  * @returns      Array of DevelopmentProject records ordered by current_status_date DESC.
  */
 export async function fetchDevelopmentPipeline(limit = 500): Promise<DevelopmentProject[]> {
-  const { minLat, minLon, maxLat, maxLon } = DISTRICT_3_BBOX;
   const params = new URLSearchParams({
-    $where: `within_box(location, ${minLat}, ${minLon}, ${maxLat}, ${maxLon})`,
     $limit: String(limit),
-    $order: 'current_status_date DESC',
   });
   return socrataFetch<DevelopmentProject>('k55i-dnjd', params);
 }
@@ -200,11 +197,8 @@ export interface ZoningDistrict {
  * @returns      Array of ZoningDistrict records ordered by zoning_sim ASC.
  */
 export async function fetchZoningDistricts(limit = 200): Promise<ZoningDistrict[]> {
-  const { minLat, minLon, maxLat, maxLon } = DISTRICT_3_BBOX;
   const params = new URLSearchParams({
-    $where: `within_box(the_geom, ${minLat}, ${minLon}, ${maxLat}, ${maxLon})`,
     $limit: String(limit),
-    $order: 'zoning_sim ASC',
   });
   return socrataFetch<ZoningDistrict>('ibu8-4ccn', params);
 }

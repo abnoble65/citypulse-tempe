@@ -13,6 +13,7 @@ import {
   fetchDevelopmentPipeline,
   fetchZoningDistricts,
 } from '../services/DataSF';
+import { aggregateDistrictData } from '../services/aggregator';
 
 async function main(): Promise<void> {
   console.log('\n── Building Permits ─────────────────────────────────────');
@@ -29,6 +30,10 @@ async function main(): Promise<void> {
   const zoning = await fetchZoningDistricts(10);
   console.log(`Total records: ${zoning.length}`);
   console.log('First result:', JSON.stringify(zoning[0], null, 2));
+
+  console.log('\n── Aggregated District Data ─────────────────────────────');
+  const aggregated = await aggregateDistrictData();
+  console.log(JSON.stringify(aggregated, null, 2));
 }
 
 main().catch((err) => {
