@@ -1,18 +1,24 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import NavBar from '../components/NavBar';
-import { parseBriefingSections } from '../services/briefing';
+import { parseBriefingSections, type DistrictData } from '../services/briefing';
 
 export default function Briefing() {
-  const { state } = useLocation() as { state?: { briefingText?: string } };
+  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData } };
   const navigate = useNavigate();
   const briefingText = state?.briefingText ?? '';
+  const aggregatedData = state?.aggregatedData;
   const sections = parseBriefingSections(briefingText);
 
   return (
     <div style={{ minHeight: '100vh', background: '#1B4F72' }}>
-      <NavBar briefingText={briefingText} />
+      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} />
 
       <main style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 24px' }}>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+          <img src="/CityPulse_Logo1_Fun.png" alt="CityPulse" style={{ width: '120px' }} />
+        </div>
+
         {/* Section label */}
         <div style={{ marginBottom: '24px' }}>
           <span
@@ -75,7 +81,7 @@ export default function Briefing() {
         {sections.briefing && (
           <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
             <button
-              onClick={() => navigate('/signals', { state: { briefingText } })}
+              onClick={() => navigate('/charts', { state: { briefingText, aggregatedData } })}
               style={{
                 background: '#2E86C1',
                 color: '#fff',
@@ -87,7 +93,7 @@ export default function Briefing() {
                 cursor: 'pointer',
               }}
             >
-              Signals &amp; Zoning →
+              Charts →
             </button>
           </div>
         )}
