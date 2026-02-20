@@ -16,7 +16,7 @@ export default function Briefing() {
       <main style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 24px' }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <img src="/CityPulse_Logo1_Fun.png" alt="CityPulse" style={{ width: '120px' }} />
+          <img src="/CityPulse_Logo1_Fun.png" alt="CityPulse" style={{ width: '180px' }} />
         </div>
 
         {/* Section label */}
