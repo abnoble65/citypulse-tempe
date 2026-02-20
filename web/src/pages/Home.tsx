@@ -11,8 +11,8 @@ export default function Home() {
     setLoading(true);
     setError(null);
     try {
-      const briefingText = await generateBriefing();
-      navigate('/briefing', { state: { briefingText } });
+      const { text: briefingText, data: aggregatedData } = await generateBriefing();
+      navigate('/briefing', { state: { briefingText, aggregatedData } });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
     } finally {
@@ -50,29 +50,11 @@ export default function Home() {
         >
           SF District 3
         </span>
-        <h1
-          style={{
-            fontSize: 'clamp(36px, 6vw, 64px)',
-            fontWeight: 800,
-            color: '#fff',
-            letterSpacing: '-1px',
-            lineHeight: 1.1,
-            margin: '0 0 8px',
-          }}
-        >
-          CityPulse
-        </h1>
-        <p
-          style={{
-            color: 'rgba(255,255,255,0.55)',
-            fontSize: '16px',
-            maxWidth: '380px',
-            lineHeight: 1.6,
-            margin: '0 auto',
-          }}
-        >
-          Urban intelligence for North Beach, Chinatown, Nob Hill, Russian Hill &amp; Telegraph Hill.
-        </p>
+        <img
+          src="/CityPulse_Logo1_Fun.png"
+          alt="CityPulse"
+          style={{ width: '180px', display: 'block', margin: '0 auto' }}
+        />
       </div>
 
       {/* Card */}
