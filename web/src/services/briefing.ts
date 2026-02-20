@@ -22,6 +22,14 @@ export interface BriefingSections {
   outlook: string;
 }
 
+function cleanSection(text: string): string {
+  return text
+    .split('\n')
+    .filter((line) => line.trim() !== '---' && !line.trimStart().startsWith('##'))
+    .join('\n')
+    .trim();
+}
+
 export function parseBriefingSections(text: string): BriefingSections {
   const headings = ['THE BRIEFING', 'THE SIGNAL', 'THE ZONING CONTEXT', 'THE OUTLOOK'];
   const keys: (keyof BriefingSections)[] = ['briefing', 'signal', 'zoningContext', 'outlook'];
@@ -36,7 +44,7 @@ export function parseBriefingSections(text: string): BriefingSections {
       i < headings.length - 1 ? text.indexOf(headings[i + 1], contentStart) : -1;
     const contentEnd = nextIdx === -1 ? text.length : nextIdx;
 
-    result[keys[i]] = text.slice(contentStart, contentEnd).trim();
+    result[keys[i]] = cleanSection(text.slice(contentStart, contentEnd));
   }
 
   return result;
