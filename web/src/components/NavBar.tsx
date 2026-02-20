@@ -1,17 +1,20 @@
 import { useNavigate, useLocation } from 'react-router-dom';
+import type { DistrictData } from '../services/briefing';
 
 const NAV_ITEMS = [
   { label: 'Home', path: '/' },
   { label: 'Briefing', path: '/briefing' },
+  { label: 'Charts', path: '/charts' },
   { label: 'Signals', path: '/signals' },
   { label: 'Outlook', path: '/outlook' },
 ];
 
 interface Props {
   briefingText?: string;
+  aggregatedData?: DistrictData;
 }
 
-export default function NavBar({ briefingText }: Props) {
+export default function NavBar({ briefingText, aggregatedData }: Props) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
@@ -19,7 +22,7 @@ export default function NavBar({ briefingText }: Props) {
     if (path === '/') {
       navigate(path);
     } else {
-      navigate(path, briefingText ? { state: { briefingText } } : undefined);
+      navigate(path, { state: { briefingText, aggregatedData } });
     }
   }
 
@@ -38,18 +41,11 @@ export default function NavBar({ briefingText }: Props) {
         zIndex: 100,
       }}
     >
-      <span
-        style={{
-          color: '#2E86C1',
-          fontWeight: 700,
-          fontSize: '17px',
-          letterSpacing: '0.5px',
-          marginRight: '20px',
-          flexShrink: 0,
-        }}
-      >
-        CityPulse
-      </span>
+      <img
+        src="/CityPulse_Logo1_Fun.png"
+        alt="CityPulse"
+        style={{ height: '40px', marginRight: '20px', flexShrink: 0 }}
+      />
 
       {NAV_ITEMS.map((item) => {
         const active = pathname === item.path;
