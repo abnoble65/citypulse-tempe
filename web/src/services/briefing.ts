@@ -1,17 +1,15 @@
 /**
  * services/briefing.ts — CityPulse web
  *
- * Browser-compatible briefing generator. Calls the Anthropic API through the
- * Vite dev-server proxy at /api/anthropic (configured in vite.config.ts).
- * The API key never leaves the server — it is injected by the proxy.
+ * Calls the Anthropic API directly from the browser using the key exposed
+ * via VITE_ANTHROPIC_API_KEY in web/.env.
  */
 
 import Anthropic from '@anthropic-ai/sdk';
 import { aggregateDistrictData } from './aggregator';
 
 const client = new Anthropic({
-  apiKey: 'placeholder',
-  baseURL: 'http://localhost:5173/api/anthropic',
+  apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY as string,
   dangerouslyAllowBrowser: true,
 });
 
