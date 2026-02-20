@@ -1,8 +1,8 @@
 /**
  * services/DataSF.ts — CityPulse web
  *
- * Browser-compatible version. The optional DataSF app token is read from
- * import.meta.env.VITE_DATASF_APP_TOKEN (set in .env.local).
+ * Fetches SF open data via the Socrata API (unauthenticated).
+ * Rate limits are sufficient for demo use without an app token.
  */
 
 const BASE_URL = 'https://data.sfgov.org/resource';
@@ -10,12 +10,7 @@ const SUPERVISOR_DISTRICT = '3';
 
 
 function buildHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const appToken = import.meta.env.VITE_DATASF_APP_TOKEN as string | undefined;
-  if (appToken) {
-    headers['X-App-Token'] = appToken;
-  }
-  return headers;
+  return { Accept: 'application/json' };
 }
 
 async function socrataFetch<T>(datasetId: string, params: URLSearchParams): Promise<T[]> {
