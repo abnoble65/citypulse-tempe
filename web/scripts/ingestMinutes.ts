@@ -9,7 +9,7 @@
  *
  * Required environment variables (can be placed in a .env file):
  *   VITE_SUPABASE_URL
- *   VITE_SUPABASE_ANON_KEY
+ *   VITE_SUPABASE_SERVICE_KEY
  *   VITE_ANTHROPIC_API_KEY
  */
 
@@ -40,7 +40,7 @@ loadEnv();
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const SUPABASE_URL     = process.env.VITE_SUPABASE_URL!;
-const SUPABASE_KEY     = process.env.VITE_SUPABASE_ANON_KEY!;
+const SUPABASE_KEY     = process.env.VITE_SUPABASE_SERVICE_KEY!;
 const ANTHROPIC_KEY    = process.env.VITE_ANTHROPIC_API_KEY!;
 const RATE_LIMIT_MS    = 2000;
 const START_DATE       = new Date('2026-02-21');
@@ -48,7 +48,7 @@ const END_DATE         = new Date('1998-01-01');
 const BASE_URL         = 'https://citypln-m-extnl.sfgov.org/Commissions/Agenda_or_Minutes';
 
 if (!SUPABASE_URL || !SUPABASE_KEY || !ANTHROPIC_KEY) {
-  console.error('Missing required environment variables. Check VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_ANTHROPIC_API_KEY.');
+  console.error('Missing required environment variables. Check VITE_SUPABASE_URL, VITE_SUPABASE_SERVICE_KEY, VITE_ANTHROPIC_API_KEY.');
   process.exit(1);
 }
 
