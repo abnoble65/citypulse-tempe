@@ -44,7 +44,7 @@ loadEnv();
 const SUPABASE_URL  = process.env.VITE_SUPABASE_URL!;
 const SUPABASE_KEY  = process.env.VITE_SUPABASE_SERVICE_KEY!;
 const ANTHROPIC_KEY = process.env.VITE_ANTHROPIC_API_KEY!;
-const RATE_LIMIT_MS = 2000;
+const RATE_LIMIT_MS = 65_000; // ~30-50k tokens/PDF; stay under 10k tokens/min limit
 const ARCHIVE_INDEX = 'https://sfplanning.org/cpc-hearing-archives';
 
 if (!SUPABASE_URL || !SUPABASE_KEY || !ANTHROPIC_KEY) {
@@ -77,6 +77,8 @@ interface ExtractedProject {
     commissioner_name: string;
     comment_text: string;
   }>;
+  shadow_flag?: boolean;
+  shadow_details?: string;
 }
 
 interface ExtractedMinutes {
@@ -160,7 +162,9 @@ Return ONLY valid JSON with this exact structure:
       ],
       "comments": [
         { "commissioner_name": "string", "comment_text": "string" }
-      ]
+      ],
+      "shadow_flag": "boolean",
+      "shadow_details": "string or null"
     }
   ]
 }
@@ -170,37 +174,65 @@ Rules:
 - Normalise vote values to: aye, nay, absent, recused, abstain.
 - Keep comment_text concise but preserve meaning.
 - If a field is not present in the minutes, use null.
+- If a project mentions any of: "shadow", "Section 295", "shadow findings", "Recreation and Park", "open space impact", or "net new shadow", set shadow_flag to true. For flagged projects, populate shadow_details with: which open spaces are named, whether shadow findings were adopted or denied, and any conditions attached. For non-flagged projects, set shadow_flag to false and shadow_details to null.
 - Return ONLY the JSON object — no markdown, no explanation.`;
 
-async function extractWithClaude(pdfBase64: string): Promise<ExtractedMinutes | null> {
-  try {
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      messages: [{
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
-          },
-          {
-            type: 'text',
-            text: 'Extract all projects from these Planning Commission minutes.',
-          },
-        ],
-      }],
-    });
+const MAX_RETRIES = 3;
+const INITIAL_BACKOFF_MS = 60_000; // 60 seconds
 
-    const content = message.content[0];
-    if (content.type !== 'text') return null;
-
-    return JSON.parse(content.text) as ExtractedMinutes;
-  } catch (err) {
-    console.error('  Claude extraction error:', err);
-    return null;
+function isRateLimitError(err: unknown): boolean {
+  if (err && typeof err === 'object') {
+    const e = err as Record<string, unknown>;
+    if (e.status === 429) return true;
+    if (typeof e.message === 'string' && e.message.includes('rate_limit')) return true;
+    const inner = e.error as Record<string, unknown> | undefined;
+    if (inner && typeof inner === 'object') {
+      const nested = inner.error as Record<string, unknown> | undefined;
+      if (nested?.type === 'rate_limit_error') return true;
+    }
   }
+  return false;
+}
+
+async function extractWithClaude(pdfBase64: string): Promise<ExtractedMinutes | null> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const message = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4096,
+        system: SYSTEM_PROMPT,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
+            },
+            {
+              type: 'text',
+              text: 'Extract all projects from these Planning Commission minutes.',
+            },
+          ],
+        }],
+      });
+
+      const content = message.content[0];
+      if (content.type !== 'text') return null;
+
+      const raw = content.text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
+      return JSON.parse(raw) as ExtractedMinutes;
+    } catch (err) {
+      if (isRateLimitError(err) && attempt < MAX_RETRIES) {
+        const backoff = INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+        process.stdout.write(`rate limited, retrying in ${backoff / 1000}s (attempt ${attempt + 1}/${MAX_RETRIES})… `);
+        await sleep(backoff);
+        continue;
+      }
+      console.error('  Claude extraction error:', err);
+      return null;
+    }
+  }
+  return null;
 }
 
 // ── Supabase upsert ───────────────────────────────────────────────────────────
@@ -231,6 +263,8 @@ async function insertProjects(hearingId: string, projects: ExtractedProject[]): 
         project_description: project.project_description ?? null,
         action:              project.action               ?? null,
         motion_number:       project.motion_number        ?? null,
+        shadow_flag:         project.shadow_flag          ?? false,
+        shadow_details:      project.shadow_details       ?? null,
       })
       .select('id')
       .single();
