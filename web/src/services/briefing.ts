@@ -6,7 +6,9 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { aggregateDistrictData } from './aggregator';
+import { aggregateDistrictData, type DistrictData } from './aggregator';
+
+export type { DistrictData };
 
 const client = new Anthropic({
   apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY as string,
@@ -50,7 +52,7 @@ export function parseBriefingSections(text: string): BriefingSections {
   return result;
 }
 
-export async function generateBriefing(): Promise<string> {
+export async function generateBriefing(): Promise<{ text: string; data: DistrictData }> {
   const data = await aggregateDistrictData();
 
   const message = await client.messages.create({
@@ -70,5 +72,5 @@ export async function generateBriefing(): Promise<string> {
     throw new Error(`Unexpected response block type: ${block.type}`);
   }
 
-  return block.text;
+  return { text: block.text, data };
 }

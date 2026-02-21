@@ -1,18 +1,19 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import NavBar from '../components/NavBar';
-import { parseBriefingSections } from '../services/briefing';
+import { parseBriefingSections, type DistrictData } from '../services/briefing';
 
 export default function Signals() {
-  const { state } = useLocation() as { state?: { briefingText?: string } };
+  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData } };
   const navigate = useNavigate();
   const briefingText = state?.briefingText ?? '';
+  const aggregatedData = state?.aggregatedData;
   const sections = parseBriefingSections(briefingText);
 
   const hasContent = sections.signal || sections.zoningContext;
 
   return (
     <div style={{ minHeight: '100vh', background: '#1B4F72' }}>
-      <NavBar briefingText={briefingText} />
+      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} />
 
       <main style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 24px' }}>
         <div style={{ marginBottom: '24px' }}>
@@ -66,13 +67,13 @@ export default function Signals() {
         {hasContent && (
           <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between' }}>
             <button
-              onClick={() => navigate('/briefing', { state: { briefingText } })}
+              onClick={() => navigate('/charts', { state: { briefingText, aggregatedData } })}
               style={navButtonStyle('secondary')}
             >
-              ← The Briefing
+              ← Charts
             </button>
             <button
-              onClick={() => navigate('/outlook', { state: { briefingText } })}
+              onClick={() => navigate('/outlook', { state: { briefingText, aggregatedData } })}
               style={navButtonStyle('primary')}
             >
               Outlook →

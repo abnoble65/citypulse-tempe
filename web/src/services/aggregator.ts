@@ -26,6 +26,7 @@ export interface PermitSummary {
   total: number;
   by_type: Record<string, number>;
   by_status: Record<string, number>;
+  cost_by_type: Record<string, number>;
   total_estimated_cost_usd: number;
   notable_permits: NotablePermit[];
 }
@@ -92,7 +93,13 @@ function buildPermitSummary(permits: BuildingPermit[]): PermitSummary {
       status: p.status,
     }));
 
-  return { total: permits.length, by_type, by_status, total_estimated_cost_usd, notable_permits };
+  const cost_by_type: Record<string, number> = {};
+  for (const p of permits) {
+    const type = p.permit_type_definition ?? p.permit_type;
+    cost_by_type[type] = (cost_by_type[type] ?? 0) + parseCost(p.revised_cost ?? p.estimated_cost);
+  }
+
+  return { total: permits.length, by_type, by_status, cost_by_type, total_estimated_cost_usd, notable_permits };
 }
 
 function buildPipelineSummary(projects: DevelopmentProject[]): PipelineSummary {

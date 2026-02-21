@@ -1,16 +1,17 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import NavBar from '../components/NavBar';
-import { parseBriefingSections } from '../services/briefing';
+import { parseBriefingSections, type DistrictData } from '../services/briefing';
 
 export default function Outlook() {
-  const { state } = useLocation() as { state?: { briefingText?: string } };
+  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData } };
   const navigate = useNavigate();
   const briefingText = state?.briefingText ?? '';
+  const aggregatedData = state?.aggregatedData;
   const sections = parseBriefingSections(briefingText);
 
   return (
     <div style={{ minHeight: '100vh', background: '#1B4F72' }}>
-      <NavBar briefingText={briefingText} />
+      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} />
 
       <main style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 24px' }}>
         <div style={{ marginBottom: '24px' }}>
@@ -111,7 +112,7 @@ export default function Outlook() {
             {/* Back nav */}
             <div style={{ marginTop: '16px' }}>
               <button
-                onClick={() => navigate('/signals', { state: { briefingText } })}
+                onClick={() => navigate('/signals', { state: { briefingText, aggregatedData } })}
                 style={{
                   background: 'rgba(255,255,255,0.08)',
                   color: '#fff',
