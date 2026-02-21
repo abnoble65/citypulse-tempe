@@ -131,37 +131,19 @@ async function fetchAllMinutesUrls(): Promise<HearingLink[]> {
   return links;
 }
 
-// ── PDF fetch & text extraction ───────────────────────────────────────────────
+// ── PDF fetch ─────────────────────────────────────────────────────────────────
 
-async function fetchPdfText(url: string): Promise<string | null> {
+async function fetchPdfBase64(url: string): Promise<string | null> {
   const res = await fetch(url);
   if (!res.ok) return null;
-
   const buffer = await res.arrayBuffer();
-
-  // Extract raw text from PDF byte stream via BT/ET block parsing.
-  // These city archive PDFs are plain-text-layer PDFs so this is reliable.
-  const raw = Buffer.from(buffer).toString('latin1');
-  const textChunks: string[] = [];
-  const btRegex = /BT([\s\S]*?)ET/g;
-  let match: RegExpExecArray | null;
-  while ((match = btRegex.exec(raw)) !== null) {
-    const block = match[1];
-    const tjRegex = /\(([^)]*)\)\s*Tj/g;
-    let tj: RegExpExecArray | null;
-    while ((tj = tjRegex.exec(block)) !== null) {
-      textChunks.push(tj[1]);
-    }
-  }
-
-  const text = textChunks.join(' ').replace(/\s+/g, ' ').trim();
-  return text.length > 100 ? text : null;
+  return Buffer.from(buffer).toString('base64');
 }
 
-// ── Claude extraction ─────────────────────────────────────────────────────────
+// ── Claude extraction (native PDF support) ────────────────────────────────────
 
 const SYSTEM_PROMPT = `You are an expert at parsing San Francisco Planning Commission meeting minutes.
-Extract all planning cases/projects from the provided minutes text and return a single JSON object.
+Extract all planning cases/projects from the provided PDF and return a single JSON object.
 
 Return ONLY valid JSON with this exact structure:
 {
@@ -190,15 +172,25 @@ Rules:
 - If a field is not present in the minutes, use null.
 - Return ONLY the JSON object — no markdown, no explanation.`;
 
-async function extractWithClaude(text: string): Promise<ExtractedMinutes | null> {
-  const truncated = text.slice(0, 80_000);
-
+async function extractWithClaude(pdfBase64: string): Promise<ExtractedMinutes | null> {
   try {
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: `Extract all projects from these Planning Commission minutes:\n\n${truncated}` }],
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
+          },
+          {
+            type: 'text',
+            text: 'Extract all projects from these Planning Commission minutes.',
+          },
+        ],
+      }],
     });
 
     const content = message.content[0];
@@ -291,17 +283,17 @@ async function main() {
     }
 
     process.stdout.write(`[${dateStr}] Fetching PDF… `);
-    const text = await fetchPdfText(url);
+    const pdfBase64 = await fetchPdfBase64(url);
 
-    if (!text) {
-      process.stdout.write('no text extracted\n');
+    if (!pdfBase64) {
+      process.stdout.write('not found\n');
       failed++;
       await sleep(RATE_LIMIT_MS);
       continue;
     }
 
-    process.stdout.write(`${text.length} chars — extracting… `);
-    const extracted = await extractWithClaude(text);
+    process.stdout.write(`${Math.round(pdfBase64.length * 0.75 / 1024)}KB — extracting… `);
+    const extracted = await extractWithClaude(pdfBase64);
 
     if (!extracted) {
       process.stdout.write('extraction failed\n');
