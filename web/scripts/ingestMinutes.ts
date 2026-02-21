@@ -1,13 +1,15 @@
 /**
  * SF Planning Commission Minutes Ingestion Script
  *
- * Walks backward from today to 1998-01-01, fetches each PDF from the SF Planning
- * Commission archive, extracts structured data via Claude, and upserts into Supabase.
+ * 1. Fetches the hearing archive index at https://sfplanning.org/cpc-hearing-archives
+ * 2. Parses every Minutes PDF link from the HTML
+ * 3. Processes each PDF in descending date order: fetches, extracts via Claude,
+ *    and upserts structured data into Supabase.
  *
  * Usage:
  *   npx tsx scripts/ingestMinutes.ts
  *
- * Required environment variables (can be placed in a .env file):
+ * Required environment variables (in .env):
  *   VITE_SUPABASE_URL
  *   VITE_SUPABASE_SERVICE_KEY
  *   VITE_ANTHROPIC_API_KEY
@@ -39,13 +41,11 @@ loadEnv();
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const SUPABASE_URL     = process.env.VITE_SUPABASE_URL!;
-const SUPABASE_KEY     = process.env.VITE_SUPABASE_SERVICE_KEY!;
-const ANTHROPIC_KEY    = process.env.VITE_ANTHROPIC_API_KEY!;
-const RATE_LIMIT_MS    = 2000;
-const START_DATE       = new Date('2026-02-21');
-const END_DATE         = new Date('1998-01-01');
-const BASE_URL         = 'https://citypln-m-extnl.sfgov.org/Commissions/Agenda_or_Minutes';
+const SUPABASE_URL  = process.env.VITE_SUPABASE_URL!;
+const SUPABASE_KEY  = process.env.VITE_SUPABASE_SERVICE_KEY!;
+const ANTHROPIC_KEY = process.env.VITE_ANTHROPIC_API_KEY!;
+const RATE_LIMIT_MS = 2000;
+const ARCHIVE_INDEX = 'https://sfplanning.org/cpc-hearing-archives';
 
 if (!SUPABASE_URL || !SUPABASE_KEY || !ANTHROPIC_KEY) {
   console.error('Missing required environment variables. Check VITE_SUPABASE_URL, VITE_SUPABASE_SERVICE_KEY, VITE_ANTHROPIC_API_KEY.');
@@ -56,6 +56,11 @@ const supabase  = createClient(SUPABASE_URL, SUPABASE_KEY);
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_KEY });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+interface HearingLink {
+  dateStr: string; // YYYY-MM-DD
+  url:     string;
+}
 
 interface ExtractedProject {
   case_number?:         string;
@@ -80,51 +85,63 @@ interface ExtractedMinutes {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function pad(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
-function dateToFilename(date: Date): string {
-  const y = date.getFullYear();
-  const m = pad(date.getMonth() + 1);
-  const d = pad(date.getDate());
-  return `${y}${m}${d}_cpc_min.pdf`;
-}
-
-function pdfUrl(date: Date): string {
-  return `${BASE_URL}/${dateToFilename(date)}`;
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Returns every Thursday between START_DATE and END_DATE in descending order.
- *  Planning Commission meetings are typically on Thursdays. */
-function allThursdays(): Date[] {
-  const dates: Date[] = [];
-  const cursor = new Date(START_DATE);
-  // Advance/rewind to nearest Thursday
-  while (cursor.getDay() !== 4) cursor.setDate(cursor.getDate() - 1);
-  while (cursor >= END_DATE) {
-    dates.push(new Date(cursor));
-    cursor.setDate(cursor.getDate() - 7);
-  }
-  return dates;
+/** Parse YYYYMMDD string from a PDF filename into a YYYY-MM-DD date string. */
+function parseDateFromUrl(url: string): string | null {
+  const match = url.match(/\/(\d{4})(\d{2})(\d{2})_(?:cpc|cal)_min\.pdf/i);
+  if (!match) return null;
+  return `${match[1]}-${match[2]}-${match[3]}`;
 }
 
-// ── PDF fetch ─────────────────────────────────────────────────────────────────
+// ── Archive index fetch ───────────────────────────────────────────────────────
+
+/** Fetch the archive index page and return all minutes PDF links, newest first. */
+async function fetchAllMinutesUrls(): Promise<HearingLink[]> {
+  console.log(`Fetching archive index: ${ARCHIVE_INDEX}`);
+  const res = await fetch(ARCHIVE_INDEX);
+  if (!res.ok) throw new Error(`Failed to fetch archive index: ${res.status} ${res.statusText}`);
+
+  const html = await res.text();
+
+  // Match all hrefs pointing to minutes PDFs on the sfgov archive server.
+  // Handles both _cpc_min.pdf and _cal_min.pdf variants.
+  const linkRegex = /href=["'](https?:\/\/citypln-m-extnl\.sfgov\.org[^"']*?(?:cpc|cal)_min\.pdf)["']/gi;
+  const seen = new Set<string>();
+  const links: HearingLink[] = [];
+
+  let m: RegExpExecArray | null;
+  while ((m = linkRegex.exec(html)) !== null) {
+    const url = m[1];
+    if (seen.has(url)) continue;
+    seen.add(url);
+
+    const dateStr = parseDateFromUrl(url);
+    if (!dateStr) continue;
+
+    links.push({ dateStr, url });
+  }
+
+  // Sort newest → oldest
+  links.sort((a, b) => b.dateStr.localeCompare(a.dateStr));
+
+  console.log(`Found ${links.length} minutes PDFs in archive index.`);
+  return links;
+}
+
+// ── PDF fetch & text extraction ───────────────────────────────────────────────
 
 async function fetchPdfText(url: string): Promise<string | null> {
   const res = await fetch(url);
-  if (!res.ok) return null; // PDF not found for this date — skip silently
+  if (!res.ok) return null;
 
   const buffer = await res.arrayBuffer();
-  const bytes   = new Uint8Array(buffer);
 
-  // Extract raw ASCII text from PDF byte stream (basic heuristic — good enough
-  // for structured minutes which are plain-text PDFs from the city archive).
-  const raw = Buffer.from(bytes).toString('latin1');
+  // Extract raw text from PDF byte stream via BT/ET block parsing.
+  // These city archive PDFs are plain-text-layer PDFs so this is reliable.
+  const raw = Buffer.from(buffer).toString('latin1');
   const textChunks: string[] = [];
   const btRegex = /BT([\s\S]*?)ET/g;
   let match: RegExpExecArray | null;
@@ -174,7 +191,7 @@ Rules:
 - Return ONLY the JSON object — no markdown, no explanation.`;
 
 async function extractWithClaude(text: string): Promise<ExtractedMinutes | null> {
-  const truncated = text.slice(0, 80_000); // Stay within context limits
+  const truncated = text.slice(0, 80_000);
 
   try {
     const message = await anthropic.messages.create({
@@ -196,11 +213,11 @@ async function extractWithClaude(text: string): Promise<ExtractedMinutes | null>
 
 // ── Supabase upsert ───────────────────────────────────────────────────────────
 
-async function upsertHearing(date: Date, url: string): Promise<string | null> {
+async function upsertHearing(dateStr: string, url: string): Promise<string | null> {
   const { data, error } = await supabase
     .from('hearings')
     .upsert(
-      { hearing_date: date.toISOString().slice(0, 10), pdf_url: url, processed_at: new Date().toISOString() },
+      { hearing_date: dateStr, pdf_url: url, processed_at: new Date().toISOString() },
       { onConflict: 'hearing_date' }
     )
     .select('id')
@@ -216,12 +233,12 @@ async function insertProjects(hearingId: string, projects: ExtractedProject[]): 
       .from('projects')
       .insert({
         hearing_id:          hearingId,
-        case_number:         project.case_number  ?? null,
-        address:             project.address       ?? null,
-        district:            project.district      ?? null,
+        case_number:         project.case_number          ?? null,
+        address:             project.address              ?? null,
+        district:            project.district             ?? null,
         project_description: project.project_description ?? null,
-        action:              project.action        ?? null,
-        motion_number:       project.motion_number ?? null,
+        action:              project.action               ?? null,
+        motion_number:       project.motion_number        ?? null,
       })
       .select('id')
       .single();
@@ -249,13 +266,11 @@ async function insertProjects(hearingId: string, projects: ExtractedProject[]): 
   }
 }
 
-// ── Already-processed check ───────────────────────────────────────────────────
-
-async function alreadyProcessed(date: Date): Promise<boolean> {
+async function alreadyProcessed(dateStr: string): Promise<boolean> {
   const { data } = await supabase
     .from('hearings')
     .select('id')
-    .eq('hearing_date', date.toISOString().slice(0, 10))
+    .eq('hearing_date', dateStr)
     .maybeSingle();
   return data !== null;
 }
@@ -263,19 +278,14 @@ async function alreadyProcessed(date: Date): Promise<boolean> {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const dates = allThursdays();
-  console.log(`Starting ingestion: ${dates.length} candidate Thursdays from ${START_DATE.toDateString()} back to ${END_DATE.toDateString()}`);
+  const hearings = await fetchAllMinutesUrls();
 
   let processed = 0;
   let skipped   = 0;
-  let notFound  = 0;
+  let failed    = 0;
 
-  for (const date of dates) {
-    const url = pdfUrl(date);
-    const dateStr = date.toISOString().slice(0, 10);
-
-    // Skip if already in DB
-    if (await alreadyProcessed(date)) {
+  for (const { dateStr, url } of hearings) {
+    if (await alreadyProcessed(dateStr)) {
       skipped++;
       continue;
     }
@@ -284,8 +294,8 @@ async function main() {
     const text = await fetchPdfText(url);
 
     if (!text) {
-      process.stdout.write('not found\n');
-      notFound++;
+      process.stdout.write('no text extracted\n');
+      failed++;
       await sleep(RATE_LIMIT_MS);
       continue;
     }
@@ -295,11 +305,12 @@ async function main() {
 
     if (!extracted) {
       process.stdout.write('extraction failed\n');
+      failed++;
       await sleep(RATE_LIMIT_MS);
       continue;
     }
 
-    const hearingId = await upsertHearing(date, url);
+    const hearingId = await upsertHearing(dateStr, url);
     if (hearingId) {
       await insertProjects(hearingId, extracted.projects);
       process.stdout.write(`saved ${extracted.projects.length} project(s)\n`);
@@ -309,7 +320,7 @@ async function main() {
     await sleep(RATE_LIMIT_MS);
   }
 
-  console.log(`\nDone. Processed: ${processed} | Already in DB: ${skipped} | Not found: ${notFound}`);
+  console.log(`\nDone. Processed: ${processed} | Already in DB: ${skipped} | Failed: ${failed}`);
 }
 
 main().catch((err) => {
