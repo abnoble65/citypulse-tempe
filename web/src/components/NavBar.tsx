@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { label: 'Charts', path: '/charts' },
   { label: 'Signals', path: '/signals' },
   { label: 'Outlook', path: '/outlook' },
+  { label: 'Commission', path: '/commission' },
 ];
 
 interface Props {

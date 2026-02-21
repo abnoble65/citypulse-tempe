@@ -7,6 +7,7 @@ import Briefing from './pages/Briefing';
 import Charts from './pages/Charts';
 import Signals from './pages/Signals';
 import Outlook from './pages/Outlook';
+import Commission from './pages/Commission';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -17,6 +18,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/charts" element={<Charts />} />
         <Route path="/signals" element={<Signals />} />
         <Route path="/outlook" element={<Outlook />} />
+        <Route path="/commission" element={<Commission />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,
