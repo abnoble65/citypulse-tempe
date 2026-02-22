@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { NavBar } from "./components/NavBar";
+import { SplashScreen } from "./components/SplashScreen";
 import { Home } from "./pages/Home";
 import { Briefing } from "./pages/Briefing";
 import { Charts } from "./pages/Charts";
@@ -10,6 +11,7 @@ import { generateBriefing } from "./services/briefing";
 import type { DistrictData } from "./services/briefing";
 
 export default function App() {
+  const [splashDone, setSplashDone] = useState(false);
   const [page, setPage] = useState("Home");
   const [briefingText, setBriefingText] = useState("");
   const [aggregatedData, setAggregatedData] = useState<DistrictData | null>(null);
@@ -52,6 +54,7 @@ export default function App() {
 
   return (
     <>
+      {!splashDone && <SplashScreen onComplete={() => setSplashDone(true)} />}
       {page !== "Home" && <NavBar activePage={page} onNavigate={setPage} />}
       {renderPage()}
     </>

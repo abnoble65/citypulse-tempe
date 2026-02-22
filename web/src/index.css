@@ -64,3 +64,14 @@ input:focus {
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
 }
+
+@keyframes pulse-draw {
+  from { stroke-dashoffset: 300; }
+  to   { stroke-dashoffset: 0; }
+}
+
+.pulse-draw {
+  stroke-dasharray: 300;
+  stroke-dashoffset: 300;
+  animation: pulse-draw 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
