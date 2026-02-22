@@ -62,22 +62,25 @@ function SectionCard({ title, children }: { title: string; children: React.React
         background: 'rgba(255,255,255,0.07)',
         border: '1px solid rgba(255,255,255,0.1)',
         borderRadius: '14px',
-        padding: '24px 28px',
+        padding: '20px 16px',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
       <h2
         style={{
-          fontSize: '12px',
+          fontSize: '11px',
           fontWeight: 700,
           color: '#2E86C1',
           letterSpacing: '1.5px',
           textTransform: 'uppercase',
-          margin: '0 0 20px',
+          margin: '0 0 16px',
+          textAlign: 'center',
         }}
       >
         {title}
       </h2>
-      {children}
+      <div style={{ flex: 1 }}>{children}</div>
     </div>
   );
 }
@@ -89,14 +92,14 @@ function StatusDonut({ byStatus }: { byStatus: Record<string, number> }) {
 
   return (
     <SectionCard title="Permit Status Breakdown">
-      <ResponsiveContainer width="100%" height={280}>
+      <ResponsiveContainer width="100%" height={300}>
         <PieChart>
           <Pie
             data={data}
             cx="50%"
-            cy="45%"
-            innerRadius={70}
-            outerRadius={110}
+            cy="42%"
+            innerRadius={55}
+            outerRadius={85}
             paddingAngle={2}
             dataKey="value"
           >
@@ -124,12 +127,12 @@ function StatusDonut({ byStatus }: { byStatus: Record<string, number> }) {
 // ── Chart 2: Count by type ────────────────────────────────────────────────────
 
 function CountByType({ byType }: { byType: Record<string, number> }) {
-  const data = toSortedEntries(byType).map((d) => ({ ...d, name: shortLabel(d.name) }));
+  const data = toSortedEntries(byType).map((d) => ({ ...d, name: shortLabel(d.name, 14) }));
 
   return (
     <SectionCard title="Permit Count by Type">
-      <ResponsiveContainer width="100%" height={Math.max(220, data.length * 36)}>
-        <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data} layout="vertical" margin={{ left: 4, right: 16, top: 4, bottom: 4 }}>
           <CartesianGrid horizontal={false} stroke={GRID_STROKE} />
           <XAxis
             type="number"
@@ -140,8 +143,8 @@ function CountByType({ byType }: { byType: Record<string, number> }) {
           <YAxis
             dataKey="name"
             type="category"
-            width={210}
-            tick={AXIS_STYLE}
+            width={95}
+            tick={{ ...AXIS_STYLE, fontSize: 10 }}
             stroke={AXIS_STROKE}
           />
           <Tooltip
@@ -160,12 +163,12 @@ function CountByType({ byType }: { byType: Record<string, number> }) {
 function ValueByType({ costByType }: { costByType: Record<string, number> }) {
   const data = toSortedEntries(costByType)
     .filter((d) => d.value > 0)
-    .map((d) => ({ name: shortLabel(d.name), value: +(d.value / 1_000_000).toFixed(2) }));
+    .map((d) => ({ name: shortLabel(d.name, 14), value: +(d.value / 1_000_000).toFixed(2) }));
 
   return (
-    <SectionCard title="Estimated Value by Type ($M)">
-      <ResponsiveContainer width="100%" height={Math.max(220, data.length * 36)}>
-        <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
+    <SectionCard title="Est. Value by Type ($M)">
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data} layout="vertical" margin={{ left: 4, right: 16, top: 4, bottom: 4 }}>
           <CartesianGrid horizontal={false} stroke={GRID_STROKE} />
           <XAxis
             type="number"
@@ -176,8 +179,8 @@ function ValueByType({ costByType }: { costByType: Record<string, number> }) {
           <YAxis
             dataKey="name"
             type="category"
-            width={210}
-            tick={AXIS_STYLE}
+            width={95}
+            tick={{ ...AXIS_STYLE, fontSize: 10 }}
             stroke={AXIS_STROKE}
           />
           <Tooltip
@@ -203,7 +206,7 @@ export default function Charts() {
     <div style={{ minHeight: '100vh', background: '#1B4F72' }}>
       <NavBar briefingText={briefingText} aggregatedData={aggregatedData} />
 
-      <main style={{ maxWidth: '820px', margin: '0 auto', padding: '40px 24px' }}>
+      <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 24px' }}>
         <div style={{ marginBottom: '28px' }}>
           <span
             style={{
@@ -234,7 +237,12 @@ export default function Charts() {
         </div>
 
         {ps ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '20px',
+            alignItems: 'stretch',
+          }}>
             <StatusDonut byStatus={ps.by_status} />
             <CountByType byType={ps.by_type} />
             <ValueByType costByType={ps.cost_by_type} />
