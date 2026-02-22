@@ -53,7 +53,7 @@ export default function Home() {
         <img
           src="/CityPulse_Logo1_Fun.png"
           alt="CityPulse"
-          style={{ width: '180px', display: 'block', margin: '0 auto' }}
+          style={{ width: '380px', display: 'block', margin: '0 auto' }}
         />
       </div>
 
