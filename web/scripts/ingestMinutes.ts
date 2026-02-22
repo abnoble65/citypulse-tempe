@@ -44,7 +44,7 @@ loadEnv();
 const SUPABASE_URL  = process.env.VITE_SUPABASE_URL!;
 const SUPABASE_KEY  = process.env.VITE_SUPABASE_SERVICE_KEY!;
 const ANTHROPIC_KEY = process.env.VITE_ANTHROPIC_API_KEY!;
-const RATE_LIMIT_MS = 65_000; // ~30-50k tokens/PDF; stay under 10k tokens/min limit
+const RATE_LIMIT_MS = 120_000; // large PDFs hit 30k tokens/min limit; 120s gives buffer
 const ARCHIVE_INDEX = 'https://sfplanning.org/cpc-hearing-archives';
 
 if (!SUPABASE_URL || !SUPABASE_KEY || !ANTHROPIC_KEY) {
