@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600;1,700;1,800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600;1,700;1,800&family=Urbanist:wght@400;500;600;700;800&display=swap');
 
 *,
 *::before,
@@ -50,28 +50,15 @@ input:focus {
   }
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.spinner {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #ffffff;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  flex-shrink: 0;
-}
-
-@keyframes pulse-draw {
-  from { stroke-dashoffset: 300; }
-  to   { stroke-dashoffset: 0; }
-}
-
+/* Splash screen pulse line animation */
 .pulse-draw {
   stroke-dasharray: 300;
   stroke-dashoffset: 300;
-  animation: pulse-draw 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: drawPulse 1.5s ease forwards 0.3s;
+}
+
+@keyframes drawPulse {
+  to {
+    stroke-dashoffset: 0;
+  }
 }

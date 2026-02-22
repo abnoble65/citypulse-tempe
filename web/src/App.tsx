@@ -10,8 +10,15 @@ import { Commission } from "./pages/Commission";
 import { generateBriefing } from "./services/briefing";
 import type { DistrictData } from "./services/briefing";
 
+const SPLASH_KEY = "citypulse_splash_seen";
+
 export default function App() {
-  const [splashDone, setSplashDone] = useState(false);
+  const [splashDone, setSplashDone] = useState(() => sessionStorage.getItem(SPLASH_KEY) === "1");
+
+  function handleSplashComplete() {
+    sessionStorage.setItem(SPLASH_KEY, "1");
+    setSplashDone(true);
+  }
   const [page, setPage] = useState("Home");
   const [briefingText, setBriefingText] = useState("");
   const [aggregatedData, setAggregatedData] = useState<DistrictData | null>(null);
@@ -54,7 +61,7 @@ export default function App() {
 
   return (
     <>
-      {!splashDone && <SplashScreen onComplete={() => setSplashDone(true)} />}
+      {!splashDone && <SplashScreen onComplete={handleSplashComplete} />}
       {page !== "Home" && <NavBar activePage={page} onNavigate={setPage} />}
       {renderPage()}
     </>

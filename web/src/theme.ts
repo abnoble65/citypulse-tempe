@@ -19,5 +19,6 @@ export const COLORS = {
 
 export const FONTS = {
   heading: "'Playfair Display', serif",
+  display: "'Urbanist', sans-serif",
   body: "'Lexend', sans-serif",
 } as const;
