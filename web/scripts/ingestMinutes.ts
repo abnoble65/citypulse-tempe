@@ -199,7 +199,7 @@ async function extractWithClaude(pdfBase64: string): Promise<ExtractedMinutes | 
     try {
       const message = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: SYSTEM_PROMPT,
         messages: [{
           role: 'user',
@@ -303,6 +303,13 @@ async function alreadyProcessed(dateStr: string): Promise<boolean> {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
+// Dates where the hearing row exists in DB but project inserts failed (shadow_details
+// schema error). These are force-deleted and reprocessed on each run.
+const FORCE_REPROCESS = new Set([
+  '2024-06-06',
+  '2022-09-08',
+]);
+
 async function main() {
   const hearings = await fetchAllMinutesUrls();
 
@@ -311,9 +318,16 @@ async function main() {
   let failed    = 0;
 
   for (const { dateStr, url } of hearings) {
-    if (await alreadyProcessed(dateStr)) {
+    const force = FORCE_REPROCESS.has(dateStr);
+
+    if (!force && await alreadyProcessed(dateStr)) {
       skipped++;
       continue;
+    }
+
+    // Delete stale hearing row (and cascaded projects) before reprocessing
+    if (force) {
+      await supabase.from('hearings').delete().eq('hearing_date', dateStr);
     }
 
     process.stdout.write(`[${dateStr}] Fetching PDF… `);
