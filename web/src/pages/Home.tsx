@@ -1,163 +1,108 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { generateBriefing } from '../services/briefing';
-import { DISTRICT_3_NEIGHBORHOODS } from '../components/NeighborhoodFilterBar';
+import { useState } from "react";
+import { COLORS, FONTS } from "../theme";
+import { NEIGHBORHOODS } from "../data";
+import { CityPulseLogo } from "../components/Icons";
 
-export default function Home() {
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+interface HomeProps {
+  onNavigate: (page: string) => void;
+}
 
-  async function handleGenerate() {
-    setLoading(true);
-    setError(null);
-    try {
-      const { text: briefingText, data: aggregatedData } = await generateBriefing();
-      navigate('/briefing', { state: { briefingText, aggregatedData } });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
-    } finally {
-      setLoading(false);
-    }
-  }
+export function Home({ onNavigate }: HomeProps) {
+  const [hovered, setHovered] = useState<number | null>(null);
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: '#1B4F72',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
-      }}
-    >
-      {/* Logo */}
-      <div style={{ marginBottom: '32px', textAlign: 'center' }}>
-        <img
-          src="/CityPulse_Logo1_Fun.png"
-          alt="CityPulse"
-          style={{ width: '380px', display: 'block', margin: '0 auto' }}
-        />
+    <div style={{
+      minHeight: "100vh",
+      background: COLORS.cream,
+      display: "flex", flexDirection: "column", alignItems: "center",
+      justifyContent: "center",
+      padding: "60px 24px",
+    }}>
+      <div style={{
+        marginBottom: 40,
+        filter: "drop-shadow(0 6px 24px rgba(212,100,59,0.2))",
+      }}>
+        <CityPulseLogo size={72} />
       </div>
 
-      <div style={{ maxWidth: '520px', width: '100%' }}>
-        {/* Neighborhood preview cards */}
-        <p
-          style={{
-            color: 'rgba(255,255,255,0.4)',
-            fontSize: '11px',
-            fontWeight: 700,
-            letterSpacing: '1.5px',
-            textTransform: 'uppercase',
-            marginBottom: '10px',
-            textAlign: 'center',
-          }}
-        >
-          SF District 3 Neighborhoods
-        </p>
+      <h1 style={{
+        fontFamily: FONTS.heading,
+        fontSize: "clamp(40px, 7vw, 72px)",
+        fontWeight: 800,
+        color: COLORS.charcoal,
+        textAlign: "center",
+        lineHeight: 1.05,
+        letterSpacing: "-0.02em",
+        marginBottom: 16,
+        maxWidth: 600,
+      }}>
+        Urban Intelligence
+        <br />
+        <span style={{ color: COLORS.orange }}>District 3</span>
+      </h1>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '10px',
-            marginBottom: '20px',
-          }}
-        >
-          {DISTRICT_3_NEIGHBORHOODS.map((n) => (
-            <div
-              key={n.zip}
-              style={{
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '12px',
-                padding: '16px 14px',
-                textAlign: 'center',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              <span style={{ fontSize: '24px', lineHeight: 1 }}>{n.icon}</span>
-              <span
-                style={{
-                  color: 'rgba(255,255,255,0.65)',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  lineHeight: 1.3,
-                }}
-              >
-                {n.name}
-              </span>
-              <span
-                style={{
-                  color: 'rgba(255,255,255,0.25)',
-                  fontSize: '11px',
-                  letterSpacing: '0.5px',
-                }}
-              >
-                {n.zip}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* Generate button */}
-        <button
-          onClick={handleGenerate}
-          disabled={loading}
-          style={{
-            width: '100%',
-            padding: '15px 24px',
-            background: loading ? 'rgba(46,134,193,0.5)' : '#2E86C1',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '10px',
-            fontSize: '16px',
-            fontWeight: 600,
-            cursor: loading ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            transition: 'background 0.15s ease',
-          }}
-        >
-          {loading ? (
-            <>
-              <span className="spinner" />
-              Generating briefing…
-            </>
-          ) : (
-            'Generate District 3 Briefing'
-          )}
-        </button>
-
-        {error && (
-          <div
-            style={{
-              marginTop: '16px',
-              background: 'rgba(231,76,60,0.15)',
-              border: '1px solid rgba(231,76,60,0.3)',
-              borderRadius: '8px',
-              padding: '12px 16px',
-              color: '#E74C3C',
-              fontSize: '13px',
-              textAlign: 'left',
-              lineHeight: 1.5,
-            }}
-          >
-            {error}
-          </div>
-        )}
-      </div>
-
-      <p style={{ marginTop: '32px', color: 'rgba(255,255,255,0.2)', fontSize: '12px' }}>
-        Powered by DataSF · Claude claude-sonnet-4-6
+      <p style={{
+        color: COLORS.midGray, fontSize: 17,
+        textAlign: "center", maxWidth: 440,
+        lineHeight: 1.6, marginBottom: 52,
+        fontFamily: FONTS.body,
+      }}>
+        AI-powered civic briefings from live San Francisco permit, pipeline, and planning data.
       </p>
+
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))",
+        gap: 14, width: "100%", maxWidth: 720,
+        marginBottom: 52,
+      }}>
+        {NEIGHBORHOODS.slice(1).map((n, i) => (
+          <div key={n.name}
+            onMouseEnter={() => setHovered(i)}
+            onMouseLeave={() => setHovered(null)}
+            style={{
+              background: COLORS.white,
+              borderRadius: 18, padding: "28px 20px",
+              border: `1.5px solid ${hovered === i ? COLORS.orange : COLORS.lightBorder}`,
+              transition: "all 0.25s ease",
+              cursor: "default",
+              textAlign: "center",
+              boxShadow: hovered === i
+                ? "0 8px 24px rgba(212,100,59,0.1)"
+                : "0 2px 8px rgba(0,0,0,0.03)",
+            }}>
+            <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}>
+              <n.Icon size={42} color={hovered === i ? COLORS.orange : COLORS.warmGray} />
+            </div>
+            <div style={{
+              fontSize: 14, fontWeight: 700, lineHeight: 1.3,
+              fontFamily: FONTS.heading,
+              color: COLORS.charcoal,
+            }}>{n.name}</div>
+            <div style={{
+              fontSize: 12, marginTop: 6,
+              fontFamily: FONTS.body,
+              color: COLORS.warmGray,
+              fontWeight: 500,
+            }}>{n.zip}</div>
+          </div>
+        ))}
+      </div>
+
+      <button onClick={() => onNavigate("Briefing")} style={{
+        background: COLORS.orange,
+        color: COLORS.white,
+        border: "none", borderRadius: 32,
+        padding: "16px 40px",
+        fontSize: 16, fontWeight: 700,
+        cursor: "pointer",
+        fontFamily: FONTS.heading,
+        boxShadow: "0 4px 20px rgba(212,100,59,0.25)",
+        transition: "transform 0.2s, box-shadow 0.2s",
+        letterSpacing: "0.01em",
+      }}>
+        Generate District 3 Briefing →
+      </button>
     </div>
   );
 }

@@ -1,169 +1,63 @@
-import { useLocation, useNavigate } from 'react-router-dom';
-import NavBar from '../components/NavBar';
-import { parseBriefingSections, type DistrictData } from '../services/briefing';
+import { COLORS, FONTS } from "../theme";
+import { SectionLabel } from "../components/SectionLabel";
 
-export default function Signals() {
-  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData } };
-  const navigate = useNavigate();
-  const briefingText = state?.briefingText ?? '';
-  const aggregatedData = state?.aggregatedData;
-  const sections = parseBriefingSections(briefingText);
-
-  const hasContent = sections.signal || sections.zoningContext;
-
+export function Signals() {
   return (
-    <div style={{ minHeight: '100vh', background: '#1B4F72' }}>
-      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} />
-
-      <main style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 24px' }}>
-        <div style={{ marginBottom: '24px' }}>
-          <span
-            style={{
-              display: 'inline-block',
-              background: 'rgba(46,134,193,0.2)',
-              border: '1px solid rgba(46,134,193,0.35)',
-              color: '#2E86C1',
-              fontSize: '11px',
-              fontWeight: 700,
-              letterSpacing: '2px',
-              textTransform: 'uppercase',
-              padding: '4px 12px',
-              borderRadius: '20px',
-              marginBottom: '12px',
-            }}
-          >
-            District 3 Intelligence
-          </span>
-          <h1
-            style={{
-              fontSize: '28px',
-              fontWeight: 700,
-              color: '#fff',
-              margin: 0,
-              letterSpacing: '-0.3px',
-            }}
-          >
-            Signals &amp; Zoning
-          </h1>
+    <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 24px" }}>
+        <SectionLabel text="The Signal" />
+        <div style={{
+          background: COLORS.softAmber, borderRadius: 20,
+          padding: "44px",
+          marginBottom: 28,
+          boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+        }}>
+          <h2 style={{
+            fontFamily: FONTS.heading,
+            fontSize: "clamp(24px, 4vw, 36px)",
+            fontWeight: 700, lineHeight: 1.15,
+            letterSpacing: "-0.01em",
+            marginBottom: 20,
+            color: COLORS.charcoal,
+            fontStyle: "italic",
+          }}>
+            Office-to-residential conversions signal a structural shift in downtown land use.
+          </h2>
+          <p style={{
+            fontFamily: FONTS.body,
+            fontSize: 15, lineHeight: 1.8,
+            color: COLORS.midGray,
+          }}>
+            Three major conversion projects filed in the past 90 days suggest that property owners are responding to persistent office vacancy rates. This trend could reshape the Financial District's residential density within five years.
+          </p>
         </div>
 
-        {hasContent ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* The Signal */}
-            {sections.signal && (
-              <SectionCard title="The Signal" content={sections.signal} />
-            )}
-
-            {/* The Zoning Context */}
-            {sections.zoningContext && (
-              <SectionCard title="The Zoning Context" content={sections.zoningContext} />
-            )}
-          </div>
-        ) : (
-          <EmptyState onHome={() => navigate('/')} />
-        )}
-
-        {/* Navigation */}
-        {hasContent && (
-          <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between' }}>
-            <button
-              onClick={() => navigate('/charts', { state: { briefingText, aggregatedData } })}
-              style={navButtonStyle('secondary')}
-            >
-              ← Charts
-            </button>
-            <button
-              onClick={() => navigate('/outlook', { state: { briefingText, aggregatedData } })}
-              style={navButtonStyle('primary')}
-            >
-              Outlook →
-            </button>
-          </div>
-        )}
-      </main>
-    </div>
-  );
-}
-
-function SectionCard({ title, content }: { title: string; content: string }) {
-  return (
-    <div
-      style={{
-        background: 'rgba(255,255,255,0.07)',
-        border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: '14px',
-        padding: '28px 32px',
-      }}
-    >
-      <h2
-        style={{
-          fontSize: '13px',
-          fontWeight: 700,
-          color: '#2E86C1',
-          letterSpacing: '1.5px',
-          textTransform: 'uppercase',
-          margin: '0 0 16px',
-        }}
-      >
-        {title}
-      </h2>
-      <p
-        style={{
-          color: 'rgba(255,255,255,0.9)',
-          fontSize: '15px',
-          lineHeight: 1.75,
-          margin: 0,
-          whiteSpace: 'pre-wrap',
-        }}
-      >
-        {content}
-      </p>
-    </div>
-  );
-}
-
-function navButtonStyle(variant: 'primary' | 'secondary'): React.CSSProperties {
-  return {
-    background: variant === 'primary' ? '#2E86C1' : 'rgba(255,255,255,0.08)',
-    color: '#fff',
-    border: variant === 'primary' ? 'none' : '1px solid rgba(255,255,255,0.15)',
-    borderRadius: '8px',
-    padding: '10px 20px',
-    fontSize: '14px',
-    fontWeight: 600,
-    cursor: 'pointer',
-  };
-}
-
-function EmptyState({ onHome }: { onHome: () => void }) {
-  return (
-    <div
-      style={{
-        background: 'rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: '14px',
-        padding: '48px 32px',
-        textAlign: 'center',
-      }}
-    >
-      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '15px', marginBottom: '20px' }}>
-        No briefing data. Generate one from the home page.
-      </p>
-      <button
-        onClick={onHome}
-        style={{
-          background: '#2E86C1',
-          color: '#fff',
-          border: 'none',
-          borderRadius: '8px',
-          padding: '10px 20px',
-          fontSize: '14px',
-          fontWeight: 600,
-          cursor: 'pointer',
-        }}
-      >
-        Go to Home
-      </button>
+        <SectionLabel text="Zoning Context" />
+        <div style={{
+          background: COLORS.white, borderRadius: 20,
+          padding: "44px",
+          border: `1px solid ${COLORS.lightBorder}`,
+          boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+        }}>
+          <h2 style={{
+            fontFamily: FONTS.heading,
+            fontSize: "clamp(24px, 4vw, 36px)",
+            fontWeight: 700, color: COLORS.charcoal,
+            lineHeight: 1.15, letterSpacing: "-0.01em",
+            marginBottom: 20,
+            fontStyle: "italic",
+          }}>
+            C-3-O and RC-4 districts dominate the active permit landscape.
+          </h2>
+          <p style={{
+            fontFamily: FONTS.body,
+            fontSize: 15, lineHeight: 1.8,
+            color: COLORS.midGray,
+          }}>
+            The downtown office district (C-3-O) and high-density residential-commercial (RC-4) zones account for 67% of all filed permits. Recent zoning amendments have expanded allowable uses in these districts, supporting the conversion trend.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,328 +1,243 @@
-import { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import {
-  PieChart, Pie, Cell, Legend, Tooltip,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer,
-} from 'recharts';
-import NavBar from '../components/NavBar';
-import NeighborhoodFilterBar from '../components/NeighborhoodFilterBar';
-import type { DistrictData, ZipPermitSummary } from '../services/aggregator';
+import { useState } from "react";
+import { COLORS, FONTS } from "../theme";
+import { MOCK_PERMITS, MOCK_STATUS, MOCK_VALUE_BY_TYPE } from "../data";
+import { FilterBar } from "../components/FilterBar";
+import { SectionLabel } from "../components/SectionLabel";
 
-// ── Colour palette ────────────────────────────────────────────────────────────
+/* ─── SVG DONUT CHART ─────────────────────────── */
 
-const STATUS_COLORS: Record<string, string> = {
-  complete:   '#27AE60',
-  issued:     '#2E86C1',
-  filed:      '#F39C12',
-  expired:    '#E74C3C',
-  cancelled:  '#7F8C8D',
-  withdrawn:  '#95A5A6',
-  plancheck:  '#8E44AD',
-};
-const FALLBACK_COLORS = ['#2E86C1', '#27AE60', '#8E44AD', '#1ABC9C', '#2980B9', '#16A085'];
+function DonutChart({ data, size = 200 }: { data: typeof MOCK_STATUS; size?: number }) {
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = size * 0.36;
+  const strokeW = size * 0.12;
+  const circumference = 2 * Math.PI * radius;
+  const total = data.reduce((s, d) => s + d.value, 0);
 
-function statusColor(name: string, idx: number): string {
-  return STATUS_COLORS[name.toLowerCase()] ?? FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
-}
+  let cumulative = 0;
+  const segments = data.map(d => {
+    const pct = d.value / total;
+    const offset = circumference * (1 - cumulative) + circumference * 0.25;
+    cumulative += pct;
+    return { ...d, dashArray: `${circumference * pct} ${circumference * (1 - pct)}`, offset };
+  });
 
-// ── Shared recharts style tokens ──────────────────────────────────────────────
-
-const AXIS_STYLE = { fill: 'rgba(255,255,255,0.6)', fontSize: 11 };
-const AXIS_STROKE = 'rgba(255,255,255,0.15)';
-const GRID_STROKE = 'rgba(255,255,255,0.07)';
-const TOOLTIP_STYLE = {
-  contentStyle: {
-    background: '#154360',
-    border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: 8,
-    color: '#fff',
-    fontSize: 13,
-  },
-  cursor: { fill: 'rgba(255,255,255,0.04)' },
-};
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function toSortedEntries(map: Record<string, number>, top = 8) {
-  return Object.entries(map)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, top)
-    .map(([name, value]) => ({ name, value }));
-}
-
-function shortLabel(name: string, max = 30): string {
-  const titled = name.charAt(0).toUpperCase() + name.slice(1);
-  return titled.length > max ? titled.slice(0, max) + '…' : titled;
-}
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        background: 'rgba(255,255,255,0.07)',
-        border: '1px solid rgba(255,255,255,0.1)',
-        borderRadius: '14px',
-        padding: '20px 16px',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <h2
-        style={{
-          fontSize: '11px',
-          fontWeight: 700,
-          color: '#2E86C1',
-          letterSpacing: '1.5px',
-          textTransform: 'uppercase',
-          margin: '0 0 16px',
-          textAlign: 'center',
-        }}
-      >
-        {title}
-      </h2>
-      <div style={{ flex: 1 }}>{children}</div>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={cx} cy={cy} r={radius} fill="none" stroke={COLORS.cream} strokeWidth={strokeW} />
+      {segments.map((seg, i) => (
+        <circle
+          key={i} cx={cx} cy={cy} r={radius} fill="none"
+          stroke={seg.color} strokeWidth={strokeW}
+          strokeDasharray={seg.dashArray}
+          strokeDashoffset={seg.offset}
+          strokeLinecap="butt"
+          style={{ transition: "stroke-dasharray 0.8s ease, stroke-dashoffset 0.8s ease" }}
+        />
+      ))}
+      <text x={cx} y={cy - 6} textAnchor="middle" fill={COLORS.charcoal}
+        fontFamily={FONTS.heading} fontSize={size * 0.15} fontWeight="700">
+        {total}
+      </text>
+      <text x={cx} y={cy + 14} textAnchor="middle" fill={COLORS.warmGray}
+        fontFamily={FONTS.body} fontSize={size * 0.065} fontWeight="500">
+        Total Permits
+      </text>
+    </svg>
+  );
+}
+
+/* ─── VERTICAL BAR CHART ──────────────────────── */
+
+function ValueBarChart({ data }: { data: typeof MOCK_VALUE_BY_TYPE }) {
+  const max = Math.max(...data.map(d => d.val));
+  const barMaxH = 140;
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+      gap: 20, height: barMaxH + 60, padding: "0 8px",
+    }}>
+      {data.map(d => {
+        const h = (d.val / max) * barMaxH;
+        return (
+          <div key={d.type} style={{
+            display: "flex", flexDirection: "column", alignItems: "center",
+            gap: 8,
+          }}>
+            <span style={{
+              fontFamily: FONTS.heading, fontSize: 16, fontWeight: 700,
+              color: COLORS.charcoal,
+            }}>${d.val}M</span>
+            <div style={{
+              width: 44, height: h, borderRadius: "10px 10px 4px 4px",
+              background: `linear-gradient(to top, ${d.color}, ${d.color}dd)`,
+              transition: "height 0.6s ease",
+            }} />
+            <span style={{
+              fontFamily: FONTS.body, fontSize: 11, fontWeight: 600,
+              color: COLORS.midGray, textAlign: "center", lineHeight: 1.2,
+              maxWidth: 56,
+            }}>{d.type}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-// ── Chart 1: Status donut ─────────────────────────────────────────────────────
+/* ─── CHARTS PAGE ─────────────────────────────── */
 
-function StatusDonut({ byStatus }: { byStatus: Record<string, number> }) {
-  const data = toSortedEntries(byStatus);
-
-  return (
-    <SectionCard title="Permit Status Breakdown">
-      <ResponsiveContainer width="100%" height={300}>
-        <PieChart>
-          <Pie
-            data={data}
-            cx="50%"
-            cy="42%"
-            innerRadius={55}
-            outerRadius={85}
-            paddingAngle={2}
-            dataKey="value"
-          >
-            {data.map((entry, i) => (
-              <Cell key={entry.name} fill={statusColor(entry.name, i)} />
-            ))}
-          </Pie>
-          <Tooltip
-            {...TOOLTIP_STYLE}
-            formatter={(value: number, name: string) => [value.toLocaleString(), shortLabel(name)]}
-          />
-          <Legend
-            formatter={(value: string) => (
-              <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>
-                {shortLabel(value)}
-              </span>
-            )}
-          />
-        </PieChart>
-      </ResponsiveContainer>
-    </SectionCard>
-  );
-}
-
-// ── Chart 2: Count by type ────────────────────────────────────────────────────
-
-function CountByType({ byType }: { byType: Record<string, number> }) {
-  const data = toSortedEntries(byType).map((d) => ({ ...d, name: shortLabel(d.name, 14) }));
+export function Charts() {
+  const [filter, setFilter] = useState("All District 3");
+  const maxVal = MOCK_PERMITS[0].value;
 
   return (
-    <SectionCard title="Permit Count by Type">
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} layout="vertical" margin={{ left: 4, right: 16, top: 4, bottom: 4 }}>
-          <CartesianGrid horizontal={false} stroke={GRID_STROKE} />
-          <XAxis
-            type="number"
-            tick={AXIS_STYLE}
-            stroke={AXIS_STROKE}
-            tickFormatter={(v: number) => v.toLocaleString()}
-          />
-          <YAxis
-            dataKey="name"
-            type="category"
-            width={95}
-            tick={{ ...AXIS_STYLE, fontSize: 10 }}
-            stroke={AXIS_STROKE}
-          />
-          <Tooltip
-            {...TOOLTIP_STYLE}
-            formatter={(value: number) => [value.toLocaleString(), 'Permits']}
-          />
-          <Bar dataKey="value" fill="#1ABC9C" radius={[0, 4, 4, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    </SectionCard>
-  );
-}
+    <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
+      <FilterBar selected={filter} onSelect={setFilter} />
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "52px 24px" }}>
+        <SectionLabel text="Charts" />
+        <h2 style={{
+          fontFamily: FONTS.heading,
+          fontSize: "clamp(28px, 5vw, 42px)",
+          fontWeight: 700, color: COLORS.charcoal,
+          lineHeight: 1.1, letterSpacing: "-0.01em",
+          marginBottom: 36,
+        }}>
+          Permit Data at a Glance
+        </h2>
 
-// ── Chart 3: Estimated value by type ─────────────────────────────────────────
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: 20, marginBottom: 24,
+        }}>
+          {/* DONUT CHART CARD */}
+          <div style={{
+            background: COLORS.white, borderRadius: 20,
+            padding: "32px",
+            border: `1px solid ${COLORS.lightBorder}`,
+            boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+            display: "flex", flexDirection: "column", alignItems: "center",
+          }}>
+            <div style={{
+              fontSize: 12, fontWeight: 700, color: COLORS.orange,
+              letterSpacing: "0.08em", textTransform: "uppercase",
+              marginBottom: 24, fontFamily: FONTS.body,
+              alignSelf: "flex-start",
+            }}>Permit Status Breakdown</div>
 
-function ValueByType({ costByType }: { costByType: Record<string, number> }) {
-  const data = toSortedEntries(costByType)
-    .filter((d) => d.value > 0)
-    .map((d) => ({ name: shortLabel(d.name, 14), value: +(d.value / 1_000_000).toFixed(2) }));
+            <DonutChart data={MOCK_STATUS} size={190} />
 
-  return (
-    <SectionCard title="Est. Value by Type ($M)">
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} layout="vertical" margin={{ left: 4, right: 16, top: 4, bottom: 4 }}>
-          <CartesianGrid horizontal={false} stroke={GRID_STROKE} />
-          <XAxis
-            type="number"
-            tick={AXIS_STYLE}
-            stroke={AXIS_STROKE}
-            tickFormatter={(v: number) => `$${v}M`}
-          />
-          <YAxis
-            dataKey="name"
-            type="category"
-            width={95}
-            tick={{ ...AXIS_STYLE, fontSize: 10 }}
-            stroke={AXIS_STROKE}
-          />
-          <Tooltip
-            {...TOOLTIP_STYLE}
-            formatter={(value: number) => [`$${value}M`, 'Est. Value']}
-          />
-          <Bar dataKey="value" fill="#8E44AD" radius={[0, 4, 4, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    </SectionCard>
-  );
-}
+            <div style={{
+              display: "grid", gridTemplateColumns: "1fr 1fr",
+              gap: "10px 24px", marginTop: 24, width: "100%",
+            }}>
+              {MOCK_STATUS.map(s => (
+                <div key={s.name} style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  fontFamily: FONTS.body, fontSize: 13,
+                }}>
+                  <div style={{
+                    width: 10, height: 10, borderRadius: 3,
+                    background: s.color, flexShrink: 0,
+                  }} />
+                  <span style={{ color: COLORS.midGray, fontWeight: 500 }}>{s.name}</span>
+                  <span style={{
+                    marginLeft: "auto", fontWeight: 700,
+                    color: COLORS.charcoal, fontFamily: FONTS.heading,
+                  }}>{s.pct}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+          {/* VALUE BY TYPE — BAR CHART */}
+          <div style={{
+            background: COLORS.white, borderRadius: 20,
+            padding: "32px",
+            border: `1px solid ${COLORS.lightBorder}`,
+            boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+          }}>
+            <div style={{
+              fontSize: 12, fontWeight: 700, color: COLORS.orange,
+              letterSpacing: "0.08em", textTransform: "uppercase",
+              marginBottom: 16, fontFamily: FONTS.body,
+            }}>Est. Value by Permit Type</div>
 
-export default function Charts() {
-  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData } };
-  const navigate = useNavigate();
-  const { briefingText = '', aggregatedData } = state ?? {};
-  const ps = aggregatedData?.permit_summary;
-
-  const [filterZip, setFilterZip] = useState<string | null>(null);
-
-  // Resolve the active permit summary — zip bucket or full district
-  const activePs: ZipPermitSummary | typeof ps =
-    filterZip && ps?.by_zip?.[filterZip] ? ps.by_zip[filterZip] : ps;
-
-  const isSparse = filterZip !== null && (activePs?.total ?? 0) < 20;
-
-  return (
-    <div style={{ minHeight: '100vh', background: '#1B4F72' }}>
-      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} />
-      <NeighborhoodFilterBar activeZip={filterZip} onChange={setFilterZip} />
-
-      <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 24px' }}>
-        <div style={{ marginBottom: '28px' }}>
-          <span
-            style={{
-              display: 'inline-block',
-              background: 'rgba(46,134,193,0.2)',
-              border: '1px solid rgba(46,134,193,0.35)',
-              color: '#2E86C1',
-              fontSize: '11px',
-              fontWeight: 700,
-              letterSpacing: '2px',
-              textTransform: 'uppercase',
-              padding: '4px 12px',
-              borderRadius: '20px',
-              marginBottom: '12px',
-            }}
-          >
-            District 3 Intelligence
-          </span>
-          <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#fff', margin: 0, letterSpacing: '-0.3px' }}>
-            Charts
-          </h1>
-          {activePs && (
-            <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '13px', marginTop: '6px' }}>
-              Based on {activePs.total.toLocaleString()} permits · total estimated value{' '}
-              ${(activePs.total_estimated_cost_usd / 1_000_000).toFixed(1)}M
-              {filterZip && <span style={{ color: 'rgba(255,255,255,0.3)' }}> · zip {filterZip}</span>}
-            </p>
-          )}
+            <ValueBarChart data={MOCK_VALUE_BY_TYPE} />
+          </div>
         </div>
 
-        {activePs ? (
-          <>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '20px',
-              alignItems: 'stretch',
-            }}>
-              <StatusDonut byStatus={activePs.by_status} />
-              <CountByType byType={activePs.by_type} />
-              <ValueByType costByType={activePs.cost_by_type} />
-            </div>
+        {/* TOP 10 ADDRESSES */}
+        <div style={{
+          background: COLORS.white, borderRadius: 20,
+          padding: "36px",
+          border: `1px solid ${COLORS.lightBorder}`,
+          boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+        }}>
+          <div style={{
+            fontSize: 12, fontWeight: 700, color: COLORS.orange,
+            letterSpacing: "0.08em", textTransform: "uppercase",
+            marginBottom: 28, fontFamily: FONTS.body,
+          }}>Top 10 Addresses by Permit Value</div>
 
-            {isSparse && (
-              <p style={{
-                marginTop: '14px',
-                color: 'rgba(255,255,255,0.35)',
-                fontSize: '12px',
-                textAlign: 'center',
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            gap: "0 40px",
+          }}>
+            {MOCK_PERMITS.map((p, i) => (
+              <div key={p.address} style={{
+                display: "flex", alignItems: "center", gap: 14,
+                padding: "12px 0",
+                borderBottom: i < MOCK_PERMITS.length - 1 ? `1px solid ${COLORS.cream}` : "none",
+                fontFamily: FONTS.body,
               }}>
-                Limited permit activity in this neighborhood — showing available data
-              </p>
-            )}
-          </>
-        ) : (
-          <div
-            style={{
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: '14px',
-              padding: '48px 32px',
-              textAlign: 'center',
-            }}
-          >
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '15px', marginBottom: '20px' }}>
-              No data available. Generate a briefing from the home page.
-            </p>
-            <button
-              onClick={() => navigate('/')}
-              style={{
-                background: '#2E86C1', color: '#fff', border: 'none',
-                borderRadius: '8px', padding: '10px 20px', fontSize: '14px',
-                fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              Go to Home
-            </button>
+                <div style={{
+                  width: 28, height: 28, borderRadius: "50%",
+                  background: i < 3 ? COLORS.orangePale : COLORS.cream,
+                  color: i < 3 ? COLORS.orange : COLORS.warmGray,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 12, fontWeight: 700, flexShrink: 0,
+                  fontFamily: FONTS.body,
+                  border: i < 3 ? `1.5px solid ${COLORS.orange}` : "none",
+                }}>{i + 1}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    display: "flex", justifyContent: "space-between",
+                    alignItems: "baseline", marginBottom: 6,
+                  }}>
+                    <span style={{
+                      fontSize: 14, fontWeight: 600, color: COLORS.charcoal,
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    }}>{p.address}</span>
+                    <span style={{
+                      fontSize: 15, fontWeight: 700, color: COLORS.charcoal,
+                      flexShrink: 0, marginLeft: 12,
+                      fontFamily: FONTS.heading,
+                    }}>${p.value}M</span>
+                  </div>
+                  <div style={{
+                    height: 6, background: COLORS.cream,
+                    borderRadius: 3, overflow: "hidden",
+                  }}>
+                    <div style={{
+                      width: `${(p.value / maxVal) * 100}%`,
+                      height: "100%",
+                      background: i < 3
+                        ? `linear-gradient(90deg, ${COLORS.orange}, ${COLORS.orangeSoft})`
+                        : COLORS.lightBorder,
+                      borderRadius: 3,
+                      transition: "width 0.6s ease",
+                    }} />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-        )}
-
-        {ps && (
-          <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between' }}>
-            <button
-              onClick={() => navigate('/briefing', { state: { briefingText, aggregatedData } })}
-              style={{
-                background: 'rgba(255,255,255,0.08)', color: '#fff',
-                border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px',
-                padding: '10px 20px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              ← The Briefing
-            </button>
-            <button
-              onClick={() => navigate('/signals', { state: { briefingText, aggregatedData } })}
-              style={{
-                background: '#2E86C1', color: '#fff', border: 'none',
-                borderRadius: '8px', padding: '10px 20px', fontSize: '14px',
-                fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              Signals &amp; Zoning →
-            </button>
-          </div>
-        )}
-      </main>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,75 +1,50 @@
-import { useNavigate, useLocation } from 'react-router-dom';
-import type { DistrictData } from '../services/briefing';
+import { COLORS, FONTS } from "../theme";
+import { CityPulseLogo } from "./Icons";
 
-const NAV_ITEMS = [
-  { label: 'Home', path: '/' },
-  { label: 'Briefing', path: '/briefing' },
-  { label: 'Charts', path: '/charts' },
-  { label: 'Signals', path: '/signals' },
-  { label: 'Outlook', path: '/outlook' },
-  { label: 'Commission', path: '/commission' },
-];
-
-interface Props {
-  briefingText?: string;
-  aggregatedData?: DistrictData;
+interface NavBarProps {
+  activePage: string;
+  onNavigate: (page: string) => void;
 }
 
-export default function NavBar({ briefingText, aggregatedData }: Props) {
-  const navigate = useNavigate();
-  const { pathname } = useLocation();
+const PAGES = ["Home", "Briefing", "Charts", "Signals", "Outlook", "Commission"];
 
-  function go(path: string) {
-    if (path === '/') {
-      navigate(path);
-    } else {
-      navigate(path, { state: { briefingText, aggregatedData } });
-    }
-  }
-
+export function NavBar({ activePage, onNavigate }: NavBarProps) {
   return (
-    <nav
-      style={{
-        background: '#154360',
-        padding: '0 24px',
-        height: '56px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '4px',
-        borderBottom: '1px solid rgba(255,255,255,0.08)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-      }}
-    >
-      <img
-        src="/CityPulse_Logo1_Fun.png"
-        alt="CityPulse"
-        style={{ height: '40px', marginRight: '20px', flexShrink: 0 }}
-      />
-
-      {NAV_ITEMS.map((item) => {
-        const active = pathname === item.path;
-        return (
-          <button
-            key={item.path}
-            onClick={() => go(item.path)}
+    <nav style={{
+      position: "sticky", top: 0, zIndex: 100,
+      background: COLORS.white,
+      borderBottom: `1px solid ${COLORS.lightBorder}`,
+      padding: "0 28px",
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      height: 60,
+      fontFamily: FONTS.body,
+    }}>
+      <div
+        style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
+        onClick={() => onNavigate("Home")}
+      >
+        <CityPulseLogo size={30} />
+        <span style={{
+          color: COLORS.charcoal, fontSize: 18, fontWeight: 700,
+          letterSpacing: "-0.02em",
+          fontFamily: FONTS.heading,
+        }}>CityPulse</span>
+      </div>
+      <div className="nav-pills" style={{ display: "flex", gap: 4, overflowX: "auto" }}>
+        {PAGES.map(p => (
+          <button key={p} onClick={() => onNavigate(p)}
             style={{
-              background: active ? 'rgba(46,134,193,0.2)' : 'transparent',
-              border: active ? '1px solid rgba(46,134,193,0.4)' : '1px solid transparent',
-              color: active ? '#2E86C1' : 'rgba(255,255,255,0.7)',
-              cursor: 'pointer',
-              padding: '6px 14px',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: active ? 600 : 400,
-              transition: 'all 0.15s ease',
+              background: activePage === p ? COLORS.orangePale : "transparent",
+              color: activePage === p ? COLORS.orange : COLORS.midGray,
+              border: "none", borderRadius: 20,
+              padding: "7px 16px", fontSize: 13, fontWeight: 600,
+              cursor: "pointer", transition: "all 0.2s",
+              fontFamily: FONTS.body,
+              whiteSpace: "nowrap",
             }}
-          >
-            {item.label}
-          </button>
-        );
-      })}
+          >{p}</button>
+        ))}
+      </div>
     </nav>
   );
 }

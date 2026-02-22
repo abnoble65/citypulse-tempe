@@ -1,148 +1,74 @@
-import { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import NavBar from '../components/NavBar';
-import NeighborhoodFilterBar, { DISTRICT_3_NEIGHBORHOODS } from '../components/NeighborhoodFilterBar';
-import { parseBriefingSections, type DistrictData } from '../services/briefing';
+import { useState } from "react";
+import { COLORS, FONTS } from "../theme";
+import { FilterBar } from "../components/FilterBar";
+import { SectionLabel } from "../components/SectionLabel";
 
-export default function Briefing() {
-  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData } };
-  const navigate = useNavigate();
-  const briefingText = state?.briefingText ?? '';
-  const aggregatedData = state?.aggregatedData;
-  const sections = parseBriefingSections(briefingText);
-
-  const [filterZip, setFilterZip] = useState<string | null>(null);
-  const activeNeighborhood = DISTRICT_3_NEIGHBORHOODS.find((n) => n.zip === filterZip);
-  const badgeLabel = activeNeighborhood ? activeNeighborhood.name : 'District 3 Intelligence';
+export function Briefing() {
+  const [filter, setFilter] = useState("All District 3");
 
   return (
-    <div style={{ minHeight: '100vh', background: '#1B4F72' }}>
-      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} />
-      <NeighborhoodFilterBar activeZip={filterZip} onChange={setFilterZip} />
+    <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
+      <FilterBar selected={filter} onSelect={setFilter} />
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 24px" }}>
+        <SectionLabel text="The Briefing" />
+        <h2 style={{
+          fontFamily: FONTS.heading,
+          fontSize: "clamp(28px, 5vw, 44px)",
+          fontWeight: 700, color: COLORS.charcoal,
+          lineHeight: 1.12, letterSpacing: "-0.01em",
+          marginBottom: 36,
+          fontStyle: "italic",
+        }}>
+          Development activity holds steady as commercial permits lead the quarter.
+        </h2>
 
-      <main style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 24px' }}>
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <img src="/CityPulse_Logo1_Fun.png" alt="CityPulse" style={{ width: '400px' }} />
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          gap: 14, marginBottom: 44,
+        }}>
+          {[
+            { num: "817", label: "Active Permits", bg: COLORS.orangePale },
+            { num: "$52M", label: "Est. Total Value", bg: COLORS.softAmber },
+            { num: "23", label: "Pipeline Projects", bg: COLORS.softGreen },
+          ].map(s => (
+            <div key={s.label} style={{
+              background: s.bg, borderRadius: 16,
+              padding: "26px 22px",
+            }}>
+              <div style={{
+                fontFamily: FONTS.heading,
+                fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 700, color: COLORS.charcoal,
+                letterSpacing: "-0.02em",
+              }}>{s.num}</div>
+              <div style={{
+                fontSize: 13, color: COLORS.midGray,
+                marginTop: 6, fontFamily: FONTS.body,
+                fontWeight: 500,
+              }}>{s.label}</div>
+            </div>
+          ))}
         </div>
 
-        {/* Section label */}
-        <div style={{ marginBottom: '24px' }}>
-          <span
-            style={{
-              display: 'inline-block',
-              background: 'rgba(46,134,193,0.2)',
-              border: '1px solid rgba(46,134,193,0.35)',
-              color: '#2E86C1',
-              fontSize: '11px',
-              fontWeight: 700,
-              letterSpacing: '2px',
-              textTransform: 'uppercase',
-              padding: '4px 12px',
-              borderRadius: '20px',
-              marginBottom: '12px',
-            }}
-          >
-            {badgeLabel}
-          </span>
-          <h1
-            style={{
-              fontSize: '28px',
-              fontWeight: 700,
-              color: '#fff',
-              margin: 0,
-              letterSpacing: '-0.3px',
-            }}
-          >
-            The Briefing
-          </h1>
-          {filterZip && (
-            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '12px', marginTop: '6px' }}>
-              Briefing generated for all of District 3 · neighborhood filter applies to Charts &amp; Commission
-            </p>
-          )}
+        <div style={{
+          background: COLORS.white,
+          borderRadius: 20, padding: "40px",
+          border: `1px solid ${COLORS.lightBorder}`,
+          fontFamily: FONTS.body,
+          fontSize: 15.5, lineHeight: 1.8,
+          color: COLORS.charcoal,
+          boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+        }}>
+          <p style={{ marginBottom: 20 }}>
+            District 3 continues to show resilient development activity this quarter, with 817 active building permits representing an estimated $52 million in construction value. Commercial projects dominate the filed permits, particularly along the Bush Street and Kearny Street corridors.
+          </p>
+          <p style={{ marginBottom: 20 }}>
+            The Financial District and Jackson Square subarea leads with 38% of all new filings, driven by office-to-residential conversion projects that align with the city's ongoing downtown recovery strategy. North Beach maintains steady residential renovation activity.
+          </p>
+          <p>
+            Three large-scale mixed-use developments in the pipeline — at 350 Bush, 600 Stockton, and 1 Grant — are expected to enter the review phase in Q2, potentially adding significant density to the district's eastern edge.
+          </p>
         </div>
-
-        {/* Content card */}
-        {sections.briefing ? (
-          <div
-            style={{
-              background: 'rgba(255,255,255,0.07)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: '14px',
-              padding: '28px 32px',
-            }}
-          >
-            <p
-              style={{
-                color: 'rgba(255,255,255,0.9)',
-                fontSize: '15px',
-                lineHeight: 1.75,
-                margin: 0,
-                whiteSpace: 'pre-wrap',
-              }}
-            >
-              {sections.briefing}
-            </p>
-          </div>
-        ) : (
-          <EmptyState onHome={() => navigate('/')} />
-        )}
-
-        {/* Next section link */}
-        {sections.briefing && (
-          <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              onClick={() => navigate('/charts', { state: { briefingText, aggregatedData } })}
-              style={{
-                background: '#2E86C1',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '10px 20px',
-                fontSize: '14px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Charts →
-            </button>
-          </div>
-        )}
-      </main>
-    </div>
-  );
-}
-
-function EmptyState({ onHome }: { onHome: () => void }) {
-  return (
-    <div
-      style={{
-        background: 'rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: '14px',
-        padding: '48px 32px',
-        textAlign: 'center',
-      }}
-    >
-      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '15px', marginBottom: '20px' }}>
-        No briefing data. Generate one from the home page.
-      </p>
-      <button
-        onClick={onHome}
-        style={{
-          background: '#2E86C1',
-          color: '#fff',
-          border: 'none',
-          borderRadius: '8px',
-          padding: '10px 20px',
-          fontSize: '14px',
-          fontWeight: 600,
-          cursor: 'pointer',
-        }}
-      >
-        Go to Home
-      </button>
+      </div>
     </div>
   );
 }

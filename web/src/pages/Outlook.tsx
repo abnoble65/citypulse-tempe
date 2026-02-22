@@ -1,170 +1,72 @@
-import { useLocation, useNavigate } from 'react-router-dom';
-import NavBar from '../components/NavBar';
-import { parseBriefingSections, type DistrictData } from '../services/briefing';
+import { COLORS, FONTS } from "../theme";
+import { SectionLabel } from "../components/SectionLabel";
 
-export default function Outlook() {
-  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData } };
-  const navigate = useNavigate();
-  const briefingText = state?.briefingText ?? '';
-  const aggregatedData = state?.aggregatedData;
-  const sections = parseBriefingSections(briefingText);
-
-  return (
-    <div style={{ minHeight: '100vh', background: '#1B4F72' }}>
-      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} />
-
-      <main style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 24px' }}>
-        <div style={{ marginBottom: '24px' }}>
-          <span
-            style={{
-              display: 'inline-block',
-              background: 'rgba(46,134,193,0.2)',
-              border: '1px solid rgba(46,134,193,0.35)',
-              color: '#2E86C1',
-              fontSize: '11px',
-              fontWeight: 700,
-              letterSpacing: '2px',
-              textTransform: 'uppercase',
-              padding: '4px 12px',
-              borderRadius: '20px',
-              marginBottom: '12px',
-            }}
-          >
-            District 3 Intelligence
-          </span>
-          <h1
-            style={{
-              fontSize: '28px',
-              fontWeight: 700,
-              color: '#fff',
-              margin: 0,
-              letterSpacing: '-0.3px',
-            }}
-          >
-            The Outlook
-          </h1>
-        </div>
-
-        {sections.outlook ? (
-          <>
-            <div
-              style={{
-                background: 'rgba(255,255,255,0.07)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '14px',
-                padding: '28px 32px',
-              }}
-            >
-              <p
-                style={{
-                  color: 'rgba(255,255,255,0.9)',
-                  fontSize: '15px',
-                  lineHeight: 1.75,
-                  margin: 0,
-                  whiteSpace: 'pre-wrap',
-                }}
-              >
-                {sections.outlook}
-              </p>
-            </div>
-
-            {/* Generate new briefing */}
-            <div
-              style={{
-                marginTop: '28px',
-                background: 'rgba(46,134,193,0.1)',
-                border: '1px solid rgba(46,134,193,0.2)',
-                borderRadius: '14px',
-                padding: '24px 32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '16px',
-                flexWrap: 'wrap',
-              }}
-            >
-              <div>
-                <p style={{ color: '#fff', fontWeight: 600, fontSize: '15px', margin: '0 0 4px' }}>
-                  Want fresh intelligence?
-                </p>
-                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', margin: 0 }}>
-                  Run a new briefing to pull the latest DataSF data.
-                </p>
-              </div>
-              <button
-                onClick={() => navigate('/')}
-                style={{
-                  background: '#2E86C1',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                }}
-              >
-                New Briefing
-              </button>
-            </div>
-
-            {/* Back nav */}
-            <div style={{ marginTop: '16px' }}>
-              <button
-                onClick={() => navigate('/signals', { state: { briefingText, aggregatedData } })}
-                style={{
-                  background: 'rgba(255,255,255,0.08)',
-                  color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  borderRadius: '8px',
-                  padding: '10px 20px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                ← Signals &amp; Zoning
-              </button>
-            </div>
-          </>
-        ) : (
-          <EmptyState onHome={() => navigate('/')} />
-        )}
-      </main>
-    </div>
-  );
+interface OutlookProps {
+  onNavigate: (page: string) => void;
 }
 
-function EmptyState({ onHome }: { onHome: () => void }) {
+export function Outlook({ onNavigate }: OutlookProps) {
   return (
-    <div
-      style={{
-        background: 'rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        borderRadius: '14px',
-        padding: '48px 32px',
-        textAlign: 'center',
-      }}
-    >
-      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '15px', marginBottom: '20px' }}>
-        No briefing data. Generate one from the home page.
-      </p>
-      <button
-        onClick={onHome}
-        style={{
-          background: '#2E86C1',
-          color: '#fff',
-          border: 'none',
-          borderRadius: '8px',
-          padding: '10px 20px',
-          fontSize: '14px',
-          fontWeight: 600,
-          cursor: 'pointer',
-        }}
-      >
-        Go to Home
-      </button>
+    <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 24px" }}>
+        <SectionLabel text="The Outlook" />
+        <h2 style={{
+          fontFamily: FONTS.heading,
+          fontSize: "clamp(28px, 5vw, 44px)",
+          fontWeight: 700, color: COLORS.charcoal,
+          lineHeight: 1.1, letterSpacing: "-0.01em",
+          marginBottom: 36,
+          fontStyle: "italic",
+        }}>
+          What to watch in the months ahead.
+        </h2>
+        <div style={{
+          background: COLORS.white, borderRadius: 20,
+          padding: "40px",
+          border: `1px solid ${COLORS.lightBorder}`,
+          fontFamily: FONTS.body,
+          fontSize: 15.5, lineHeight: 1.8,
+          color: COLORS.charcoal,
+          marginBottom: 32,
+          boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+        }}>
+          <p style={{ marginBottom: 18 }}>
+            District 3's development trajectory will be shaped by three factors over the next quarter: the Planning Commission's stance on conversion projects, interest rate decisions affecting construction financing, and the pace of downtown office leasing recovery.
+          </p>
+          <p>
+            Watch for the 350 Bush Street hearing in March — it's likely to set a precedent for similar conversion applications. If approved, expect a wave of filings along the Bush-Kearny corridor.
+          </p>
+        </div>
+
+        <div style={{
+          background: COLORS.orangePale, borderRadius: 20,
+          padding: "44px",
+          textAlign: "center",
+          border: `1px solid ${COLORS.lightBorder}`,
+        }}>
+          <div style={{
+            fontFamily: FONTS.heading,
+            fontSize: 26, fontWeight: 700,
+            marginBottom: 12, color: COLORS.charcoal,
+            fontStyle: "italic",
+          }}>Want fresh intelligence?</div>
+          <p style={{
+            fontFamily: FONTS.body,
+            fontSize: 15, color: COLORS.midGray,
+            marginBottom: 28, fontWeight: 500,
+          }}>Generate a new briefing with the latest data.</p>
+          <button onClick={() => onNavigate("Home")} style={{
+            background: COLORS.orange, color: COLORS.white,
+            border: "none", borderRadius: 28,
+            padding: "14px 36px", fontSize: 15,
+            fontWeight: 700, cursor: "pointer",
+            fontFamily: FONTS.heading,
+            boxShadow: "0 4px 16px rgba(212,100,59,0.2)",
+          }}>
+            ← Back to Home
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
