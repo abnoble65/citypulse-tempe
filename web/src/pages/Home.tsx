@@ -5,9 +5,12 @@ import { CityPulseLogo } from "../components/Icons";
 
 interface HomeProps {
   onNavigate: (page: string) => void;
+  onGenerate: () => void;
+  loading: boolean;
+  error: string | null;
 }
 
-export function Home({ onNavigate }: HomeProps) {
+export function Home({ onGenerate, loading, error }: HomeProps) {
   const [hovered, setHovered] = useState<number | null>(null);
 
   return (
@@ -89,20 +92,48 @@ export function Home({ onNavigate }: HomeProps) {
         ))}
       </div>
 
-      <button onClick={() => onNavigate("Briefing")} style={{
-        background: COLORS.orange,
-        color: COLORS.white,
-        border: "none", borderRadius: 32,
-        padding: "16px 40px",
-        fontSize: 16, fontWeight: 700,
-        cursor: "pointer",
-        fontFamily: FONTS.heading,
-        boxShadow: "0 4px 20px rgba(212,100,59,0.25)",
-        transition: "transform 0.2s, box-shadow 0.2s",
-        letterSpacing: "0.01em",
-      }}>
-        Generate District 3 Briefing →
+      <button
+        onClick={onGenerate}
+        disabled={loading}
+        style={{
+          background: loading ? COLORS.orangeSoft : COLORS.orange,
+          color: COLORS.white,
+          border: "none", borderRadius: 32,
+          padding: "16px 40px",
+          fontSize: 16, fontWeight: 700,
+          cursor: loading ? "not-allowed" : "pointer",
+          fontFamily: FONTS.heading,
+          boxShadow: "0 4px 20px rgba(212,100,59,0.25)",
+          letterSpacing: "0.01em",
+          display: "flex", alignItems: "center", gap: 10,
+        }}
+      >
+        {loading ? (
+          <>
+            <span className="spinner" />
+            Generating briefing…
+          </>
+        ) : (
+          "Generate District 3 Briefing →"
+        )}
       </button>
+
+      {error && (
+        <div style={{
+          marginTop: 20,
+          background: "#FDEEEE",
+          border: "1px solid #F0C8C8",
+          borderRadius: 12,
+          padding: "12px 20px",
+          color: "#B44040",
+          fontSize: 13,
+          fontFamily: FONTS.body,
+          maxWidth: 440,
+          lineHeight: 1.5,
+        }}>
+          {error}
+        </div>
+      )}
     </div>
   );
 }
