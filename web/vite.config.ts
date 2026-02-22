@@ -9,8 +9,10 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
+      host: true,
       port: 5173,
       strictPort: true,
+      allowedHosts: ['tomeka-unleached-fluctuatingly.ngrok-free.dev'],
       proxy: {
         '/api/anthropic': {
           target: 'https://api.anthropic.com',
