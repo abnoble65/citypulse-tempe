@@ -3,15 +3,17 @@ import NavBar from '../components/NavBar';
 import { parseBriefingSections, type DistrictData } from '../services/briefing';
 
 export default function Outlook() {
-  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData } };
+  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData; selectedZip?: string; selectedNeighborhood?: string } };
   const navigate = useNavigate();
   const briefingText = state?.briefingText ?? '';
   const aggregatedData = state?.aggregatedData;
+  const selectedZip = state?.selectedZip;
+  const selectedNeighborhood = state?.selectedNeighborhood;
   const sections = parseBriefingSections(briefingText);
 
   return (
     <div style={{ minHeight: '100vh', background: '#1B4F72' }}>
-      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} />
+      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} selectedZip={selectedZip} selectedNeighborhood={selectedNeighborhood} />
 
       <main style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 24px' }}>
         <div style={{ marginBottom: '24px' }}>
@@ -30,7 +32,7 @@ export default function Outlook() {
               marginBottom: '12px',
             }}
           >
-            District 3 Intelligence
+            {selectedNeighborhood ?? 'District 3 Intelligence'}
           </span>
           <h1
             style={{
@@ -112,7 +114,7 @@ export default function Outlook() {
             {/* Back nav */}
             <div style={{ marginTop: '16px' }}>
               <button
-                onClick={() => navigate('/signals', { state: { briefingText, aggregatedData } })}
+                onClick={() => navigate('/signals', { state: { briefingText, aggregatedData, selectedZip, selectedNeighborhood } })}
                 style={{
                   background: 'rgba(255,255,255,0.08)',
                   color: '#fff',

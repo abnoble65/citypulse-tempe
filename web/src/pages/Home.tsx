@@ -2,17 +2,37 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateBriefing } from '../services/briefing';
 
+interface Neighborhood {
+  name: string;
+  zip: string;
+  icon: string;
+  subtitle: string;
+}
+
+const NEIGHBORHOODS: Neighborhood[] = [
+  { name: 'North Beach / Telegraph Hill', zip: '94133', icon: '⛵', subtitle: '94133' },
+  { name: 'Financial District / Jackson Square', zip: '94111', icon: '🏦', subtitle: '94111' },
+  { name: 'Chinatown / Nob Hill', zip: '94108', icon: '🏮', subtitle: '94108' },
+  { name: 'Russian Hill', zip: '94109', icon: '🌉', subtitle: '94109' },
+];
+
 export default function Home() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedZip, setSelectedZip] = useState<string | null>(null);
+
+  const selectedNeighborhood = NEIGHBORHOODS.find((n) => n.zip === selectedZip) ?? null;
 
   async function handleGenerate() {
+    if (!selectedZip || !selectedNeighborhood) return;
     setLoading(true);
     setError(null);
     try {
       const { text: briefingText, data: aggregatedData } = await generateBriefing();
-      navigate('/briefing', { state: { briefingText, aggregatedData } });
+      navigate('/briefing', {
+        state: { briefingText, aggregatedData, selectedZip, selectedNeighborhood: selectedNeighborhood.name },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
     } finally {
@@ -32,24 +52,8 @@ export default function Home() {
         padding: '24px',
       }}
     >
-      {/* Logo / brand */}
-      <div style={{ marginBottom: '12px', textAlign: 'center' }}>
-        <span
-          style={{
-            display: 'inline-block',
-            background: '#2E86C1',
-            color: '#fff',
-            fontSize: '11px',
-            fontWeight: 700,
-            letterSpacing: '2px',
-            textTransform: 'uppercase',
-            padding: '4px 12px',
-            borderRadius: '20px',
-            marginBottom: '16px',
-          }}
-        >
-          SF District 3
-        </span>
+      {/* Logo */}
+      <div style={{ marginBottom: '32px', textAlign: 'center' }}>
         <img
           src="/CityPulse_Logo1_Fun.png"
           alt="CityPulse"
@@ -57,37 +61,90 @@ export default function Home() {
         />
       </div>
 
-      {/* Card */}
-      <div
-        style={{
-          marginTop: '40px',
-          background: 'rgba(255,255,255,0.07)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: '16px',
-          padding: '36px 40px',
-          maxWidth: '440px',
-          width: '100%',
-          textAlign: 'center',
-        }}
-      >
-        <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: '14px', marginBottom: '24px', lineHeight: 1.6 }}>
-          Pulls live permit data, development pipeline, and zoning context from DataSF, then generates
-          a narrative district intelligence briefing via Claude.
+      {/* Neighborhood selector */}
+      <div style={{ maxWidth: '480px', width: '100%' }}>
+        <p
+          style={{
+            color: 'rgba(255,255,255,0.55)',
+            fontSize: '12px',
+            fontWeight: 700,
+            letterSpacing: '1.5px',
+            textTransform: 'uppercase',
+            marginBottom: '12px',
+            textAlign: 'center',
+          }}
+        >
+          Select a Neighborhood
         </p>
 
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '12px',
+            marginBottom: '20px',
+          }}
+        >
+          {NEIGHBORHOODS.map((n) => {
+            const selected = selectedZip === n.zip;
+            return (
+              <button
+                key={n.zip}
+                onClick={() => setSelectedZip(n.zip)}
+                style={{
+                  background: selected ? 'rgba(46,134,193,0.2)' : 'rgba(255,255,255,0.06)',
+                  border: selected ? '2px solid #2E86C1' : '2px solid rgba(255,255,255,0.1)',
+                  borderRadius: '14px',
+                  padding: '20px 16px',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  transition: 'border-color 0.15s ease, background 0.15s ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <span style={{ fontSize: '28px', lineHeight: 1 }}>{n.icon}</span>
+                <span
+                  style={{
+                    color: selected ? '#fff' : 'rgba(255,255,255,0.75)',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {n.name}
+                </span>
+                <span
+                  style={{
+                    color: selected ? '#2E86C1' : 'rgba(255,255,255,0.35)',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    letterSpacing: '1px',
+                  }}
+                >
+                  {n.subtitle}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Generate button */}
         <button
           onClick={handleGenerate}
-          disabled={loading}
+          disabled={loading || !selectedZip}
           style={{
             width: '100%',
             padding: '14px 24px',
-            background: loading ? 'rgba(46,134,193,0.5)' : '#2E86C1',
-            color: '#fff',
+            background: !selectedZip ? 'rgba(46,134,193,0.25)' : loading ? 'rgba(46,134,193,0.5)' : '#2E86C1',
+            color: !selectedZip ? 'rgba(255,255,255,0.35)' : '#fff',
             border: 'none',
             borderRadius: '10px',
             fontSize: '16px',
             fontWeight: 600,
-            cursor: loading ? 'not-allowed' : 'pointer',
+            cursor: !selectedZip || loading ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -124,7 +181,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* Footer hint */}
+      {/* Footer */}
       <p style={{ marginTop: '32px', color: 'rgba(255,255,255,0.25)', fontSize: '12px' }}>
         Powered by DataSF · Claude claude-sonnet-4-6
       </p>

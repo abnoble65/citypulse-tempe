@@ -197,14 +197,14 @@ function ValueByType({ costByType }: { costByType: Record<string, number> }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Charts() {
-  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData } };
+  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData; selectedZip?: string; selectedNeighborhood?: string } };
   const navigate = useNavigate();
-  const { briefingText = '', aggregatedData } = state ?? {};
+  const { briefingText = '', aggregatedData, selectedZip, selectedNeighborhood } = state ?? {};
   const ps = aggregatedData?.permit_summary;
 
   return (
     <div style={{ minHeight: '100vh', background: '#1B4F72' }}>
-      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} />
+      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} selectedZip={selectedZip} selectedNeighborhood={selectedNeighborhood} />
 
       <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 24px' }}>
         <div style={{ marginBottom: '28px' }}>
@@ -223,7 +223,7 @@ export default function Charts() {
               marginBottom: '12px',
             }}
           >
-            District 3 Intelligence
+            {selectedNeighborhood ?? 'District 3 Intelligence'}
           </span>
           <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#fff', margin: 0, letterSpacing: '-0.3px' }}>
             Charts
@@ -276,7 +276,7 @@ export default function Charts() {
         {ps && (
           <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between' }}>
             <button
-              onClick={() => navigate('/briefing', { state: { briefingText, aggregatedData } })}
+              onClick={() => navigate('/briefing', { state: { briefingText, aggregatedData, selectedZip, selectedNeighborhood } })}
               style={{
                 background: 'rgba(255,255,255,0.08)', color: '#fff',
                 border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px',
@@ -286,7 +286,7 @@ export default function Charts() {
               ← The Briefing
             </button>
             <button
-              onClick={() => navigate('/signals', { state: { briefingText, aggregatedData } })}
+              onClick={() => navigate('/signals', { state: { briefingText, aggregatedData, selectedZip, selectedNeighborhood } })}
               style={{
                 background: '#2E86C1', color: '#fff', border: 'none',
                 borderRadius: '8px', padding: '10px 20px', fontSize: '14px',
