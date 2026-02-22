@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import NavBar from '../components/NavBar';
+import NeighborhoodFilterBar, { DISTRICT_3_NEIGHBORHOODS } from '../components/NeighborhoodFilterBar';
 import { supabase } from '../services/supabase';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -274,6 +275,9 @@ export default function Commission() {
   const [addressGroups, setAddressGroups] = useState<Map<string, ProjectResult[]>>(new Map());
   const [loadingSearch, setLoadingSearch] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [filterZip, setFilterZip] = useState<string | null>(null);
+
+  const activeNeighborhood = DISTRICT_3_NEIGHBORHOODS.find((n) => n.zip === filterZip);
 
   useEffect(() => {
     supabase
@@ -294,7 +298,7 @@ export default function Commission() {
     setLoadingSearch(true);
     setHasSearched(true);
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('projects')
       .select(`
         id, address, case_number, project_description, action, motion_number,
@@ -303,7 +307,13 @@ export default function Commission() {
         votes(commissioner_name, vote),
         commissioner_comments(commissioner_name, comment_text)
       `)
-      .ilike('address', `%${q}%`)
+      .ilike('address', `%${q}%`);
+
+    if (filterZip) {
+      query = query.ilike('address', `%${filterZip}%`);
+    }
+
+    const { data, error } = await query
       .order('hearing_date', { referencedTable: 'hearings', ascending: false });
 
     if (!error && data) {
@@ -321,6 +331,11 @@ export default function Commission() {
   return (
     <div style={{ minHeight: '100vh', background: '#1B4F72' }}>
       <NavBar />
+      <NeighborhoodFilterBar activeZip={filterZip} onChange={(zip) => {
+        setFilterZip(zip);
+        setHasSearched(false);
+        setAddressGroups(new Map());
+      }} />
 
       <main style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 24px' }}>
         {/* Header */}
@@ -353,7 +368,7 @@ export default function Commission() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Enter a street address…"
+              placeholder={activeNeighborhood ? `Search addresses in ${activeNeighborhood.name.split(' / ')[0]}…` : 'Enter a street address…'}
               style={{
                 flex: 1, background: 'rgba(255,255,255,0.07)',
                 border: '1px solid rgba(255,255,255,0.15)',

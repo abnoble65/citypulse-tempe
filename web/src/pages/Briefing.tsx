@@ -1,19 +1,24 @@
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import NavBar from '../components/NavBar';
+import NeighborhoodFilterBar, { DISTRICT_3_NEIGHBORHOODS } from '../components/NeighborhoodFilterBar';
 import { parseBriefingSections, type DistrictData } from '../services/briefing';
 
 export default function Briefing() {
-  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData; selectedZip?: string; selectedNeighborhood?: string } };
+  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData } };
   const navigate = useNavigate();
   const briefingText = state?.briefingText ?? '';
   const aggregatedData = state?.aggregatedData;
-  const selectedZip = state?.selectedZip;
-  const selectedNeighborhood = state?.selectedNeighborhood;
   const sections = parseBriefingSections(briefingText);
+
+  const [filterZip, setFilterZip] = useState<string | null>(null);
+  const activeNeighborhood = DISTRICT_3_NEIGHBORHOODS.find((n) => n.zip === filterZip);
+  const badgeLabel = activeNeighborhood ? activeNeighborhood.name : 'District 3 Intelligence';
 
   return (
     <div style={{ minHeight: '100vh', background: '#1B4F72' }}>
-      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} selectedZip={selectedZip} selectedNeighborhood={selectedNeighborhood} />
+      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} />
+      <NeighborhoodFilterBar activeZip={filterZip} onChange={setFilterZip} />
 
       <main style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 24px' }}>
         {/* Logo */}
@@ -38,7 +43,7 @@ export default function Briefing() {
               marginBottom: '12px',
             }}
           >
-            {selectedNeighborhood ?? 'District 3 Intelligence'}
+            {badgeLabel}
           </span>
           <h1
             style={{
@@ -51,6 +56,11 @@ export default function Briefing() {
           >
             The Briefing
           </h1>
+          {filterZip && (
+            <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '12px', marginTop: '6px' }}>
+              Briefing generated for all of District 3 · neighborhood filter applies to Charts &amp; Commission
+            </p>
+          )}
         </div>
 
         {/* Content card */}
@@ -83,7 +93,7 @@ export default function Briefing() {
         {sections.briefing && (
           <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
             <button
-              onClick={() => navigate('/charts', { state: { briefingText, aggregatedData, selectedZip, selectedNeighborhood } })}
+              onClick={() => navigate('/charts', { state: { briefingText, aggregatedData } })}
               style={{
                 background: '#2E86C1',
                 color: '#fff',

@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   PieChart, Pie, Cell, Legend, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer,
 } from 'recharts';
 import NavBar from '../components/NavBar';
-import type { DistrictData } from '../services/briefing';
+import NeighborhoodFilterBar from '../components/NeighborhoodFilterBar';
+import type { DistrictData, ZipPermitSummary } from '../services/aggregator';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 
@@ -197,14 +199,23 @@ function ValueByType({ costByType }: { costByType: Record<string, number> }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Charts() {
-  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData; selectedZip?: string; selectedNeighborhood?: string } };
+  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData } };
   const navigate = useNavigate();
-  const { briefingText = '', aggregatedData, selectedZip, selectedNeighborhood } = state ?? {};
+  const { briefingText = '', aggregatedData } = state ?? {};
   const ps = aggregatedData?.permit_summary;
+
+  const [filterZip, setFilterZip] = useState<string | null>(null);
+
+  // Resolve the active permit summary — zip bucket or full district
+  const activePs: ZipPermitSummary | typeof ps =
+    filterZip && ps?.by_zip?.[filterZip] ? ps.by_zip[filterZip] : ps;
+
+  const isSparse = filterZip !== null && (activePs?.total ?? 0) < 20;
 
   return (
     <div style={{ minHeight: '100vh', background: '#1B4F72' }}>
-      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} selectedZip={selectedZip} selectedNeighborhood={selectedNeighborhood} />
+      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} />
+      <NeighborhoodFilterBar activeZip={filterZip} onChange={setFilterZip} />
 
       <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 24px' }}>
         <div style={{ marginBottom: '28px' }}>
@@ -223,30 +234,44 @@ export default function Charts() {
               marginBottom: '12px',
             }}
           >
-            {selectedNeighborhood ?? 'District 3 Intelligence'}
+            District 3 Intelligence
           </span>
           <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#fff', margin: 0, letterSpacing: '-0.3px' }}>
             Charts
           </h1>
-          {ps && (
+          {activePs && (
             <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '13px', marginTop: '6px' }}>
-              Based on {ps.total.toLocaleString()} permits · total estimated value{' '}
-              ${(ps.total_estimated_cost_usd / 1_000_000).toFixed(1)}M
+              Based on {activePs.total.toLocaleString()} permits · total estimated value{' '}
+              ${(activePs.total_estimated_cost_usd / 1_000_000).toFixed(1)}M
+              {filterZip && <span style={{ color: 'rgba(255,255,255,0.3)' }}> · zip {filterZip}</span>}
             </p>
           )}
         </div>
 
-        {ps ? (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '20px',
-            alignItems: 'stretch',
-          }}>
-            <StatusDonut byStatus={ps.by_status} />
-            <CountByType byType={ps.by_type} />
-            <ValueByType costByType={ps.cost_by_type} />
-          </div>
+        {activePs ? (
+          <>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '20px',
+              alignItems: 'stretch',
+            }}>
+              <StatusDonut byStatus={activePs.by_status} />
+              <CountByType byType={activePs.by_type} />
+              <ValueByType costByType={activePs.cost_by_type} />
+            </div>
+
+            {isSparse && (
+              <p style={{
+                marginTop: '14px',
+                color: 'rgba(255,255,255,0.35)',
+                fontSize: '12px',
+                textAlign: 'center',
+              }}>
+                Limited permit activity in this neighborhood — showing available data
+              </p>
+            )}
+          </>
         ) : (
           <div
             style={{
@@ -276,7 +301,7 @@ export default function Charts() {
         {ps && (
           <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between' }}>
             <button
-              onClick={() => navigate('/briefing', { state: { briefingText, aggregatedData, selectedZip, selectedNeighborhood } })}
+              onClick={() => navigate('/briefing', { state: { briefingText, aggregatedData } })}
               style={{
                 background: 'rgba(255,255,255,0.08)', color: '#fff',
                 border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px',
@@ -286,7 +311,7 @@ export default function Charts() {
               ← The Briefing
             </button>
             <button
-              onClick={() => navigate('/signals', { state: { briefingText, aggregatedData, selectedZip, selectedNeighborhood } })}
+              onClick={() => navigate('/signals', { state: { briefingText, aggregatedData } })}
               style={{
                 background: '#2E86C1', color: '#fff', border: 'none',
                 borderRadius: '8px', padding: '10px 20px', fontSize: '14px',

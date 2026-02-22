@@ -13,11 +13,9 @@ const NAV_ITEMS = [
 interface Props {
   briefingText?: string;
   aggregatedData?: DistrictData;
-  selectedZip?: string;
-  selectedNeighborhood?: string;
 }
 
-export default function NavBar({ briefingText, aggregatedData, selectedZip, selectedNeighborhood }: Props) {
+export default function NavBar({ briefingText, aggregatedData }: Props) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
@@ -25,7 +23,7 @@ export default function NavBar({ briefingText, aggregatedData, selectedZip, sele
     if (path === '/') {
       navigate(path);
     } else {
-      navigate(path, { state: { briefingText, aggregatedData, selectedZip, selectedNeighborhood } });
+      navigate(path, { state: { briefingText, aggregatedData } });
     }
   }
 

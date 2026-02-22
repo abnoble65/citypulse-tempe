@@ -22,13 +22,17 @@ export interface NotablePermit {
   status: string;
 }
 
-export interface PermitSummary {
+export interface ZipPermitSummary {
   total: number;
   by_type: Record<string, number>;
   by_status: Record<string, number>;
   cost_by_type: Record<string, number>;
   total_estimated_cost_usd: number;
+}
+
+export interface PermitSummary extends ZipPermitSummary {
   notable_permits: NotablePermit[];
+  by_zip: Record<string, ZipPermitSummary>;
 }
 
 export interface PipelineSummary {
@@ -74,14 +78,22 @@ function isoDate(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-function buildPermitSummary(permits: BuildingPermit[]): PermitSummary {
+function buildZipSummary(permits: BuildingPermit[]): ZipPermitSummary {
   const by_type = countBy(permits, (p) => p.permit_type_definition ?? p.permit_type);
   const by_status = countBy(permits, (p) => p.status);
+  const cost_by_type: Record<string, number> = {};
+  let total_estimated_cost_usd = 0;
+  for (const p of permits) {
+    const cost = parseCost(p.revised_cost ?? p.estimated_cost);
+    const type = p.permit_type_definition ?? p.permit_type;
+    cost_by_type[type] = (cost_by_type[type] ?? 0) + cost;
+    total_estimated_cost_usd += cost;
+  }
+  return { total: permits.length, by_type, by_status, cost_by_type, total_estimated_cost_usd };
+}
 
-  const total_estimated_cost_usd = permits.reduce(
-    (sum, p) => sum + parseCost(p.revised_cost ?? p.estimated_cost),
-    0,
-  );
+function buildPermitSummary(permits: BuildingPermit[]): PermitSummary {
+  const base = buildZipSummary(permits);
 
   const notable_permits: NotablePermit[] = permits
     .filter((p) => parseCost(p.revised_cost ?? p.estimated_cost) > 1_000_000)
@@ -93,13 +105,19 @@ function buildPermitSummary(permits: BuildingPermit[]): PermitSummary {
       status: p.status,
     }));
 
-  const cost_by_type: Record<string, number> = {};
+  // Bucket permits by zip code for client-side filtering
+  const byZipMap: Record<string, BuildingPermit[]> = {};
   for (const p of permits) {
-    const type = p.permit_type_definition ?? p.permit_type;
-    cost_by_type[type] = (cost_by_type[type] ?? 0) + parseCost(p.revised_cost ?? p.estimated_cost);
+    const zip = p.zipcode?.trim();
+    if (!zip) continue;
+    (byZipMap[zip] ??= []).push(p);
+  }
+  const by_zip: Record<string, ZipPermitSummary> = {};
+  for (const [zip, zipPermits] of Object.entries(byZipMap)) {
+    by_zip[zip] = buildZipSummary(zipPermits);
   }
 
-  return { total: permits.length, by_type, by_status, cost_by_type, total_estimated_cost_usd, notable_permits };
+  return { ...base, notable_permits, by_zip };
 }
 
 function buildPipelineSummary(projects: DevelopmentProject[]): PipelineSummary {

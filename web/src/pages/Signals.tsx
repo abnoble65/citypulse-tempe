@@ -3,19 +3,17 @@ import NavBar from '../components/NavBar';
 import { parseBriefingSections, type DistrictData } from '../services/briefing';
 
 export default function Signals() {
-  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData; selectedZip?: string; selectedNeighborhood?: string } };
+  const { state } = useLocation() as { state?: { briefingText?: string; aggregatedData?: DistrictData } };
   const navigate = useNavigate();
   const briefingText = state?.briefingText ?? '';
   const aggregatedData = state?.aggregatedData;
-  const selectedZip = state?.selectedZip;
-  const selectedNeighborhood = state?.selectedNeighborhood;
   const sections = parseBriefingSections(briefingText);
 
   const hasContent = sections.signal || sections.zoningContext;
 
   return (
     <div style={{ minHeight: '100vh', background: '#1B4F72' }}>
-      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} selectedZip={selectedZip} selectedNeighborhood={selectedNeighborhood} />
+      <NavBar briefingText={briefingText} aggregatedData={aggregatedData} />
 
       <main style={{ maxWidth: '760px', margin: '0 auto', padding: '40px 24px' }}>
         <div style={{ marginBottom: '24px' }}>
@@ -34,7 +32,7 @@ export default function Signals() {
               marginBottom: '12px',
             }}
           >
-            {selectedNeighborhood ?? 'District 3 Intelligence'}
+            District 3 Intelligence
           </span>
           <h1
             style={{
@@ -69,13 +67,13 @@ export default function Signals() {
         {hasContent && (
           <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'space-between' }}>
             <button
-              onClick={() => navigate('/charts', { state: { briefingText, aggregatedData, selectedZip, selectedNeighborhood } })}
+              onClick={() => navigate('/charts', { state: { briefingText, aggregatedData } })}
               style={navButtonStyle('secondary')}
             >
               ← Charts
             </button>
             <button
-              onClick={() => navigate('/outlook', { state: { briefingText, aggregatedData, selectedZip, selectedNeighborhood } })}
+              onClick={() => navigate('/outlook', { state: { briefingText, aggregatedData } })}
               style={navButtonStyle('primary')}
             >
               Outlook →
