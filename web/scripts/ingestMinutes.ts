@@ -306,6 +306,7 @@ async function alreadyProcessed(dateStr: string): Promise<boolean> {
 // Dates where the hearing row exists in DB but project inserts failed (shadow_details
 // schema error). These are force-deleted and reprocessed on each run.
 const FORCE_REPROCESS = new Set([
+  '2025-06-26', // large PDF, JSON truncation mid-stream
   '2024-06-06',
   '2022-09-08',
 ]);
