@@ -4,6 +4,7 @@ import { NEIGHBORHOODS } from "../data";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { supabase } from "../services/supabase";
+import { NeighborhoodHero } from "../components/NeighborhoodHero";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -278,6 +279,7 @@ export function Commission() {
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
       <FilterBar selected={filter} onSelect={handleFilterChange} />
+      <NeighborhoodHero selected={filter} />
       <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 24px" }}>
         <SectionLabel text="Commission Hearings" />
         <h2 style={{

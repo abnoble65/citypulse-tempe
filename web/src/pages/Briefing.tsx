@@ -5,6 +5,7 @@ import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { parseBriefingSections } from "../services/briefing";
 import type { DistrictData } from "../services/briefing";
+import { NeighborhoodHero } from "../components/NeighborhoodHero";
 
 interface BriefingProps {
   briefingText: string;
@@ -47,6 +48,7 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
       <FilterBar selected={filter} onSelect={setFilter} />
+      <NeighborhoodHero selected={filter} />
       <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 24px" }}>
         <SectionLabel text="The Briefing" />
         <h2 style={{

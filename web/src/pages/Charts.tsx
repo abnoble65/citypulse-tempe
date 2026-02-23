@@ -4,6 +4,7 @@ import { NEIGHBORHOODS } from "../data";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import type { DistrictData, ZipPermitSummary } from "../services/aggregator";
+import { NeighborhoodHero } from "../components/NeighborhoodHero";
 
 interface ChartsProps {
   aggregatedData: DistrictData | null;
@@ -199,6 +200,7 @@ export function Charts({ aggregatedData, onNavigate }: ChartsProps) {
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
       <FilterBar selected={filter} onSelect={setFilter} />
+      <NeighborhoodHero selected={filter} />
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "52px 24px" }}>
         <SectionLabel text="Charts" />
         <h2 style={{
