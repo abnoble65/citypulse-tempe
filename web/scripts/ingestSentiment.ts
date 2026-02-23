@@ -96,7 +96,8 @@ function isRateLimitError(err: unknown): boolean {
 
 /**
  * Fetch all Planning Commission clips from the Granicus ViewPublisher page.
- * Parses clip_id and meeting date from the HTML table rows.
+ * Rows use class "odd"/"even"; dates are MM/DD/YY (2-digit year);
+ * clip_id appears in MediaPlayer/TranscriptViewer href query params.
  */
 async function fetchGranicusClips(): Promise<GranicusClip[]> {
   const url = `${GRANICUS_BASE}/ViewPublisher.php?view_id=${GRANICUS_VIEW_ID}`;
@@ -109,9 +110,8 @@ async function fetchGranicusClips(): Promise<GranicusClip[]> {
   const clips: GranicusClip[] = [];
   const seen  = new Set<string>();
 
-  // Each meeting is a <tr class="listingRow"> (or similar).
-  // MediaPlayer/TranscriptViewer links embed clip_id as a query param.
-  const rowRegex = /<tr[^>]*class="[^"]*listingRow[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi;
+  // Rows are <tr class="odd" ...> or <tr class="even" ...>
+  const rowRegex = /<tr\s+class="(?:odd|even)"[^>]*>([\s\S]*?)<\/tr>/gi;
   let rowMatch: RegExpExecArray | null;
 
   while ((rowMatch = rowRegex.exec(html)) !== null) {
@@ -126,12 +126,7 @@ async function fetchGranicusClips(): Promise<GranicusClip[]> {
     const dateStr = parseGranicusDate(rowHtml);
     if (!dateStr) continue;
 
-    const titleMatch = rowHtml.match(/<td[^>]*class="[^"]*title[^"]*"[^>]*>([\s\S]*?)<\/td>/i);
-    const title = titleMatch
-      ? titleMatch[1].replace(/<[^>]+>/g, '').trim()
-      : `Planning Commission ${dateStr}`;
-
-    clips.push({ clip_id, dateStr, title });
+    clips.push({ clip_id, dateStr, title: `Planning Commission ${dateStr}` });
   }
 
   // Sort newest → oldest
@@ -141,30 +136,28 @@ async function fetchGranicusClips(): Promise<GranicusClip[]> {
 }
 
 /**
- * Parse a Granicus date string (from a table cell's inner HTML) to YYYY-MM-DD.
- * Handles "MM/DD/YYYY" and "Month DD, YYYY" formats.
+ * Parse a Granicus date to YYYY-MM-DD.
+ * Handles MM/DD/YY (2-digit year, e.g. "02/12/26") and MM/DD/YYYY.
+ * Falls back to the hidden unix timestamp span if present.
  */
 function parseGranicusDate(cellHtml: string): string | null {
-  // MM/DD/YYYY
-  const slashMatch = cellHtml.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
-  if (slashMatch) {
-    const [, mm, dd, yyyy] = slashMatch;
-    return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+  // Prefer the hidden unix timestamp: <span style="display:none;">1770883200</span>MM/DD/YY
+  const tsMatch = cellHtml.match(/<span[^>]*style="display:none;"[^>]*>(\d{9,10})<\/span>/i);
+  if (tsMatch) {
+    const ts = parseInt(tsMatch[1], 10) * 1000;
+    const d  = new Date(ts);
+    const yyyy = d.getUTCFullYear();
+    const mm   = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const dd   = String(d.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   }
 
-  // "Month DD, YYYY"
-  const MONTHS: Record<string, string> = {
-    january:'01', february:'02', march:'03', april:'04',
-    may:'05', june:'06', july:'07', august:'08',
-    september:'09', october:'10', november:'11', december:'12',
-  };
-  const longMatch = cellHtml.match(
-    /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})\b/i
-  );
-  if (longMatch) {
-    const [, monthName, dd, yyyy] = longMatch;
-    const mm = MONTHS[monthName.toLowerCase()];
-    return `${yyyy}-${mm}-${dd.padStart(2, '0')}`;
+  // MM/DD/YY or MM/DD/YYYY
+  const slashMatch = cellHtml.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
+  if (slashMatch) {
+    const [, mm, dd, yy] = slashMatch;
+    const yyyy = yy.length === 2 ? `20${yy}` : yy;
+    return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
   }
 
   return null;
@@ -173,106 +166,116 @@ function parseGranicusDate(cellHtml: string): string | null {
 // ── VTT transcript fetch ──────────────────────────────────────────────────────
 
 /**
- * Download the VTT caption transcript for a Granicus clip.
+ * Download the caption transcript for a Granicus clip.
  *
- * Tries two approaches in order:
- *   1. Direct VTT via TranscriptViewer format parameter
- *   2. Parse the TranscriptViewer HTML for a .vtt download link
+ * Granicus TranscriptViewer returns an HTML page where the transcript text
+ * is rendered directly in the body with <br> line breaks — not a VTT file.
+ * We fetch the HTML and strip all tags to get plain text.
  */
 async function fetchTranscript(clipId: string): Promise<string | null> {
-  // Attempt 1: direct VTT download
-  const directUrl = `${GRANICUS_BASE}/TranscriptViewer.php?clip_id=${clipId}&view_id=${GRANICUS_VIEW_ID}&format=vtt`;
+  const url = `${GRANICUS_BASE}/TranscriptViewer.php?view_id=${GRANICUS_VIEW_ID}&clip_id=${clipId}`;
   try {
-    const directRes = await fetch(directUrl, { redirect: 'follow' });
-    if (directRes.ok) {
-      const text = await directRes.text();
-      if (text.startsWith('WEBVTT') || text.includes('-->')) return text;
-    }
-  } catch { /* fall through */ }
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const html = await res.text();
 
-  // Attempt 2: parse viewer HTML for a .vtt href
-  const viewerUrl = `${GRANICUS_BASE}/TranscriptViewer.php?clip_id=${clipId}&view_id=${GRANICUS_VIEW_ID}`;
-  try {
-    const viewerRes = await fetch(viewerUrl);
-    if (!viewerRes.ok) return null;
-    const html = await viewerRes.text();
+    // The transcript text starts after the closing </table> of the header block.
+    // Strip HTML tags and collapse whitespace to get clean plain text.
+    const afterHeader = html.replace(/[\s\S]*?<\/table>/i, '');
+    const plainText = afterHeader
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
 
-    const vttMatch = html.match(/href=["']([^"']*\.vtt[^"']*)["']/i);
-    if (vttMatch) {
-      const vttUrl = vttMatch[1].startsWith('http')
-        ? vttMatch[1]
-        : `${GRANICUS_BASE}/${vttMatch[1].replace(/^\//, '')}`;
-      const vttRes = await fetch(vttUrl);
-      if (vttRes.ok) return vttRes.text();
-    }
-  } catch { /* fall through */ }
-
-  return null;
+    return plainText.length > 100 ? plainText : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Public comment extraction ─────────────────────────────────────────────────
 
 /**
- * Strip VTT metadata and slice out the public comment portion of a transcript.
+ * Extract public comment content from a full hearing transcript.
  *
- * Planning Commission hearings follow a predictable agenda: staff presentation,
- * project sponsor presentation, then "PUBLIC COMMENT". We extract from the
- * public comment header until commissioners resume substantive dialogue.
+ * Planning Commission hearings span many hours with multiple agenda items,
+ * each having its own public comment period. Rather than trying to parse
+ * the window boundaries exactly, we:
+ *   1. Collect all >> speaker lines (Granicus marks turns with >>)
+ *   2. Include surrounding lines for context
+ *   3. Skip lines that are clearly staff/commissioner boilerplate
+ *   4. Return up to 12k chars for Claude to analyze
  *
- * Falls back to returning the full stripped transcript if no section marker found.
+ * Claude's prompt instructs it to ignore procedural/continuance testimony
+ * and focus on development project positions.
  */
-function extractPublicCommentSection(vtt: string): string {
-  const lines = vtt.split('\n');
-  const cueLines: string[] = [];
+function extractPublicCommentSection(transcript: string): string {
+  const lines = transcript.split('\n').map(l => l.trim()).filter(Boolean);
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    if (/^WEBVTT/.test(trimmed)) continue;
-    if (/^\d+$/.test(trimmed)) continue;               // cue sequence number
-    if (/^\d{2}:\d{2}/.test(trimmed)) continue;        // timestamp
-    if (/^NOTE\b/.test(trimmed)) continue;
-    cueLines.push(trimmed);
+  // Lines that are routine boilerplate (not speaker testimony)
+  const BOILERPLATE_RE = /EACH SPEAKER WILL BE ALLOWED|THREE MINUTES|CHIME INDICATING|SPEAK CLEARLY|SILENCE ANY MOBILE|COMMISSION DOES NOT TOLERATE|PLEASE STATE YOUR NAME|WHEN YOU'RE ALLOTTED|TIMER ON THE PODIUM|LINE UP ON THE SCREEN/i;
+
+  // Collect speaker turns (lines starting with >>) and their following context lines
+  const speakerBlocks: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith('>>') || line.startsWith('> >')) {
+      if (BOILERPLATE_RE.test(line)) continue;
+      // Grab this line plus up to 8 continuation lines
+      const block: string[] = [line];
+      for (let j = i + 1; j < Math.min(i + 9, lines.length); j++) {
+        const next = lines[j];
+        if (next.startsWith('>>') || /PUBLIC\s+COMMENT\s+(?:IS\s+)?CLOSED/i.test(next)) break;
+        if (!BOILERPLATE_RE.test(next)) block.push(next);
+      }
+      speakerBlocks.push(block.join(' '));
+    }
   }
 
-  const fullText = cueLines.join(' ');
+  if (speakerBlocks.length === 0) {
+    // No >> markers found — return middle section of transcript
+    const mid = Math.floor(transcript.length / 3);
+    return transcript.slice(mid, mid + 12_000);
+  }
 
-  const pcStart = fullText.search(/public\s+comment/i);
-  if (pcStart === -1) return fullText; // no marker — return all, Claude will find it
-
-  // End when commissioner/chair dialogue resumes after at least 100 chars of public comment
-  const afterPc = fullText.slice(pcStart + 100);
-  const endRelative = afterPc.search(
-    /\b(?:CHAIR|PRESIDENT|VICE\s+PRESIDENT|COMMISSIONER)\s+\w+\s*:/i
-  );
-  const endIdx = endRelative !== -1
-    ? pcStart + 100 + endRelative
-    : Math.min(pcStart + 15_000, fullText.length); // cap at ~15k chars
-
-  return fullText.slice(pcStart, endIdx);
+  // Cap at 12k chars
+  let combined = speakerBlocks.join('\n');
+  if (combined.length > 12_000) combined = combined.slice(0, 12_000);
+  return combined;
 }
 
 // ── Claude sentiment analysis ─────────────────────────────────────────────────
 
 const SENTIMENT_SYSTEM = `You are an expert at analyzing public comment testimony from San Francisco Planning Commission hearings.
-You will receive the transcript text of the public comment portion of a Planning Commission hearing.
-Count the distinct public speakers and classify each speaker's position on the primary development project.
+You will receive speaker turns extracted from a full Planning Commission hearing transcript.
+The hearing typically covers multiple agenda items (development projects, conditional use authorizations, appeals, etc.).
+
+Your task: identify all members of the public who testified about development projects or land use items,
+and classify their collective positions.
 
 Return ONLY a valid JSON object with this exact structure:
 {
-  "speakers": <total distinct public speakers as integer>,
-  "for_project": <count who spoke in support as integer>,
+  "speakers": <total distinct public speakers on development/land-use items as integer>,
+  "for_project": <count who spoke in support of the relevant project(s) as integer>,
   "against_project": <count who spoke in opposition as integer>,
   "neutral": <count with mixed, unclear, or question-only positions as integer>,
-  "top_themes": [<up to 5 recurring themes or concerns, as short concrete phrases>],
-  "notable_quotes": [<up to 3 verbatim quotes capturing the range of opinion, under 200 chars each>]
+  "top_themes": [<up to 5 recurring themes or concerns raised, as short concrete phrases>],
+  "notable_quotes": [<up to 3 verbatim excerpts that best capture the range of opinion, under 200 chars each>]
 }
 
 Rules:
-- Count only members of the public — not commissioners, staff, or the project sponsor.
-- If a speaker's position is ambiguous, count them as neutral.
-- Themes should be specific (e.g. "shadow impact on St. Mary's Square", "construction noise", "insufficient BMR percentage").
-- Quotes must be genuine verbatim excerpts from the transcript, not paraphrases.
+- Only count members of the public — not commissioners, staff, or the project sponsor presenting their own project.
+- Exclude speakers on purely procedural/continuance items unless they express a substantive position.
+- If a speaker's position is ambiguous, count as neutral.
+- If no public speakers are identifiable, return all zeros and empty arrays.
+- Themes should be concrete (e.g. "shadow impact on St. Mary's Square", "noise from construction", "insufficient affordable housing").
+- Quotes must be verbatim text from the transcript.
 - for_project + against_project + neutral must equal speakers.
 - Return ONLY the JSON — no markdown fences, no explanation.`;
 

@@ -241,7 +241,7 @@ function HearingDetailCard({ hearing }: { hearing: Hearing }) {
 export function Commission() {
   const [filter, setFilter] = useState("All District 3");
   const [search, setSearch] = useState("");
-  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [expandedAddress, setExpandedAddress] = useState<string | null>(null);
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
@@ -286,12 +286,14 @@ export function Commission() {
           marginBottom: 16, fontFamily: FONTS.body,
         }}>Recent Hearings</div>
 
-        {MOCK_HEARINGS.map((h, i) => {
+        {MOCK_HEARINGS
+          .filter(h => !search || h.address.toLowerCase().includes(search.toLowerCase()))
+          .map((h) => {
           const ac = actionStyle(h.action);
-          const isExpanded = expandedIndex === i;
+          const isExpanded = expandedAddress === h.address;
 
           return (
-            <div key={i} style={{
+            <div key={h.address} style={{
               background: COLORS.white, borderRadius: 16,
               padding: "28px", marginBottom: 14,
               border: `1px solid ${isExpanded ? COLORS.orange : COLORS.lightBorder}`,
@@ -367,7 +369,7 @@ export function Commission() {
                   </div>
                 )}
                 <button
-                  onClick={() => setExpandedIndex(isExpanded ? null : i)}
+                  onClick={() => setExpandedAddress(isExpanded ? null : h.address)}
                   style={{
                     background: isExpanded ? COLORS.charcoal : COLORS.cream,
                     color: isExpanded ? COLORS.white : COLORS.charcoal,
