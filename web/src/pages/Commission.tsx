@@ -1,15 +1,73 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
-import { MOCK_HEARINGS } from "../data";
-import type { Hearing } from "../data";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
+import { supabase } from "../services/supabase";
 
-function actionStyle(action: string) {
-  if (action === "Approved") return { bg: "#EDF5ED", text: "#3D7A3F", border: "#C8E0C8" };
-  if (action === "Continued") return { bg: "#FEF5EC", text: "#B47A2E", border: "#F0DFC4" };
-  return { bg: "#FDEEEE", text: "#B44040", border: "#F0C8C8" };
+/* ─── Types ──────────────────────────────────── */
+
+interface Sentiment {
+  speakers:        number;
+  for_project:     number;
+  against_project: number;
+  neutral:         number;
+  top_themes:      string[];
+  notable_quotes:  string[];
+  source:          string;
+  clip_id:         string | null;
+}
+
+interface Vote {
+  commissioner_name: string;
+  vote: string;
+}
+
+interface Comment {
+  commissioner_name: string;
+  comment_text: string;
+}
+
+interface LiveProject {
+  id: string;
+  address: string | null;
+  action: string | null;
+  project_description: string | null;
+  shadow_flag: boolean;
+  shadow_details: string | null;
+  case_number: string | null;
+  hearing: { id: string; hearing_date: string; public_sentiment: Sentiment[] } | null;
+  votes: Vote[];
+  commissioner_comments: Comment[];
+}
+
+/* ─── Helpers ────────────────────────────────── */
+
+function normalizeAction(action: string | null): "Approved" | "Continued" | "Disapproved" {
+  if (!action) return "Continued";
+  const a = action.toLowerCase();
+  if (a.includes("approv") || a.includes("adopt") || a.includes("grant") || a.includes("permit issued")) return "Approved";
+  if (a.includes("disapp") || a.includes("denied") || a.includes("deny")) return "Disapproved";
+  return "Continued";
+}
+
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function tallyVotes(votes: Vote[]) {
+  return {
+    aye:    votes.filter(v => v.vote === "aye").length,
+    nay:    votes.filter(v => v.vote === "nay").length,
+    absent: votes.filter(v => ["absent", "recused", "abstain"].includes(v.vote)).length,
+  };
+}
+
+function actionStyle(norm: "Approved" | "Continued" | "Disapproved") {
+  if (norm === "Approved")    return { bg: "#EDF5ED", text: "#3D7A3F", border: "#C8E0C8" };
+  if (norm === "Continued")   return { bg: "#FEF5EC", text: "#B47A2E", border: "#F0DFC4" };
+  return                             { bg: "#FDEEEE", text: "#B44040", border: "#F0C8C8" };
 }
 
 /* ─── Sentiment Bar ──────────────────────────── */
@@ -17,24 +75,19 @@ function actionStyle(action: string) {
 function SentimentBar({ forCount, against, neutral, total }: {
   forCount: number; against: number; neutral: number; total: number;
 }) {
-  const forPct = (forCount / total) * 100;
-  const againstPct = (against / total) * 100;
-  const neutralPct = (neutral / total) * 100;
+  if (total === 0) return null;
+  const forPct     = (forCount / total) * 100;
+  const againstPct = (against  / total) * 100;
+  const neutralPct = (neutral  / total) * 100;
 
   return (
     <div>
-      <div style={{
-        display: "flex", height: 12, borderRadius: 6,
-        overflow: "hidden", marginBottom: 10,
-      }}>
-        <div style={{ width: `${forPct}%`, background: "#5B9A5F", transition: "width 0.4s" }} />
+      <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", marginBottom: 10 }}>
+        <div style={{ width: `${forPct}%`,     background: "#5B9A5F", transition: "width 0.4s" }} />
         <div style={{ width: `${neutralPct}%`, background: "#B0A89E", transition: "width 0.4s" }} />
         <div style={{ width: `${againstPct}%`, background: "#D4643B", transition: "width 0.4s" }} />
       </div>
-      <div style={{
-        display: "flex", gap: 20, fontSize: 12,
-        fontFamily: FONTS.body, fontWeight: 600,
-      }}>
+      <div style={{ display: "flex", gap: 20, fontSize: 12, fontFamily: FONTS.body, fontWeight: 600 }}>
         <span style={{ color: "#3D7A3F" }}>● {forCount} Support</span>
         <span style={{ color: "#B0A89E" }}>● {neutral} Neutral</span>
         <span style={{ color: "#D4643B" }}>● {against} Oppose</span>
@@ -45,9 +98,10 @@ function SentimentBar({ forCount, against, neutral, total }: {
 
 /* ─── Detail Card ────────────────────────────── */
 
-function HearingDetailCard({ hearing }: { hearing: Hearing }) {
-  const d = hearing.detail;
-  const s = d.publicSentiment;
+function ProjectDetailCard({ project }: { project: LiveProject }) {
+  const sentiment = project.hearing?.public_sentiment?.[0] ?? null;
+  const tally = tallyVotes(project.votes);
+  const comments = project.commissioner_comments.slice(0, 4);
 
   return (
     <div style={{
@@ -58,177 +112,176 @@ function HearingDetailCard({ hearing }: { hearing: Hearing }) {
       <style>{`
         @keyframes fadeSlideIn {
           from { opacity: 0; transform: translateY(-8px); }
-          to { opacity: 1; transform: translateY(0); }
+          to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
 
-      {/* Major Actions */}
-      <div style={{ marginBottom: 28 }}>
-        <div style={{
-          fontSize: 12, fontWeight: 700, color: COLORS.orange,
-          letterSpacing: "0.06em", textTransform: "uppercase",
-          marginBottom: 12, fontFamily: FONTS.body,
-        }}>Major Development Actions</div>
-        <p style={{
-          fontFamily: FONTS.body, fontSize: 14.5, lineHeight: 1.75,
-          color: COLORS.charcoal,
-        }}>{d.majorActions}</p>
-      </div>
+      {/* Project Description */}
+      {project.project_description && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{
+            fontSize: 12, fontWeight: 700, color: COLORS.orange,
+            letterSpacing: "0.06em", textTransform: "uppercase",
+            marginBottom: 12, fontFamily: FONTS.body,
+          }}>Project Description</div>
+          <p style={{ fontFamily: FONTS.body, fontSize: 14.5, lineHeight: 1.75, color: COLORS.charcoal }}>
+            {project.project_description}
+          </p>
+        </div>
+      )}
 
-      {/* Commissioner Concerns */}
-      <div style={{ marginBottom: 28 }}>
-        <div style={{
-          fontSize: 12, fontWeight: 700, color: COLORS.orange,
-          letterSpacing: "0.06em", textTransform: "uppercase",
-          marginBottom: 12, fontFamily: FONTS.body,
-        }}>Commissioner Concerns</div>
-        {d.commissionerConcerns.map((c, i) => (
-          <div key={i} style={{
-            display: "flex", gap: 14, alignItems: "flex-start",
-            padding: "14px 0",
-            borderBottom: i < d.commissionerConcerns.length - 1
-              ? `1px solid ${COLORS.cream}` : "none",
-          }}>
-            <div style={{
-              background: COLORS.softAmber, borderRadius: 8,
-              padding: "6px 12px", flexShrink: 0,
-              fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
-              color: "#B47A2E", whiteSpace: "nowrap",
-            }}>{c.name}</div>
-            <p style={{
-              fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.7,
-              color: COLORS.midGray,
-            }}>{c.concern}</p>
+      {/* Shadow Impact */}
+      {project.shadow_flag && project.shadow_details && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{
+            fontSize: 12, fontWeight: 700, color: "#B47A2E",
+            letterSpacing: "0.06em", textTransform: "uppercase",
+            marginBottom: 12, fontFamily: FONTS.body,
+          }}>☀ Shadow Impact — Section 295</div>
+          <p style={{ fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.75, color: COLORS.charcoal }}>
+            {project.shadow_details}
+          </p>
+        </div>
+      )}
+
+      {/* Commissioner Discussion */}
+      {comments.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{
+            fontSize: 12, fontWeight: 700, color: COLORS.orange,
+            letterSpacing: "0.06em", textTransform: "uppercase",
+            marginBottom: 12, fontFamily: FONTS.body,
+          }}>Commissioner Discussion</div>
+          {comments.map((c, i) => (
+            <div key={i} style={{
+              display: "flex", gap: 14, alignItems: "flex-start",
+              padding: "14px 0",
+              borderBottom: i < comments.length - 1 ? `1px solid ${COLORS.cream}` : "none",
+            }}>
+              <div style={{
+                background: COLORS.softAmber, borderRadius: 8,
+                padding: "6px 12px", flexShrink: 0,
+                fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
+                color: "#B47A2E", whiteSpace: "nowrap",
+              }}>{c.commissioner_name}</div>
+              <p style={{ fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.7, color: COLORS.midGray }}>
+                {c.comment_text}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Vote breakdown */}
+      {project.votes.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{
+            fontSize: 12, fontWeight: 700, color: COLORS.orange,
+            letterSpacing: "0.06em", textTransform: "uppercase",
+            marginBottom: 12, fontFamily: FONTS.body,
+          }}>Commissioner Votes</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {project.votes.map((v, i) => {
+              const voteColor =
+                v.vote === "aye"     ? { bg: "#EDF5ED", text: "#3D7A3F", border: "#C8E0C8" } :
+                v.vote === "nay"     ? { bg: "#FDEEEE", text: "#B44040", border: "#F0C8C8" } :
+                                       { bg: COLORS.cream, text: COLORS.warmGray, border: COLORS.lightBorder };
+              return (
+                <div key={i} style={{
+                  background: voteColor.bg, border: `1px solid ${voteColor.border}`,
+                  borderRadius: 10, padding: "8px 14px",
+                  fontFamily: FONTS.body, fontSize: 12,
+                }}>
+                  <span style={{ fontWeight: 700, color: voteColor.text, textTransform: "capitalize" }}>
+                    {v.vote}
+                  </span>
+                  <span style={{ color: COLORS.midGray, marginLeft: 6 }}>{v.commissioner_name}</span>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
 
-      {/* Public Impact */}
-      <div style={{ marginBottom: 28 }}>
-        <div style={{
-          fontSize: 12, fontWeight: 700, color: COLORS.orange,
-          letterSpacing: "0.06em", textTransform: "uppercase",
-          marginBottom: 12, fontFamily: FONTS.body,
-        }}>What This Means for Residents</div>
-        {d.publicImpact.map((impact, i) => (
-          <div key={i} style={{
-            display: "flex", gap: 12, alignItems: "flex-start",
-            marginBottom: 12,
-          }}>
-            <div style={{
-              width: 6, height: 6, borderRadius: "50%",
-              background: COLORS.orange, flexShrink: 0,
-              marginTop: 8,
-            }} />
-            <p style={{
-              fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.7,
-              color: COLORS.midGray,
-            }}>{impact}</p>
-          </div>
-        ))}
-      </div>
+      {/* Case number */}
+      {project.case_number && (
+        <div style={{ marginBottom: sentiment ? 28 : 8 }}>
+          <span style={{
+            fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray,
+          }}>Case No. {project.case_number}</span>
+        </div>
+      )}
 
-      {/* Public Sentiment */}
-      {s && (
-        <div style={{
-          background: COLORS.cream, borderRadius: 16,
-          padding: "28px 32px",
-        }}>
+      {/* Public Comment Sentiment */}
+      {sentiment && sentiment.speakers > 0 && (
+        <div style={{ background: COLORS.cream, borderRadius: 16, padding: "28px 32px" }}>
           <div style={{
             display: "flex", justifyContent: "space-between",
-            alignItems: "center", marginBottom: 16,
-            flexWrap: "wrap", gap: 8,
+            alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8,
           }}>
             <div style={{
               fontSize: 12, fontWeight: 700, color: COLORS.orange,
-              letterSpacing: "0.06em", textTransform: "uppercase",
-              fontFamily: FONTS.body,
+              letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: FONTS.body,
             }}>Public Comment Sentiment</div>
-            <div style={{
-              display: "flex", alignItems: "center", gap: 8,
-            }}>
-              <span style={{
-                fontFamily: "'Urbanist', sans-serif",
-                fontSize: 22, fontWeight: 800, color: COLORS.charcoal,
-              }}>{s.speakers}</span>
-              <span style={{
-                fontFamily: FONTS.body, fontSize: 12,
-                color: COLORS.warmGray, fontWeight: 500,
-              }}>speakers</span>
-              {s.source === "sfgovtv_captions" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontFamily: "'Urbanist', sans-serif", fontSize: 22, fontWeight: 800, color: COLORS.charcoal }}>
+                {sentiment.speakers}
+              </span>
+              <span style={{ fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray, fontWeight: 500 }}>
+                speakers
+              </span>
+              {sentiment.source === "sfgovtv_captions" && (
                 <span style={{
                   background: COLORS.softBlue, color: "#4A6FA5",
-                  fontSize: 10, fontWeight: 700,
-                  padding: "3px 8px", borderRadius: 4,
-                  fontFamily: FONTS.body, marginLeft: 4,
-                  letterSpacing: "0.03em",
+                  fontSize: 10, fontWeight: 700, padding: "3px 8px",
+                  borderRadius: 4, fontFamily: FONTS.body, marginLeft: 4,
                 }}>VIA SFGOVTV</span>
               )}
             </div>
           </div>
 
           <SentimentBar
-            forCount={s.forProject}
-            against={s.againstProject}
-            neutral={s.neutral}
-            total={s.speakers}
+            forCount={sentiment.for_project}
+            against={sentiment.against_project}
+            neutral={sentiment.neutral}
+            total={sentiment.speakers}
           />
 
-          {/* Top Themes */}
-          <div style={{ marginTop: 20, marginBottom: 18 }}>
-            <div style={{
-              fontSize: 11, fontWeight: 700, color: COLORS.midGray,
-              letterSpacing: "0.04em", textTransform: "uppercase",
-              marginBottom: 10, fontFamily: FONTS.body,
-            }}>Top Themes Raised</div>
-            <div style={{
-              display: "flex", flexWrap: "wrap", gap: 8,
-            }}>
-              {s.topThemes.map((theme, i) => (
-                <span key={i} style={{
-                  background: COLORS.white,
-                  border: `1px solid ${COLORS.lightBorder}`,
-                  borderRadius: 20, padding: "6px 14px",
-                  fontSize: 13, fontFamily: FONTS.body,
-                  color: COLORS.charcoal, fontWeight: 500,
-                }}>{theme}</span>
-              ))}
+          {sentiment.top_themes?.length > 0 && (
+            <div style={{ marginTop: 20, marginBottom: 18 }}>
+              <div style={{
+                fontSize: 11, fontWeight: 700, color: COLORS.midGray,
+                letterSpacing: "0.04em", textTransform: "uppercase",
+                marginBottom: 10, fontFamily: FONTS.body,
+              }}>Top Themes Raised</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {sentiment.top_themes.map((theme, i) => (
+                  <span key={i} style={{
+                    background: COLORS.white, border: `1px solid ${COLORS.lightBorder}`,
+                    borderRadius: 20, padding: "6px 14px",
+                    fontSize: 13, fontFamily: FONTS.body, color: COLORS.charcoal, fontWeight: 500,
+                  }}>{theme}</span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Notable Quotes */}
-          {s.notableQuotes.length > 0 && (
+          {sentiment.notable_quotes?.length > 0 && (
             <div>
               <div style={{
                 fontSize: 11, fontWeight: 700, color: COLORS.midGray,
                 letterSpacing: "0.04em", textTransform: "uppercase",
                 marginBottom: 10, fontFamily: FONTS.body,
               }}>Notable Public Testimony</div>
-              {s.notableQuotes.map((q, i) => (
-                <div key={i} style={{
-                  borderLeft: `3px solid ${COLORS.orange}`,
-                  paddingLeft: 16, marginBottom: 12,
-                }}>
+              {sentiment.notable_quotes.map((q, i) => (
+                <div key={i} style={{ borderLeft: `3px solid ${COLORS.orange}`, paddingLeft: 16, marginBottom: 12 }}>
                   <p style={{
                     fontFamily: FONTS.body, fontSize: 14,
-                    lineHeight: 1.7, color: COLORS.charcoal,
-                    fontStyle: "italic",
+                    lineHeight: 1.7, color: COLORS.charcoal, fontStyle: "italic",
                   }}>"{q}"</p>
                 </div>
               ))}
             </div>
-          )}
-
-          {/* Video link */}
-          {d.videoUrl && (
-            <a href={d.videoUrl} target="_blank" rel="noopener noreferrer" style={{
-              display: "inline-flex", alignItems: "center", gap: 8,
-              marginTop: 12, fontSize: 13, fontWeight: 600,
-              color: COLORS.orange, fontFamily: FONTS.body,
-              textDecoration: "none",
-            }}>
-              ▶ Watch full hearing on SFGovTV
-            </a>
           )}
         </div>
       )}
@@ -239,9 +292,49 @@ function HearingDetailCard({ hearing }: { hearing: Hearing }) {
 /* ─── COMMISSION PAGE ────────────────────────── */
 
 export function Commission() {
-  const [filter, setFilter] = useState("All District 3");
-  const [search, setSearch] = useState("");
-  const [expandedAddress, setExpandedAddress] = useState<string | null>(null);
+  const [filter, setFilter]               = useState("All District 3");
+  const [search, setSearch]               = useState("");
+  const [expandedId, setExpandedId]       = useState<string | null>(null);
+  const [projects, setProjects]           = useState<LiveProject[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      setError(null);
+
+      const { data, error: err } = await supabase
+        .from("projects")
+        .select(`
+          id, address, action, project_description,
+          shadow_flag, shadow_details, case_number,
+          hearing:hearing_id(
+            id, hearing_date,
+            public_sentiment(
+              speakers, for_project, against_project, neutral,
+              top_themes, notable_quotes, source, clip_id
+            )
+          ),
+          votes(commissioner_name, vote),
+          commissioner_comments(commissioner_name, comment_text)
+        `)
+        .not("address", "is", null)
+        .order("hearing_id", { ascending: false })
+        .limit(30);
+
+      if (err) { setError(err.message); setLoading(false); return; }
+      setProjects((data ?? []) as unknown as LiveProject[]);
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  const visible = projects.filter(p => {
+    if (!p.address) return false;
+    if (search && !p.address.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
@@ -253,8 +346,7 @@ export function Commission() {
           fontFamily: "'Urbanist', sans-serif",
           fontSize: "clamp(28px, 5vw, 42px)",
           fontWeight: 800, color: COLORS.charcoal,
-          lineHeight: 1.1, letterSpacing: "-0.02em",
-          marginBottom: 28,
+          lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: 28,
         }}>
           Planning Commission Record
         </h2>
@@ -264,20 +356,20 @@ export function Commission() {
             type="text" placeholder="Search by address..."
             value={search} onChange={e => setSearch(e.target.value)}
             style={{
-              flex: 1, padding: "14px 20px",
-              borderRadius: 14, border: `1.5px solid ${COLORS.lightBorder}`,
-              fontSize: 15, fontFamily: FONTS.body,
-              background: COLORS.white, outline: "none",
-              fontWeight: 500, color: COLORS.charcoal,
+              flex: 1, padding: "14px 20px", borderRadius: 14,
+              border: `1.5px solid ${COLORS.lightBorder}`, fontSize: 15,
+              fontFamily: FONTS.body, background: COLORS.white,
+              outline: "none", fontWeight: 500, color: COLORS.charcoal,
             }}
           />
-          <button style={{
-            background: COLORS.orange, color: COLORS.white,
-            border: "none", borderRadius: 14,
-            padding: "14px 28px", fontSize: 15, fontWeight: 700,
-            cursor: "pointer", fontFamily: "'Urbanist', sans-serif",
-            boxShadow: "0 2px 8px rgba(212,100,59,0.15)",
-          }}>Search</button>
+          <button
+            onClick={() => {}}
+            style={{
+              background: COLORS.orange, color: COLORS.white, border: "none",
+              borderRadius: 14, padding: "14px 28px", fontSize: 15, fontWeight: 700,
+              cursor: "pointer", fontFamily: "'Urbanist', sans-serif",
+              boxShadow: "0 2px 8px rgba(212,100,59,0.15)",
+            }}>Search</button>
         </div>
 
         <div style={{
@@ -286,14 +378,36 @@ export function Commission() {
           marginBottom: 16, fontFamily: FONTS.body,
         }}>Recent Hearings</div>
 
-        {MOCK_HEARINGS
-          .filter(h => !search || h.address.toLowerCase().includes(search.toLowerCase()))
-          .map((h) => {
-          const ac = actionStyle(h.action);
-          const isExpanded = expandedAddress === h.address;
+        {/* Loading */}
+        {loading && (
+          <div style={{ textAlign: "center", padding: "48px 0", color: COLORS.warmGray, fontFamily: FONTS.body }}>
+            Loading hearing records…
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div style={{
+            background: "#FDEEEE", border: "1px solid #F0C8C8", borderRadius: 12,
+            padding: "16px 20px", color: "#B44040", fontFamily: FONTS.body, fontSize: 14,
+          }}>
+            Failed to load hearing records: {error}
+          </div>
+        )}
+
+        {/* Project cards */}
+        {!loading && !error && visible.map((p) => {
+          const norm = normalizeAction(p.action);
+          const ac   = actionStyle(norm);
+          const tally = tallyVotes(p.votes);
+          const sentiment = p.hearing?.public_sentiment?.[0] ?? null;
+          const isExpanded = expandedId === p.id;
+          const dateStr = p.hearing?.hearing_date
+            ? formatDate(p.hearing.hearing_date)
+            : "";
 
           return (
-            <div key={h.address} style={{
+            <div key={p.id} style={{
               background: COLORS.white, borderRadius: 16,
               padding: "28px", marginBottom: 14,
               border: `1px solid ${isExpanded ? COLORS.orange : COLORS.lightBorder}`,
@@ -304,72 +418,72 @@ export function Commission() {
             }}>
               <div style={{
                 display: "flex", justifyContent: "space-between",
-                alignItems: "flex-start", marginBottom: 14,
-                flexWrap: "wrap", gap: 8,
+                alignItems: "flex-start", marginBottom: 14, flexWrap: "wrap", gap: 8,
               }}>
                 <div>
                   <div style={{
                     fontSize: 20, fontWeight: 800, color: COLORS.charcoal,
                     fontFamily: "'Urbanist', sans-serif",
-                  }}>{h.address}</div>
-                  <div style={{
-                    fontSize: 13, color: COLORS.warmGray, marginTop: 4,
-                    fontFamily: FONTS.body, fontWeight: 500,
-                  }}>{h.date}</div>
+                  }}>{p.address}</div>
+                  {dateStr && (
+                    <div style={{
+                      fontSize: 13, color: COLORS.warmGray, marginTop: 4,
+                      fontFamily: FONTS.body, fontWeight: 500,
+                    }}>{dateStr}</div>
+                  )}
                 </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  {h.shadow && (
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  {p.shadow_flag && (
                     <span style={{
                       background: "#FEF5EC", color: "#B47A2E",
                       padding: "5px 12px", borderRadius: 20,
-                      fontSize: 11, fontWeight: 700,
-                      fontFamily: FONTS.body,
+                      fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
                       border: "1px solid #F0DFC4",
                     }}>☀ Shadow</span>
                   )}
-                  {h.detail.publicSentiment && (
+                  {sentiment && sentiment.speakers > 0 && (
                     <span style={{
                       background: COLORS.softBlue, color: "#4A6FA5",
                       padding: "5px 12px", borderRadius: 20,
-                      fontSize: 11, fontWeight: 700,
-                      fontFamily: FONTS.body,
+                      fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
                       border: "1px solid #C8D8E8",
-                    }}>💬 {h.detail.publicSentiment.speakers} Comments</span>
+                    }}>💬 {sentiment.speakers} Comments</span>
                   )}
                   <span style={{
                     background: ac.bg, color: ac.text,
                     padding: "5px 14px", borderRadius: 20,
-                    fontSize: 12, fontWeight: 700,
-                    fontFamily: FONTS.body,
+                    fontSize: 12, fontWeight: 700, fontFamily: FONTS.body,
                     border: `1px solid ${ac.border}`,
-                  }}>{h.action}</span>
+                  }}>{p.action ?? norm}</span>
                 </div>
               </div>
-              <p style={{
-                fontSize: 14, color: COLORS.midGray,
-                lineHeight: 1.65, marginBottom: 16,
-                fontFamily: FONTS.body,
-              }}>{h.desc}</p>
 
-              <div style={{
-                display: "flex", justifyContent: "space-between",
-                alignItems: "center",
-              }}>
-                {h.votes.aye > 0 && (
+              {p.project_description && (
+                <p style={{
+                  fontSize: 14, color: COLORS.midGray,
+                  lineHeight: 1.65, marginBottom: 16, fontFamily: FONTS.body,
+                }}>
+                  {p.project_description.slice(0, 200)}
+                  {p.project_description.length > 200 ? "…" : ""}
+                </p>
+              )}
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                {tally.aye > 0 && (
                   <div style={{
                     display: "flex", gap: 16, fontSize: 13,
                     fontFamily: FONTS.body, fontWeight: 700,
-                    padding: "10px 14px",
-                    background: COLORS.cream,
-                    borderRadius: 10,
+                    padding: "10px 14px", background: COLORS.cream, borderRadius: 10,
                   }}>
-                    <span style={{ color: "#3D7A3F" }}>✓ {h.votes.aye} Aye</span>
-                    <span style={{ color: "#B44040" }}>✕ {h.votes.nay} Nay</span>
-                    <span style={{ color: COLORS.warmGray }}>— {h.votes.absent} Absent</span>
+                    <span style={{ color: "#3D7A3F" }}>✓ {tally.aye} Aye</span>
+                    <span style={{ color: "#B44040" }}>✕ {tally.nay} Nay</span>
+                    {tally.absent > 0 && (
+                      <span style={{ color: COLORS.warmGray }}>— {tally.absent} Absent</span>
+                    )}
                   </div>
                 )}
                 <button
-                  onClick={() => setExpandedAddress(isExpanded ? null : h.address)}
+                  onClick={() => setExpandedId(isExpanded ? null : p.id)}
                   style={{
                     background: isExpanded ? COLORS.charcoal : COLORS.cream,
                     color: isExpanded ? COLORS.white : COLORS.charcoal,
@@ -377,18 +491,23 @@ export function Commission() {
                     borderRadius: 10, padding: "8px 18px",
                     fontSize: 13, fontWeight: 700,
                     cursor: "pointer", fontFamily: FONTS.body,
-                    transition: "all 0.2s",
-                    marginLeft: "auto",
+                    transition: "all 0.2s", marginLeft: "auto",
                   }}
                 >
                   {isExpanded ? "Hide Details ▲" : "Full Analysis ▼"}
                 </button>
               </div>
 
-              {isExpanded && <HearingDetailCard hearing={h} />}
+              {isExpanded && <ProjectDetailCard project={p} />}
             </div>
           );
         })}
+
+        {!loading && !error && visible.length === 0 && (
+          <div style={{ textAlign: "center", padding: "48px 0", color: COLORS.warmGray, fontFamily: FONTS.body }}>
+            No hearings found{search ? ` matching "${search}"` : ""}.
+          </div>
+        )}
       </div>
     </div>
   );
