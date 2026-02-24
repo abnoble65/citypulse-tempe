@@ -350,23 +350,19 @@ async function upsertSentiment(
   clipId:    string,
   result:    SentimentResult,
 ): Promise<void> {
-  const { error } = await supabase
-    .from('public_sentiment')
-    .upsert(
-      {
-        hearing_id:      hearingId,
-        clip_id:         clipId,
-        speakers:        result.speakers,
-        for_project:     result.for_project,
-        against_project: result.against_project,
-        neutral:         result.neutral,
-        top_themes:      result.top_themes,
-        notable_quotes:  result.notable_quotes,
-        source:          'sfgovtv_captions',
-        processed_at:    new Date().toISOString(),
-      },
-      { onConflict: 'hearing_id' },
-    );
+  // Use RPC to bypass the PostgREST schema cache (avoids "column not found" errors
+  // that occur after ALTER TABLE until the cache is manually reloaded).
+  const { error } = await supabase.rpc('upsert_sentiment', {
+    p_hearing_id:      hearingId,
+    p_clip_id:         clipId,
+    p_speakers:        result.speakers,
+    p_for_project:     result.for_project,
+    p_against_project: result.against_project,
+    p_neutral:         result.neutral,
+    p_top_themes:      result.top_themes,
+    p_notable_quotes:  result.notable_quotes,
+    p_source:          'sfgovtv_captions',
+  });
 
   if (error) console.error('  Supabase upsert error:', error.message);
 }

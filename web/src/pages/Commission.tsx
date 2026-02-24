@@ -100,7 +100,6 @@ function SentimentBar({ forCount, against, neutral, total }: {
 
 function ProjectDetailCard({ project }: { project: LiveProject }) {
   const sentiment = project.hearing?.public_sentiment?.[0] ?? null;
-  const tally = tallyVotes(project.votes);
   const comments = project.commissioner_comments.slice(0, 4);
 
   return (
