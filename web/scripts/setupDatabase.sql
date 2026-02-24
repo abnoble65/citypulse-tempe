@@ -16,7 +16,9 @@ create table if not exists projects (
   district            text,
   project_description text,
   action              text,
-  motion_number       text
+  motion_number       text,
+  shadow_flag         boolean default false,
+  shadow_details      text
 );
 
 create table if not exists votes (
