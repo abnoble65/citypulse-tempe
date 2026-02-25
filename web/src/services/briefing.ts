@@ -7,6 +7,13 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { aggregateDistrictData, type DistrictData } from './aggregator';
+import { supabase } from './supabase';
+
+interface ShadowProject {
+  address: string | null;
+  project_description: string | null;
+  shadow_details: string | null;
+}
 
 export type { DistrictData };
 
@@ -205,8 +212,25 @@ export async function generateOutlook(
   data: DistrictData,
   focus?: { zip: string; name: string },
 ): Promise<OutlookData> {
-  let analysisData = data;
+  // Fetch shadow-flagged projects from Supabase in parallel with data prep.
+  // Always district-wide — shadow impact is a D3-level concern regardless of
+  // neighborhood filter, and project addresses rarely contain zip codes.
+  const shadowPromise = supabase
+    .from('projects')
+    .select('address, project_description, shadow_details', { count: 'exact' })
+    .eq('shadow_flag', true)
+    .not('shadow_details', 'is', null)
+    .not('address', 'is', null)
+    .limit(8)
+    .then(({ data: rows, count, error }) => {
+      if (error) {
+        console.warn('[generateOutlook] shadow query failed:', error.message);
+        return { projects: [] as ShadowProject[], total: 0 };
+      }
+      return { projects: (rows ?? []) as ShadowProject[], total: count ?? 0 };
+    });
 
+  let analysisData = data;
   if (focus) {
     const zipSummary = data.permit_summary.by_zip?.[focus.zip];
     analysisData = {
@@ -223,10 +247,16 @@ export async function generateOutlook(
     };
   }
 
+  const { projects: shadowProjects, total: shadowTotal } = await shadowPromise;
   const locationLabel = focus ? focus.name : 'District 3';
 
-  const userContent = `${JSON.stringify(analysisData, null, 2)}
+  const shadowBlock = shadowTotal > 0
+    ? `\nSHADOW-FLAGGED PROJECTS — DISTRICT 3 (${shadowTotal} projects flagged for Section 295 shadow-impact review; ${shadowProjects.length} shown below):
+${shadowProjects.map(p => `- ${p.address}: ${p.shadow_details ?? p.project_description ?? '(no detail)'}`).join('\n')}\n`
+    : '';
 
+  const userContent = `${JSON.stringify(analysisData, null, 2)}
+${shadowBlock}
 TASK: Generate a forward-looking outlook for ${locationLabel} based on the data above.
 
 Return ONLY a JSON object in this exact shape (no other text):
@@ -244,16 +274,18 @@ For each event use these exact keys:
 - "priority": exactly one of "low", "medium", "high"
 
 For each risk use these exact keys:
-- "icon": a single relevant emoji (e.g. 📉 🏗️ 🏘️ 🚇 💰 ⚠️ 🌳 🏛️)
+- "icon": a single relevant emoji (e.g. 📉 🏗️ 🏘️ 🚇 💰 ⚠️ ☀️ 🏛️)
 - "title": short risk name (4–6 words)
-- "detail": 2–3 sentences on why this is a concern in the next 3–6 months, referencing permit patterns or pipeline data
+- "detail": 2–3 sentences on why this is a concern in the next 3–6 months, referencing permit patterns, pipeline data, or shadow-flagged addresses where relevant
 - "priority": exactly one of "low", "medium", "high"
 
 For each engagement item use these exact keys:
 - "title": specific opportunity name (6–10 words)
 - "detail": 1–2 sentences on how residents can participate, referencing specific project stages or hearings visible in the data
 
-Be specific. Reference actual project types, pipeline counts, and permit patterns from the data.`;
+IMPORTANT: Include at least one risk item about shadow impact, citing the total count of flagged projects and referencing specific addresses from the shadow data above. Use the ☀️ icon for that item.
+
+Be specific. Reference actual project types, pipeline counts, permit patterns, and shadow-flagged addresses from the data.`;
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
