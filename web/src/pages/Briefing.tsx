@@ -82,7 +82,7 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
       <FilterBar selected={filter} onSelect={setFilter} />
-      <NeighborhoodHero selected={filter} />
+      <NeighborhoodHero selected={filter} aggregatedData={aggregatedData} />
       <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 24px" }}>
         <SectionLabel text="The Briefing" />
         <h2 style={{
@@ -127,15 +127,21 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
           {isGenerating && (
             <div style={{
               position: "absolute", inset: 0, borderRadius: 20,
-              background: "rgba(255,255,255,0.75)",
+              background: "rgba(255,255,255,0.88)",
               display: "flex", alignItems: "center", justifyContent: "center",
+              flexDirection: "column", gap: 14,
               zIndex: 2,
             }}>
-              <div style={{
-                fontFamily: FONTS.body, fontSize: 14, fontWeight: 600,
-                color: COLORS.orange,
-              }}>
-                Generating {locationLabel} briefing…
+              <svg width="36" height="36" viewBox="0 0 36 36">
+                <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="3" />
+                <circle cx="18" cy="18" r="14" fill="none" stroke={COLORS.orange} strokeWidth="3"
+                  strokeDasharray="66" strokeDashoffset="50" strokeLinecap="round">
+                  <animateTransform attributeName="transform" type="rotate"
+                    from="0 18 18" to="360 18 18" dur="0.75s" repeatCount="indefinite" />
+                </circle>
+              </svg>
+              <div style={{ fontFamily: FONTS.body, fontSize: 13, fontWeight: 600, color: COLORS.charcoal }}>
+                Analyzing {ps.total > 0 ? `${ps.total.toLocaleString()} permits` : "permit data"} in {locationLabel}…
               </div>
             </div>
           )}
