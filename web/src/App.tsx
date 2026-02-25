@@ -50,7 +50,7 @@ export default function App() {
       case "Charts":
         return <Charts aggregatedData={aggregatedData} onNavigate={setPage} />;
       case "Signals":
-        return <Signals briefingText={briefingText} onNavigate={setPage} />;
+        return <Signals aggregatedData={aggregatedData} onNavigate={setPage} />;
       case "Outlook":
         return <Outlook briefingText={briefingText} onNavigate={setPage} />;
       case "Commission":

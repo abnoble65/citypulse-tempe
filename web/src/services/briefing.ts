@@ -10,6 +10,13 @@ import { aggregateDistrictData, type DistrictData } from './aggregator';
 
 export type { DistrictData };
 
+export interface Signal {
+  title: string;
+  body: string;
+  severity: 'low' | 'medium' | 'high';
+  concern: string;
+}
+
 const client = new Anthropic({
   apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY as string,
   dangerouslyAllowBrowser: true,
@@ -99,4 +106,65 @@ export async function generateBriefingFromData(
   const block = message.content[0];
   if (block.type !== 'text') throw new Error(`Unexpected response block type: ${block.type}`);
   return block.text;
+}
+
+const SIGNALS_SYSTEM_PROMPT = `You are an urban planning analyst for San Francisco District 3. Analyze permit and development data and identify key signals and trends. Always return valid JSON only — no markdown, no prose, no code fences.`;
+
+/**
+ * Generate structured signals from already-fetched DistrictData.
+ * If `focus` is provided, scopes the analysis to that zip's permit data.
+ */
+export async function generateSignals(
+  data: DistrictData,
+  focus?: { zip: string; name: string },
+): Promise<Signal[]> {
+  let analysisData = data;
+
+  if (focus) {
+    const zipSummary = data.permit_summary.by_zip?.[focus.zip];
+    analysisData = {
+      ...data,
+      permit_summary: {
+        total:                    zipSummary?.total                    ?? 0,
+        by_type:                  zipSummary?.by_type                  ?? {},
+        by_status:                zipSummary?.by_status                ?? {},
+        cost_by_type:             zipSummary?.cost_by_type             ?? {},
+        total_estimated_cost_usd: zipSummary?.total_estimated_cost_usd ?? 0,
+        notable_permits:          [],
+        by_zip:                   {},
+      },
+    };
+  }
+
+  const locationLabel = focus ? focus.name : 'District 3';
+
+  const userContent = `${JSON.stringify(analysisData, null, 2)}
+
+TASK: Identify 3–5 key signals or trends for ${locationLabel} based on the data above.
+
+For each signal return an object with these exact keys:
+- "title": short title, 5–8 words
+- "body": 2–3 sentences explaining what the data shows, citing specific numbers
+- "severity": exactly one of "low", "medium", or "high"
+- "concern": 1–2 sentences on why residents should care
+
+Focus on: unusual permit volume, clustering of similar project types, potential displacement risk, affordability impact, and infrastructure strain.
+
+Return ONLY a JSON object in this exact shape (no other text):
+{"signals": [{"title":"...","body":"...","severity":"...","concern":"..."}]}`;
+
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 1024,
+    system: SIGNALS_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: userContent }],
+  });
+
+  const block = message.content[0];
+  if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
+
+  // Strip any accidental markdown code fences
+  const raw = block.text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  const parsed = JSON.parse(raw) as { signals: Signal[] };
+  return parsed.signals;
 }
