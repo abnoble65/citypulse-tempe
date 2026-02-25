@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
 import { NEIGHBORHOODS } from "../data";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
-import { parseBriefingSections } from "../services/briefing";
+import { parseBriefingSections, generateBriefingFromData } from "../services/briefing";
 import type { DistrictData } from "../services/briefing";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 
@@ -14,10 +14,38 @@ interface BriefingProps {
 }
 
 export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingProps) {
-  const [filter, setFilter] = useState("All District 3");
-  const sections = parseBriefingSections(briefingText);
-  const ps = aggregatedData?.permit_summary;
-  const pip = aggregatedData?.pipeline_summary;
+  const [filter, setFilter]           = useState("All District 3");
+  const [localText, setLocalText]     = useState(briefingText);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // When a new district-wide briefing arrives (user re-generated from Home),
+  // reset to it and clear any neighborhood filter.
+  useEffect(() => {
+    setLocalText(briefingText);
+    setFilter("All District 3");
+  }, [briefingText]);
+
+  // Re-generate when the neighborhood filter changes.
+  useEffect(() => {
+    if (!aggregatedData) return;
+
+    const neighborhood = NEIGHBORHOODS.find(n => n.name === filter && n.zip !== null);
+
+    if (!neighborhood) {
+      // "All District 3" — restore the full district briefing.
+      setLocalText(briefingText);
+      return;
+    }
+
+    setIsGenerating(true);
+    generateBriefingFromData(aggregatedData, { zip: neighborhood.zip!, name: neighborhood.name })
+      .then(text => setLocalText(text))
+      .catch(err => console.error("[Briefing] neighborhood generation failed:", err))
+      .finally(() => setIsGenerating(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]); // intentionally only re-run when filter changes, not on every prop update
+
+  const sections = parseBriefingSections(localText);
 
   if (!aggregatedData) {
     return (
@@ -39,10 +67,16 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
   const activeNeighborhood = NEIGHBORHOODS.find(n => n.name === filter && n.zip);
   const locationLabel = activeNeighborhood ? activeNeighborhood.name : "District 3";
 
+  // Use zip-scoped permit stats when a neighborhood is selected.
+  const ps = activeNeighborhood
+    ? (aggregatedData.permit_summary.by_zip?.[activeNeighborhood.zip!] ?? aggregatedData.permit_summary)
+    : aggregatedData.permit_summary;
+  const pip = aggregatedData.pipeline_summary;
+
   const stats = [
-    { num: ps ? ps.total.toLocaleString() : "—", label: "Active Permits", bg: COLORS.orangePale },
-    { num: ps ? `$${(ps.total_estimated_cost_usd / 1_000_000).toFixed(0)}M` : "—", label: "Est. Total Value", bg: COLORS.softAmber },
-    { num: pip ? pip.net_pipeline_units.toLocaleString() : "—", label: "Pipeline Units", bg: COLORS.softGreen },
+    { num: ps.total.toLocaleString(),                                         label: "Active Permits",   bg: COLORS.orangePale },
+    { num: `$${(ps.total_estimated_cost_usd / 1_000_000).toFixed(1)}M`,      label: "Est. Total Value", bg: COLORS.softAmber  },
+    { num: pip.net_pipeline_units.toLocaleString(),                           label: "Pipeline Units",   bg: COLORS.softGreen  },
   ];
 
   return (
@@ -66,20 +100,15 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
           gap: 14, marginBottom: 44,
         }}>
           {stats.map(s => (
-            <div key={s.label} style={{
-              background: s.bg, borderRadius: 16,
-              padding: "26px 22px",
-            }}>
+            <div key={s.label} style={{ background: s.bg, borderRadius: 16, padding: "26px 22px" }}>
               <div style={{
                 fontFamily: "'Urbanist', sans-serif",
                 fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 800, color: COLORS.charcoal,
                 letterSpacing: "-0.02em",
               }}>{s.num}</div>
-              <div style={{
-                fontSize: 13, color: COLORS.midGray,
-                marginTop: 6, fontFamily: FONTS.body,
-                fontWeight: 500,
-              }}>{s.label}</div>
+              <div style={{ fontSize: 13, color: COLORS.midGray, marginTop: 6, fontFamily: FONTS.body, fontWeight: 500 }}>
+                {s.label}
+              </div>
             </div>
           ))}
         </div>
@@ -87,14 +116,33 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
         <div style={{
           background: COLORS.white,
           borderRadius: 20, padding: "40px",
-          border: `1px solid ${COLORS.lightBorder}`,
+          border: `1px solid ${isGenerating ? COLORS.orange : COLORS.lightBorder}`,
           fontFamily: FONTS.body,
           fontSize: 15.5, lineHeight: 1.8,
           color: COLORS.charcoal,
           boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+          transition: "border 0.3s",
+          position: "relative",
         }}>
+          {isGenerating && (
+            <div style={{
+              position: "absolute", inset: 0, borderRadius: 20,
+              background: "rgba(255,255,255,0.75)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 2,
+            }}>
+              <div style={{
+                fontFamily: FONTS.body, fontSize: 14, fontWeight: 600,
+                color: COLORS.orange,
+              }}>
+                Generating {locationLabel} briefing…
+              </div>
+            </div>
+          )}
           {sections.briefing ? (
-            <p style={{ whiteSpace: "pre-wrap" }}>{sections.briefing}</p>
+            <p style={{ whiteSpace: "pre-wrap", opacity: isGenerating ? 0.4 : 1, transition: "opacity 0.3s" }}>
+              {sections.briefing}
+            </p>
           ) : (
             <p style={{ color: COLORS.warmGray, fontStyle: "italic" }}>
               Briefing content unavailable — the AI response may not have followed the expected format.

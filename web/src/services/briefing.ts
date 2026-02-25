@@ -54,23 +54,49 @@ export function parseBriefingSections(text: string): BriefingSections {
 
 export async function generateBriefing(): Promise<{ text: string; data: DistrictData }> {
   const data = await aggregateDistrictData();
+  const text = await generateBriefingFromData(data);
+  return { text, data };
+}
+
+/**
+ * Generate a briefing from already-fetched DistrictData.
+ * If `focus` is provided, filters permit data to that zip and instructs
+ * Claude to write specifically about that neighborhood.
+ */
+export async function generateBriefingFromData(
+  data: DistrictData,
+  focus?: { zip: string; name: string },
+): Promise<string> {
+  let briefingData: DistrictData = data;
+
+  if (focus) {
+    const zipSummary = data.permit_summary.by_zip?.[focus.zip];
+    briefingData = {
+      ...data,
+      permit_summary: {
+        total:                  zipSummary?.total                  ?? 0,
+        by_type:                zipSummary?.by_type                ?? {},
+        by_status:              zipSummary?.by_status              ?? {},
+        cost_by_type:           zipSummary?.cost_by_type           ?? {},
+        total_estimated_cost_usd: zipSummary?.total_estimated_cost_usd ?? 0,
+        notable_permits:        [],
+        by_zip:                 {},
+      },
+    };
+  }
+
+  const userContent = focus
+    ? `${JSON.stringify(briefingData, null, 2)}\n\nFOCUS: Write this briefing specifically for the ${focus.name} neighborhood (zip ${focus.zip}). Reference ${focus.name} by name throughout. Pipeline and zoning data above reflect all of District 3 — note this where relevant.`
+    : JSON.stringify(briefingData, null, 2);
 
   const message = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
     system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: JSON.stringify(data, null, 2),
-      },
-    ],
+    messages: [{ role: 'user', content: userContent }],
   });
 
   const block = message.content[0];
-  if (block.type !== 'text') {
-    throw new Error(`Unexpected response block type: ${block.type}`);
-  }
-
-  return { text: block.text, data };
+  if (block.type !== 'text') throw new Error(`Unexpected response block type: ${block.type}`);
+  return block.text;
 }
