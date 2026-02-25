@@ -199,7 +199,7 @@ async function extractWithClaude(pdfBase64: string): Promise<ExtractedMinutes | 
     try {
       const message = await anthropic.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
+        max_tokens: 16384,
         system: SYSTEM_PROMPT,
         messages: [{
           role: 'user',
