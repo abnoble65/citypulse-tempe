@@ -52,7 +52,7 @@ export default function App() {
       case "Signals":
         return <Signals aggregatedData={aggregatedData} onNavigate={setPage} />;
       case "Outlook":
-        return <Outlook briefingText={briefingText} onNavigate={setPage} />;
+        return <Outlook aggregatedData={aggregatedData} onNavigate={setPage} />;
       case "Commission":
         return <Commission />;
       default:

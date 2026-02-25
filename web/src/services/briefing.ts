@@ -17,6 +17,32 @@ export interface Signal {
   concern: string;
 }
 
+export interface OutlookEvent {
+  title: string;
+  timeframe: string;
+  detail: string;
+  impact: string;
+  priority: 'low' | 'medium' | 'high';
+}
+
+export interface OutlookRisk {
+  icon: string;
+  title: string;
+  detail: string;
+  priority: 'low' | 'medium' | 'high';
+}
+
+export interface OutlookEngagement {
+  title: string;
+  detail: string;
+}
+
+export interface OutlookData {
+  events: OutlookEvent[];
+  risks: OutlookRisk[];
+  engagement: OutlookEngagement[];
+}
+
 const client = new Anthropic({
   apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY as string,
   dangerouslyAllowBrowser: true,
@@ -167,4 +193,78 @@ Return ONLY a JSON object in this exact shape (no other text):
   const raw = block.text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
   const parsed = JSON.parse(raw) as { signals: Signal[] };
   return parsed.signals;
+}
+
+const OUTLOOK_SYSTEM_PROMPT = `You are an urban planning analyst for San Francisco District 3. Analyze permit and development data and produce a forward-looking outlook. Always return valid JSON only — no markdown, no prose, no code fences.`;
+
+/**
+ * Generate a structured forward-looking outlook from already-fetched DistrictData.
+ * If `focus` is provided, scopes the analysis to that zip's permit data.
+ */
+export async function generateOutlook(
+  data: DistrictData,
+  focus?: { zip: string; name: string },
+): Promise<OutlookData> {
+  let analysisData = data;
+
+  if (focus) {
+    const zipSummary = data.permit_summary.by_zip?.[focus.zip];
+    analysisData = {
+      ...data,
+      permit_summary: {
+        total:                    zipSummary?.total                    ?? 0,
+        by_type:                  zipSummary?.by_type                  ?? {},
+        by_status:                zipSummary?.by_status                ?? {},
+        cost_by_type:             zipSummary?.cost_by_type             ?? {},
+        total_estimated_cost_usd: zipSummary?.total_estimated_cost_usd ?? 0,
+        notable_permits:          [],
+        by_zip:                   {},
+      },
+    };
+  }
+
+  const locationLabel = focus ? focus.name : 'District 3';
+
+  const userContent = `${JSON.stringify(analysisData, null, 2)}
+
+TASK: Generate a forward-looking outlook for ${locationLabel} based on the data above.
+
+Return ONLY a JSON object in this exact shape (no other text):
+{
+  "events": [3–4 items],
+  "risks": [3–4 items],
+  "engagement": [2–3 items]
+}
+
+For each event use these exact keys:
+- "title": name of the upcoming decision, hearing, or milestone (8–12 words)
+- "timeframe": estimated timing, e.g. "Next 30–60 days", "Q2 2026", "3–6 months"
+- "detail": 2–3 sentences on what is happening, referencing specific project types or pipeline counts
+- "impact": 1–2 sentences on what this means for residents
+- "priority": exactly one of "low", "medium", "high"
+
+For each risk use these exact keys:
+- "icon": a single relevant emoji (e.g. 📉 🏗️ 🏘️ 🚇 💰 ⚠️ 🌳 🏛️)
+- "title": short risk name (4–6 words)
+- "detail": 2–3 sentences on why this is a concern in the next 3–6 months, referencing permit patterns or pipeline data
+- "priority": exactly one of "low", "medium", "high"
+
+For each engagement item use these exact keys:
+- "title": specific opportunity name (6–10 words)
+- "detail": 1–2 sentences on how residents can participate, referencing specific project stages or hearings visible in the data
+
+Be specific. Reference actual project types, pipeline counts, and permit patterns from the data.`;
+
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 1536,
+    system: OUTLOOK_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: userContent }],
+  });
+
+  const block = message.content[0];
+  if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
+
+  const raw = block.text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  return JSON.parse(raw) as OutlookData;
 }

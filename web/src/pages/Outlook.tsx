@@ -1,15 +1,43 @@
+import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
+import { NEIGHBORHOODS } from "../data";
+import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
-import { parseBriefingSections } from "../services/briefing";
+import { NeighborhoodHero } from "../components/NeighborhoodHero";
+import { generateOutlook } from "../services/briefing";
+import type { OutlookData, OutlookEvent, OutlookRisk, OutlookEngagement } from "../services/briefing";
+import type { DistrictData } from "../services/aggregator";
 
 interface OutlookProps {
-  briefingText: string;
+  aggregatedData: DistrictData | null;
   onNavigate: (page: string) => void;
 }
 
-function WatchItem({ title, date, detail, impact }: {
-  title: string; date: string; detail: string; impact: string;
-}) {
+/* ─── Priority badge ─────────────────────────── */
+
+const PRIORITY_CFG = {
+  high:   { label: "HIGH",   bg: "#FDEEEE", text: "#B44040", border: "#F0C8C8" },
+  medium: { label: "MEDIUM", bg: "#FEF5EC", text: "#B47A2E", border: "#F0DFC4" },
+  low:    { label: "LOW",    bg: COLORS.softBlue, text: "#4A6FA5", border: "#C8D8E8" },
+} as const;
+
+function PriorityBadge({ priority }: { priority: 'low' | 'medium' | 'high' }) {
+  const cfg = PRIORITY_CFG[priority] ?? PRIORITY_CFG.low;
+  return (
+    <span style={{
+      fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
+      color: cfg.text, background: cfg.bg,
+      border: `1px solid ${cfg.border}`,
+      borderRadius: 6, padding: "4px 10px",
+      whiteSpace: "nowrap", flexShrink: 0,
+      letterSpacing: "0.04em",
+    }}>{cfg.label}</span>
+  );
+}
+
+/* ─── Watch item (events) ────────────────────── */
+
+function WatchItem({ event }: { event: OutlookEvent }) {
   return (
     <div style={{ padding: "24px 0", borderBottom: `1px solid ${COLORS.lightBorder}` }}>
       <div style={{
@@ -19,18 +47,22 @@ function WatchItem({ title, date, detail, impact }: {
         <h3 style={{
           fontFamily: "'Urbanist', sans-serif", fontSize: 18,
           fontWeight: 700, color: COLORS.charcoal, lineHeight: 1.3,
-        }}>{title}</h3>
-        <span style={{
-          fontFamily: FONTS.body, fontSize: 12, fontWeight: 600,
-          color: COLORS.orange, background: COLORS.orangePale,
-          borderRadius: 6, padding: "4px 12px",
-          whiteSpace: "nowrap", flexShrink: 0,
-        }}>{date}</span>
+          margin: 0, flex: 1,
+        }}>{event.title}</h3>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{
+            fontFamily: FONTS.body, fontSize: 12, fontWeight: 600,
+            color: COLORS.orange, background: COLORS.orangePale,
+            borderRadius: 6, padding: "4px 12px",
+            whiteSpace: "nowrap",
+          }}>{event.timeframe}</span>
+          <PriorityBadge priority={event.priority} />
+        </div>
       </div>
       <p style={{
         fontFamily: FONTS.body, fontSize: 14.5, lineHeight: 1.75,
         color: COLORS.midGray, marginBottom: 10,
-      }}>{detail}</p>
+      }}>{event.detail}</p>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
         <span style={{
           fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
@@ -39,162 +71,246 @@ function WatchItem({ title, date, detail, impact }: {
         }}>IMPACT →</span>
         <p style={{
           fontFamily: FONTS.body, fontSize: 13, lineHeight: 1.6,
-          color: COLORS.charcoal, fontWeight: 500,
-        }}>{impact}</p>
+          color: COLORS.charcoal, fontWeight: 500, margin: 0,
+        }}>{event.impact}</p>
       </div>
     </div>
   );
 }
 
-function RiskCard({ icon, title, detail }: { icon: string; title: string; detail: string }) {
+/* ─── Risk card ──────────────────────────────── */
+
+function RiskCard({ risk }: { risk: OutlookRisk }) {
   return (
     <div style={{
       background: COLORS.cream, borderRadius: 16, padding: "24px 28px",
       border: `1px solid ${COLORS.lightBorder}`,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-        <span style={{ fontSize: 22 }}>{icon}</span>
-        <h4 style={{
-          fontFamily: "'Urbanist', sans-serif", fontSize: 16,
-          fontWeight: 700, color: COLORS.charcoal,
-        }}>{title}</h4>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 22 }}>{risk.icon}</span>
+          <h4 style={{
+            fontFamily: "'Urbanist', sans-serif", fontSize: 16,
+            fontWeight: 700, color: COLORS.charcoal, margin: 0,
+          }}>{risk.title}</h4>
+        </div>
+        <PriorityBadge priority={risk.priority} />
       </div>
       <p style={{
-        fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.7, color: COLORS.midGray,
-      }}>{detail}</p>
+        fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.7,
+        color: COLORS.midGray, margin: 0,
+      }}>{risk.detail}</p>
     </div>
   );
 }
 
-export function Outlook({ briefingText, onNavigate }: OutlookProps) {
-  const sections = parseBriefingSections(briefingText);
+/* ─── Engagement card ────────────────────────── */
 
-  if (!briefingText) {
+function EngagementCard({ item }: { item: OutlookEngagement }) {
+  return (
+    <div style={{
+      background: COLORS.white, borderRadius: 14, padding: "20px 24px",
+      border: `1px solid ${COLORS.lightBorder}`,
+      display: "flex", alignItems: "flex-start", gap: 14,
+    }}>
+      <span style={{
+        fontSize: 20, flexShrink: 0, marginTop: 2,
+        width: 36, height: 36, borderRadius: "50%",
+        background: COLORS.softBlue,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>🏛️</span>
+      <div>
+        <div style={{
+          fontFamily: "'Urbanist', sans-serif", fontSize: 15,
+          fontWeight: 700, color: COLORS.charcoal, marginBottom: 6,
+        }}>{item.title}</div>
+        <p style={{
+          fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.65,
+          color: COLORS.midGray, margin: 0,
+        }}>{item.detail}</p>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Page ───────────────────────────────────── */
+
+export function Outlook({ aggregatedData, onNavigate }: OutlookProps) {
+  const [filter, setFilter]             = useState("All District 3");
+  const [outlook, setOutlook]           = useState<OutlookData | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [genError, setGenError]         = useState<string | null>(null);
+
+  // Generate when filter changes (also fires on mount).
+  useEffect(() => {
+    if (!aggregatedData) return;
+
+    const neighborhood = NEIGHBORHOODS.find(n => n.name === filter && n.zip !== null);
+
+    setIsGenerating(true);
+    setGenError(null);
+
+    generateOutlook(
+      aggregatedData,
+      neighborhood ? { zip: neighborhood.zip!, name: neighborhood.name } : undefined,
+    )
+      .then(d => setOutlook(d))
+      .catch(err => {
+        console.error("[Outlook] generation failed:", err);
+        setGenError(err instanceof Error ? err.message : "Generation failed");
+      })
+      .finally(() => setIsGenerating(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]); // intentionally only re-run when filter changes
+
+  if (!aggregatedData) {
     return (
       <div style={{ background: COLORS.cream, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center", padding: "48px 32px" }}>
-          <p style={{ color: COLORS.midGray, fontSize: 15, fontFamily: FONTS.body, marginBottom: 24 }}>
-            No briefing data yet. Generate one from the home page.
+        <div style={{ textAlign: "center", padding: "48px 32px", maxWidth: 380 }}>
+          <p style={{
+            fontFamily: "'Urbanist', sans-serif", fontSize: 18, fontWeight: 800,
+            color: COLORS.charcoal, marginBottom: 12,
+          }}>
+            No data available
+          </p>
+          <p style={{ color: COLORS.midGray, fontSize: 14, fontFamily: FONTS.body, lineHeight: 1.65, marginBottom: 28 }}>
+            Generate a briefing from the home page to view the outlook.
           </p>
           <button onClick={() => onNavigate("Home")} style={{
             background: COLORS.orange, color: COLORS.white, border: "none",
             borderRadius: 24, padding: "12px 28px", fontSize: 14, fontWeight: 700,
-            cursor: "pointer", fontFamily: FONTS.heading,
+            cursor: "pointer", fontFamily: "'Urbanist', sans-serif",
           }}>← Go to Home</button>
         </div>
       </div>
     );
   }
 
+  const activeNeighborhood = NEIGHBORHOODS.find(n => n.name === filter && n.zip);
+  const locationLabel = activeNeighborhood ? activeNeighborhood.name : "District 3";
+
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
+      <FilterBar selected={filter} onSelect={setFilter} />
+      <NeighborhoodHero selected={filter} aggregatedData={aggregatedData} />
       <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 24px" }}>
 
-        {/* ── THE OUTLOOK ────────────────────────── */}
         <SectionLabel text="The Outlook" />
         <h2 style={{
           fontFamily: "'Urbanist', sans-serif",
           fontSize: "clamp(28px, 5vw, 44px)",
           fontWeight: 800, color: COLORS.charcoal,
-          lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: 36,
+          lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: 8,
         }}>
-          What to watch in the months ahead.
+          What to watch in the months ahead for {locationLabel}.
         </h2>
-
-        {/* AI-generated outlook */}
-        <div style={{
-          background: COLORS.white, borderRadius: 20, padding: "40px 44px",
-          border: `1px solid ${COLORS.lightBorder}`,
-          fontFamily: FONTS.body, fontSize: 15.5, lineHeight: 1.8,
-          color: COLORS.charcoal, marginBottom: 24,
-          boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
-          whiteSpace: "pre-wrap",
+        <p style={{
+          fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,
+          marginBottom: 36,
         }}>
-          {sections.outlook}
-        </div>
+          Powered by live DataSF permit activity and development pipeline data.
+        </p>
 
-        {/* ── EVENTS TO WATCH ────────────────────── */}
-        <SectionLabel text="Key Events" />
-        <div style={{
-          background: COLORS.white, borderRadius: 20, padding: "28px 44px",
-          border: `1px solid ${COLORS.lightBorder}`,
-          marginBottom: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
-        }}>
-          <WatchItem
-            title="350 Bush Street — Planning Commission Hearing"
-            date="Mar 2026"
-            detail="The largest office-to-residential conversion proposed in District 3 at 180 feet and 210 units. Widely viewed as a bellwether case — approval would accelerate similar filings along the Bush-Kearny corridor; denial could slow the entire conversion pipeline."
-            impact="Sets precedent for conversion project height, density, and affordable housing requirements. Shadow analysis for St. Mary's Square still pending."
-          />
-          <WatchItem
-            title="600 Stockton Street — Environmental Review Publication"
-            date="Apr 2026"
-            detail="The preliminary environmental review for this mixed-use project is expected to be published. Community groups have signaled intent to challenge the traffic analysis."
-            impact="Could extend the project timeline by 6–12 months if environmental challenges are filed. Affects three adjacent small businesses during construction."
-          />
-          <WatchItem
-            title="Planning Commission — Cumulative Impact Policy Discussion"
-            date="May 2026"
-            detail="The Commission has scheduled a policy discussion on whether to require cumulative impact assessments when multiple large projects are proposed within a defined radius."
-            impact="If adopted, would add a new review layer for projects in high-activity zones. Could slow approvals but address infrastructure and quality-of-life concerns."
-          />
-          <WatchItem
-            title="Fed Interest Rate Decision"
-            date="Jun 2026"
-            detail="At least two developers in the District 3 pipeline have indicated project timelines are contingent on a rate cut. Current financing costs make marginal conversion projects unviable without lower rates or increased city subsidies."
-            impact="A rate hold or increase could pause 3–5 pipeline projects. A cut of 25+ basis points would likely trigger a wave of new filings within 60 days."
-          />
-        </div>
-
-        {/* ── RISKS & DOWNSIDE SCENARIOS ──────── */}
-        <SectionLabel text="Risks & Downside Scenarios" />
-        <div style={{
-          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-          gap: 16, marginBottom: 24,
-        }}>
-          <RiskCard icon="📉" title="Pipeline Stall"
-            detail="If interest rates remain elevated and the 350 Bush hearing produces restrictive conditions, the conversion pipeline could lose 40–60% of its current projects, leaving District 3 with persistent office vacancy and no clear path to residential growth."
-          />
-          <RiskCard icon="🏗️" title="Construction Overload"
-            detail="If all current pipeline projects advance simultaneously, the district faces 18–24 months of concentrated construction activity. Without coordinated management, this could strain infrastructure and disrupt businesses and residents."
-          />
-          <RiskCard icon="🏘️" title="Displacement Pressure"
-            detail="Renovation activity in Chinatown and Nob Hill continues to raise displacement concerns. Even well-intentioned seismic retrofits can trigger rent increases or unit reconfigurations that reduce affordable housing stock."
-          />
-          <RiskCard icon="🚇" title="Transit Capacity Gap"
-            detail="Current Muni service on key District 3 routes is operating near peak capacity. Adding 600+ residential units without supplemental transit planning could push these routes past functional limits."
-          />
-        </div>
-
-        {/* ── GET INVOLVED ──────────── */}
-        <SectionLabel text="Get Involved" />
-        <div style={{
-          background: COLORS.softBlue, borderRadius: 20, padding: "36px 44px",
-          marginBottom: 32, border: "1px solid #C8D8E8",
-        }}>
-          <h3 style={{
-            fontFamily: "'Urbanist', sans-serif", fontSize: 22,
-            fontWeight: 800, color: COLORS.charcoal, marginBottom: 16,
+        {/* Loading spinner */}
+        {isGenerating && (
+          <div style={{
+            background: COLORS.white, borderRadius: 20, padding: "60px 32px",
+            border: `1px solid ${COLORS.orange}`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexDirection: "column", gap: 16, marginBottom: 24,
           }}>
-            How to stay informed and participate
-          </h3>
-          <div style={{ fontFamily: FONTS.body, fontSize: 14.5, lineHeight: 1.8, color: COLORS.midGray }}>
-            <p style={{ marginBottom: 14 }}>
-              <strong style={{ color: COLORS.charcoal }}>Attend Commission Hearings:</strong> Planning Commission meetings are open to the public and accept in-person and written testimony. High-impact sessions are flagged in the Commission page.
-            </p>
-            <p style={{ marginBottom: 14 }}>
-              <strong style={{ color: COLORS.charcoal }}>Submit Public Comment:</strong> Comments can be filed on any active permit through the SF Planning Department portal. Written comments submitted at least 48 hours before a hearing are included in the Commission's packet.
-            </p>
-            <p style={{ marginBottom: 14 }}>
-              <strong style={{ color: COLORS.charcoal }}>Monitor Permit Activity:</strong> CityPulse tracks all active permits in District 3. Regenerate this briefing periodically to stay current on new filings and status changes.
-            </p>
-            <p>
-              <strong style={{ color: COLORS.charcoal }}>Contact Your Supervisor:</strong> The District 3 Supervisor's office can provide updates on district-level policy discussions and connect residents with neighborhood liaison staff.
+            <svg width="36" height="36" viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="3" />
+              <circle cx="18" cy="18" r="14" fill="none" stroke={COLORS.orange} strokeWidth="3"
+                strokeDasharray="66" strokeDashoffset="50" strokeLinecap="round">
+                <animateTransform attributeName="transform" type="rotate"
+                  from="0 18 18" to="360 18 18" dur="0.75s" repeatCount="indefinite" />
+              </circle>
+            </svg>
+            <div style={{ fontFamily: FONTS.body, fontSize: 13, fontWeight: 600, color: COLORS.charcoal }}>
+              Projecting {locationLabel} development outlook…
+            </div>
+          </div>
+        )}
+
+        {/* Error state */}
+        {!isGenerating && genError && (
+          <div style={{
+            background: "#FDEEEE", border: "1px solid #F0C8C8", borderRadius: 16,
+            padding: "36px 32px", textAlign: "center", marginBottom: 24,
+          }}>
+            <p style={{
+              fontFamily: "'Urbanist', sans-serif", fontSize: 17, fontWeight: 800,
+              color: "#B44040", marginBottom: 10,
+            }}>Failed to generate outlook</p>
+            <p style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.midGray, lineHeight: 1.6, margin: 0 }}>
+              {genError}
             </p>
           </div>
-        </div>
+        )}
 
-        {/* ── CTA ──────────────────────────────── */}
+        {outlook && !isGenerating && (
+          <>
+            {/* Key Events */}
+            {outlook.events.length > 0 && (
+              <>
+                <SectionLabel text="Key Events" />
+                <div style={{
+                  background: COLORS.white, borderRadius: 20, padding: "8px 44px 4px",
+                  border: `1px solid ${COLORS.lightBorder}`,
+                  marginBottom: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+                }}>
+                  {outlook.events.map((event, i) => (
+                    <WatchItem key={i} event={event} />
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Risks */}
+            {outlook.risks.length > 0 && (
+              <>
+                <SectionLabel text="Risks & Downside Scenarios" />
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                  gap: 16, marginBottom: 24,
+                }}>
+                  {outlook.risks.map((risk, i) => (
+                    <RiskCard key={i} risk={risk} />
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Civic Engagement */}
+            {outlook.engagement.length > 0 && (
+              <>
+                <SectionLabel text="Civic Engagement" />
+                <div style={{
+                  display: "flex", flexDirection: "column", gap: 12, marginBottom: 24,
+                }}>
+                  {outlook.engagement.map((item, i) => (
+                    <EngagementCard key={i} item={item} />
+                  ))}
+                </div>
+                <div style={{
+                  background: COLORS.softBlue, borderRadius: 16, padding: "24px 28px",
+                  border: "1px solid #C8D8E8", marginBottom: 24,
+                  fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.75, color: COLORS.midGray,
+                }}>
+                  <strong style={{ color: COLORS.charcoal }}>How to participate: </strong>
+                  Planning Commission hearings are open to the public. Written comments submitted
+                  48+ hours before a hearing are included in the Commission's packet. Active permits
+                  can be tracked and commented on through the SF Planning Department portal.
+                  Contact the District 3 Supervisor's office for neighborhood liaison support.
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {/* CTA */}
         <div style={{
           background: COLORS.orangePale, borderRadius: 20, padding: "44px",
           textAlign: "center", border: `1px solid ${COLORS.lightBorder}`,
