@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavBar } from "./components/NavBar";
 import { SplashScreen } from "./components/SplashScreen";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Home } from "./pages/Home";
 import { Briefing } from "./pages/Briefing";
 import { Charts } from "./pages/Charts";
@@ -60,10 +61,12 @@ export default function App() {
   };
 
   return (
-    <>
+    <ErrorBoundary label="App">
       {!splashDone && <SplashScreen onComplete={handleSplashComplete} />}
       {page !== "Home" && <NavBar activePage={page} onNavigate={setPage} />}
-      {renderPage()}
-    </>
+      <ErrorBoundary label={page}>
+        {renderPage()}
+      </ErrorBoundary>
+    </ErrorBoundary>
   );
 }

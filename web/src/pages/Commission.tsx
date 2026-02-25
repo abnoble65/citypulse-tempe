@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { COLORS, FONTS } from "../theme";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
@@ -290,6 +290,33 @@ function ProjectDetailCard({ project }: { project: LiveProject }) {
   );
 }
 
+/* ─── Skeleton Card ──────────────────────────── */
+
+function SkeletonCard() {
+  return (
+    <div style={{
+      background: COLORS.white, borderRadius: 16,
+      padding: "28px", marginBottom: 14,
+      border: `1px solid ${COLORS.lightBorder}`,
+    }}>
+      <style>{`
+        @keyframes skeleton-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.45; }
+        }
+        .sk { animation: skeleton-pulse 1.6s ease-in-out infinite; background: ${COLORS.lightBorder}; border-radius: 5px; }
+      `}</style>
+      <div className="sk" style={{ height: 22, width: "52%", marginBottom: 10 }} />
+      <div className="sk" style={{ height: 13, width: "28%", marginBottom: 22, background: COLORS.cream }} />
+      <div className="sk" style={{ height: 13, width: "92%", marginBottom: 8, background: COLORS.cream }} />
+      <div className="sk" style={{ height: 13, width: "76%", marginBottom: 24, background: COLORS.cream }} />
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <div className="sk" style={{ height: 36, width: 130 }} />
+      </div>
+    </div>
+  );
+}
+
 /* ─── COMMISSION PAGE ────────────────────────── */
 
 export function Commission() {
@@ -300,36 +327,40 @@ export function Commission() {
   const [loading, setLoading]             = useState(true);
   const [error, setError]                 = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError(null);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-      const { data, error: err } = await supabase
-        .from("projects")
-        .select(`
-          id, address, district, action, project_description,
-          shadow_flag, shadow_details, case_number,
-          hearing:hearing_id(
-            id, hearing_date,
-            public_sentiment(
-              speakers, for_project, against_project, neutral,
-              top_themes, notable_quotes, source, clip_id
-            )
-          ),
-          votes(commissioner_name, vote),
-          commissioner_comments(commissioner_name, comment_text)
-        `)
-        .not("address", "is", null)
-        .order("hearing_id", { ascending: false })
-        .limit(30);
+    const { data, error: err } = await supabase
+      .from("projects")
+      .select(`
+        id, address, district, action, project_description,
+        shadow_flag, shadow_details, case_number,
+        hearing:hearing_id(
+          id, hearing_date,
+          public_sentiment(
+            speakers, for_project, against_project, neutral,
+            top_themes, notable_quotes, source, clip_id
+          )
+        ),
+        votes(commissioner_name, vote),
+        commissioner_comments(commissioner_name, comment_text)
+      `)
+      .not("address", "is", null)
+      .order("hearing_id", { ascending: false })
+      .limit(30);
 
-      if (err) { setError(err.message); setLoading(false); return; }
-      setProjects((data ?? []) as unknown as LiveProject[]);
+    if (err) {
+      console.error("[Commission] Supabase query failed:", err);
+      setError(err.message);
       setLoading(false);
+      return;
     }
-    load();
+    setProjects((data ?? []) as unknown as LiveProject[]);
+    setLoading(false);
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const selectedNeighborhood = NEIGHBORHOODS.find(n => n.name === filter) ?? null;
 
@@ -394,20 +425,37 @@ export function Commission() {
           marginBottom: 16, fontFamily: FONTS.body,
         }}>Recent Hearings</div>
 
-        {/* Loading */}
-        {loading && (
-          <div style={{ textAlign: "center", padding: "48px 0", color: COLORS.warmGray, fontFamily: FONTS.body }}>
-            Loading hearing records…
-          </div>
-        )}
+        {/* Loading skeleton */}
+        {loading && [0, 1, 2].map(i => <SkeletonCard key={i} />)}
 
         {/* Error */}
-        {error && (
+        {!loading && error && (
           <div style={{
-            background: "#FDEEEE", border: "1px solid #F0C8C8", borderRadius: 12,
-            padding: "16px 20px", color: "#B44040", fontFamily: FONTS.body, fontSize: 14,
+            background: "#FDEEEE", border: "1px solid #F0C8C8",
+            borderRadius: 16, padding: "36px 32px", textAlign: "center",
           }}>
-            Failed to load hearing records: {error}
+            <p style={{
+              fontFamily: "'Urbanist', sans-serif", fontSize: 17, fontWeight: 800,
+              color: "#B44040", marginBottom: 10,
+            }}>
+              Unable to load hearing data
+            </p>
+            <p style={{
+              fontFamily: FONTS.body, fontSize: 14, color: COLORS.midGray,
+              lineHeight: 1.6, marginBottom: 28,
+            }}>
+              Check your connection and try again.
+            </p>
+            <button
+              onClick={load}
+              style={{
+                background: COLORS.orange, color: COLORS.white, border: "none",
+                borderRadius: 24, padding: "11px 28px", fontSize: 14, fontWeight: 700,
+                cursor: "pointer", fontFamily: "'Urbanist', sans-serif",
+              }}
+            >
+              Retry
+            </button>
           </div>
         )}
 

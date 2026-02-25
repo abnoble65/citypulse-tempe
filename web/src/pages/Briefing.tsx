@@ -50,14 +50,20 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
   if (!aggregatedData) {
     return (
       <div style={{ background: COLORS.cream, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center", padding: "48px 32px" }}>
-          <p style={{ color: COLORS.midGray, fontSize: 15, fontFamily: FONTS.body, marginBottom: 24 }}>
-            No briefing data yet. Generate one from the home page.
+        <div style={{ textAlign: "center", padding: "48px 32px", maxWidth: 380 }}>
+          <p style={{
+            fontFamily: "'Urbanist', sans-serif", fontSize: 18, fontWeight: 800,
+            color: COLORS.charcoal, marginBottom: 12,
+          }}>
+            Unable to load briefing data
+          </p>
+          <p style={{ color: COLORS.midGray, fontSize: 14, fontFamily: FONTS.body, lineHeight: 1.65, marginBottom: 28 }}>
+            Check your connection and try again, or generate a new briefing from the home page.
           </p>
           <button onClick={() => onNavigate("Home")} style={{
             background: COLORS.orange, color: COLORS.white, border: "none",
             borderRadius: 24, padding: "12px 28px", fontSize: 14, fontWeight: 700,
-            cursor: "pointer", fontFamily: FONTS.heading,
+            cursor: "pointer", fontFamily: "'Urbanist', sans-serif",
           }}>← Go to Home</button>
         </div>
       </div>

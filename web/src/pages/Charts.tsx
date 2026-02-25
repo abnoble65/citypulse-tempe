@@ -164,6 +164,35 @@ export function Charts({ aggregatedData, onNavigate }: ChartsProps) {
     );
   }
 
+  if (aggregatedData.permit_summary.total === 0) {
+    return (
+      <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
+        <FilterBar selected={filter} onSelect={setFilter} />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "70vh" }}>
+          <div style={{ textAlign: "center", padding: "48px 32px", maxWidth: 380 }}>
+            <p style={{
+              fontFamily: "'Urbanist', sans-serif", fontSize: 18, fontWeight: 800,
+              color: COLORS.charcoal, marginBottom: 12,
+            }}>
+              No permit data available
+            </p>
+            <p style={{
+              color: COLORS.midGray, fontSize: 14, fontFamily: FONTS.body,
+              lineHeight: 1.65, marginBottom: 28,
+            }}>
+              The DataSF data source may be temporarily unavailable. Try generating a new briefing.
+            </p>
+            <button onClick={() => onNavigate("Home")} style={{
+              background: COLORS.orange, color: COLORS.white, border: "none",
+              borderRadius: 24, padding: "12px 28px", fontSize: 14, fontWeight: 700,
+              cursor: "pointer", fontFamily: "'Urbanist', sans-serif",
+            }}>← Go to Home</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Resolve active permit summary
   const selectedZip = NEIGHBORHOODS.find(n => n.name === filter)?.zip ?? null;
   const ps = aggregatedData.permit_summary;
