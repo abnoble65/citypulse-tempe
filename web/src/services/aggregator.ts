@@ -142,12 +142,8 @@ function buildZoningProfile(zones: ZoningDistrict[]): ZoningProfile {
   const special_use_districts = [
     ...new Set(
       zones
-        .filter(
-          (z) =>
-            z.commercial_hours_of_operation ||
-            z.gen?.toLowerCase().includes('special'),
-        )
-        .map((z) => z.districtname),
+        .filter((z) => z.gen?.toLowerCase().includes('special'))
+        .map((z) => z.districtna),
     ),
   ].sort();
 
@@ -159,13 +155,12 @@ function buildZoningProfile(zones: ZoningDistrict[]): ZoningProfile {
 function buildDateRange(
   permits: BuildingPermit[],
   projects: DevelopmentProject[],
-  zones: ZoningDistrict[],
+  _zones: ZoningDistrict[],
 ): DateRange {
   const candidates: Date[] = [
     ...permits.map((p) => p.filed_date),
     ...permits.map((p) => p.status_date),
     ...projects.map((p) => p.current_status_date),
-    ...zones.map((z) => z.last_edit),
   ]
     .filter((s): s is string => !!s)
     .map((s) => new Date(s))
@@ -182,31 +177,16 @@ function buildDateRange(
   };
 }
 
-const MOCK_PIPELINE_SUMMARY: PipelineSummary = {
-  total: 42,
-  net_pipeline_units: 318,
-  by_status: {
-    'BP Filed': 9,
-    'BP Issued': 7,
-    'Construction': 11,
-    'PL Filed': 6,
-    'PL Approved': 5,
-    'Completed': 4,
-  },
-  total_affordable_units: 87,
+const EMPTY_PIPELINE_SUMMARY: PipelineSummary = {
+  total: 0,
+  net_pipeline_units: 0,
+  by_status: {},
+  total_affordable_units: 0,
 };
 
-const MOCK_ZONING_PROFILE: ZoningProfile = {
-  unique_zoning_codes: [
-    'C-2', 'C-3-O', 'C-3-O(SD)', 'CCB', 'NCD', 'NCT-3',
-    'P', 'RC-4', 'RM-2', 'RM-3', 'RM-4', 'RH-1', 'RH-2', 'RH-3',
-  ],
-  special_use_districts: [
-    'Broadway Neighborhood Commercial District',
-    'Chinatown Community Business District',
-    'North Beach Neighborhood Commercial District',
-    'Polk Street Neighborhood Commercial District',
-  ],
+const EMPTY_ZONING_PROFILE: ZoningProfile = {
+  unique_zoning_codes: [],
+  special_use_districts: [],
   height_range: null,
 };
 
@@ -221,25 +201,32 @@ export async function aggregateDistrictData(): Promise<DistrictData> {
     fetchDevelopmentPipeline(),
     fetchZoningDistricts(),
   ]);
+  console.log(`[aggregator] DataSF results — permits: ${permits.length}, pipeline: ${allProjects.length}, zoning: ${allZones.length}`);
 
   const projects = allProjects.filter((p) => {
     const hood = (p.nhood41 ?? '').toLowerCase();
     return DISTRICT_3_NEIGHBORHOODS.some((n) => hood.includes(n));
   });
 
-  const zones = allZones.filter((z) => z.districtname?.trim() && z.zoning_sim?.trim());
+  const zones = allZones.filter((z) => z.districtna?.trim() && z.zoning_sim?.trim());
 
+  if (projects.length === 0) {
+    console.warn('[aggregator] No pipeline projects returned from DataSF — using empty fallback.');
+  }
   const pipeline_summary =
-    projects.length > 0 ? buildPipelineSummary(projects) : MOCK_PIPELINE_SUMMARY;
+    projects.length > 0 ? buildPipelineSummary(projects) : EMPTY_PIPELINE_SUMMARY;
 
   const zoningProfile = buildZoningProfile(zones);
+  if (zoningProfile.unique_zoning_codes.length === 0) {
+    console.warn('[aggregator] No zoning districts returned from DataSF — using empty fallback.');
+  }
   const zoning_profile =
-    zoningProfile.unique_zoning_codes.length > 0 ? zoningProfile : MOCK_ZONING_PROFILE;
+    zoningProfile.unique_zoning_codes.length > 0 ? zoningProfile : EMPTY_ZONING_PROFILE;
 
   return {
     permit_summary: buildPermitSummary(permits),
     pipeline_summary,
     zoning_profile,
-    date_range: buildDateRange(permits, projects, zones),
+    date_range: buildDateRange(permits, projects, []),
   };
 }

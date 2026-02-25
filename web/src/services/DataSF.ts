@@ -95,21 +95,19 @@ export async function fetchDevelopmentPipeline(limit = 500): Promise<Development
   const params = new URLSearchParams({
     $limit: String(limit),
   });
-  return socrataFetch<DevelopmentProject>('k55i-dnjd', params);
+  return socrataFetch<DevelopmentProject>('6jgi-cpb4', params);
 }
 
 export interface ZoningDistrict {
   zoning_sim: string;
-  districtname: string;
+  districtna: string;   // was districtname in old dataset
   gen: string;
   zoning: string;
-  codesection: string;
+  codesectio: string;   // was codesection in old dataset
   url?: string;
-  commercial_hours_of_operation?: string;
-  last_edit?: string;
 }
 
 export async function fetchZoningDistricts(limit = 200): Promise<ZoningDistrict[]> {
   const params = new URLSearchParams({ $limit: String(limit) });
-  return socrataFetch<ZoningDistrict>('ibu8-4ccn', params);
+  return socrataFetch<ZoningDistrict>('3i4a-hu95', params);
 }

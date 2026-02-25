@@ -4,6 +4,7 @@ import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { supabase } from "../services/supabase";
+import { NEIGHBORHOODS } from "../data";
 
 /* ─── Types ──────────────────────────────────── */
 
@@ -31,6 +32,7 @@ interface Comment {
 interface LiveProject {
   id: string;
   address: string | null;
+  district: string | null;
   action: string | null;
   project_description: string | null;
   shadow_flag: boolean;
@@ -306,7 +308,7 @@ export function Commission() {
       const { data, error: err } = await supabase
         .from("projects")
         .select(`
-          id, address, action, project_description,
+          id, address, district, action, project_description,
           shadow_flag, shadow_details, case_number,
           hearing:hearing_id(
             id, hearing_date,
@@ -329,9 +331,24 @@ export function Commission() {
     load();
   }, []);
 
+  const selectedNeighborhood = NEIGHBORHOODS.find(n => n.name === filter) ?? null;
+
   const visible = projects.filter(p => {
     if (!p.address) return false;
     if (search && !p.address.toLowerCase().includes(search.toLowerCase())) return false;
+    if (selectedNeighborhood && selectedNeighborhood.zip !== null) {
+      const addr = (p.address ?? "").toLowerCase();
+      const dist = (p.district ?? "").toLowerCase();
+      const desc = (p.project_description ?? "").toLowerCase();
+      const name = selectedNeighborhood.name.toLowerCase();
+      const zip  = selectedNeighborhood.zip;
+      const matches =
+        addr.includes(zip) ||
+        addr.includes(name) ||
+        dist.includes(name) ||
+        desc.includes(name);
+      if (!matches) return false;
+    }
     return true;
   });
 
@@ -504,7 +521,8 @@ export function Commission() {
 
         {!loading && !error && visible.length === 0 && (
           <div style={{ textAlign: "center", padding: "48px 0", color: COLORS.warmGray, fontFamily: FONTS.body }}>
-            No hearings found{search ? ` matching "${search}"` : ""}.
+            No hearings found{search ? ` matching "${search}"` : ""}
+            {selectedNeighborhood?.zip ? ` in ${selectedNeighborhood.name}` : ""}.
           </div>
         )}
       </div>
