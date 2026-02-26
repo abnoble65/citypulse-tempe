@@ -66,6 +66,8 @@ function boundaryStyle(name: string, activeNeighborhoodName: string | null): L.P
 }
 
 // ── Neighborhood boundary layer ──────────────────────────────────────────────
+const BOUNDARY_PANE = "cpBoundaryPane";
+
 function BoundaryLayer({
   boundaries,
   activeNeighborhoodName,
@@ -76,6 +78,18 @@ function BoundaryLayer({
   const map = useMap();
   const layersRef = useRef<Map<string, L.GeoJSON>>(new Map());
 
+  // Create a dedicated pane below the overlay pane so boundaries never
+  // obscure permit markers or intercept click events.
+  useEffect(() => {
+    if (!map.getPane(BOUNDARY_PANE)) {
+      map.createPane(BOUNDARY_PANE);
+      const pane = map.getPane(BOUNDARY_PANE)!;
+      pane.style.zIndex = "390";       // below overlayPane (400)
+      pane.style.pointerEvents = "none"; // markers remain clickable
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Re-create all boundary layers when boundaries Map changes (district switch).
   useEffect(() => {
     for (const [, layer] of layersRef.current) map.removeLayer(layer);
@@ -83,6 +97,7 @@ function BoundaryLayer({
 
     for (const [name, feature] of boundaries) {
       const layer = L.geoJSON(feature as GeoJsonObject, {
+        pane: BOUNDARY_PANE,
         style: () => boundaryStyle(name, activeNeighborhoodName),
       }).addTo(map);
       layersRef.current.set(name, layer);
@@ -166,10 +181,14 @@ export function MapView({ permits, districtConfig, activeZip, boundaries, active
         zoom={zoom}
         style={{ height: 420, borderRadius: 16, width: "100%" }}
         scrollWheelZoom={false}
+        zoomControl={false}
+        attributionControl={false}
       >
         <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          subdomains="abcd"
+          maxZoom={19}
         />
         <MapController
           permits={permits}
@@ -214,7 +233,16 @@ export function MapView({ permits, districtConfig, activeZip, boundaries, active
         ))}
       </MapContainer>
 
-      {/* Legend — bottom-left so OSM attribution (bottom-right) is never obscured */}
+      {/* Attribution — bottom right */}
+      <div style={{
+        position: "absolute", bottom: 6, right: 10, zIndex: 1000,
+        fontSize: 10, color: "#999", fontFamily: "system-ui, sans-serif",
+        pointerEvents: "none",
+      }}>
+        © OSM © CARTO
+      </div>
+
+      {/* Legend — bottom-left */}
       <div style={{
         position: "absolute", bottom: 16, left: 16, zIndex: 1000,
         background: "rgba(255,255,255,0.93)", borderRadius: 10,

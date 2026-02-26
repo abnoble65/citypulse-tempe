@@ -644,8 +644,10 @@ export function Commission({ districtConfig }: CommissionProps) {
           </p>
         )}
 
-        {/* Context map — visible once projects load and geocoding has yielded at least one marker */}
-        {!loading && !error && commissionMarkers.length > 0 && (
+        {/* Context map — show as soon as any data is available (markers OR boundaries).
+            Passing an empty markers array is fine: CommissionMap shows the district
+            view with boundary outlines, which is useful orientation even without markers. */}
+        {!loading && !error && (projects.length > 0 || boundaries.size > 0) && (
           <Suspense fallback={
             <div style={{
               height: 220, borderRadius: 20,

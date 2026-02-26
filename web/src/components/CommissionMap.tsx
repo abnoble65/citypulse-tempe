@@ -63,6 +63,8 @@ function boundaryStyle(name: string, activeNeighborhoodName: string | null): L.P
   };
 }
 
+const BOUNDARY_PANE = "cpBoundaryPane";
+
 function BoundaryLayer({
   boundaries,
   activeNeighborhoodName,
@@ -73,12 +75,24 @@ function BoundaryLayer({
   const map = useMap();
   const layersRef = useRef<Map<string, L.GeoJSON>>(new Map());
 
+  // Dedicated pane below overlayPane so boundaries never obscure markers.
+  useEffect(() => {
+    if (!map.getPane(BOUNDARY_PANE)) {
+      map.createPane(BOUNDARY_PANE);
+      const pane = map.getPane(BOUNDARY_PANE)!;
+      pane.style.zIndex = "390";
+      pane.style.pointerEvents = "none";
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     for (const [, layer] of layersRef.current) map.removeLayer(layer);
     layersRef.current.clear();
 
     for (const [name, feature] of boundaries) {
       const layer = L.geoJSON(feature as GeoJsonObject, {
+        pane: BOUNDARY_PANE,
         style: () => boundaryStyle(name, activeNeighborhoodName),
       }).addTo(map);
       layersRef.current.set(name, layer);
@@ -152,7 +166,13 @@ export function CommissionMap({
   const zoom   = DISTRICT_ZOOM[districtConfig.number]   ?? 14;
 
   return (
-    <div style={{ position: "relative", marginBottom: 28 }}>
+    <div style={{
+      position: "relative", marginBottom: 28,
+      borderRadius: 20,
+      border: "1px solid rgba(0,0,0,0.06)",
+      boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
+      overflow: "hidden",  // clips map corners without needing radius on inner div
+    }}>
       <MapContainer
         center={center}
         zoom={zoom}
@@ -233,8 +253,8 @@ export function CommissionMap({
         </div>
       )}
 
-      {/* Legend — bottom left, above badge */}
-      <div style={{
+      {/* Legend — only shown once markers are present */}
+      {markers.length > 0 && <div style={{
         position: "absolute", top: 12, right: 12, zIndex: 1000,
         background: "rgba(255,255,255,0.92)", borderRadius: 10,
         padding: "8px 12px", backdropFilter: "blur(4px)",
@@ -256,7 +276,7 @@ export function CommissionMap({
             <span style={{ color: "#555" }}>{item.label}</span>
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }
