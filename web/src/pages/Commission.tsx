@@ -1,10 +1,17 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { COLORS, FONTS } from "../theme";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { supabase } from "../services/supabase";
+import { geocodeAddresses } from "../services/geocoder";
+import type { LatLng } from "../services/geocoder";
+import type { CommissionMarker } from "../components/CommissionMap";
 import type { DistrictConfig } from "../districts";
+
+const CommissionMapLazy = lazy(() =>
+  import("../components/CommissionMap").then(m => ({ default: m.CommissionMap }))
+);
 
 /** Format an ISO date string as "Feb 25, 2026" */
 function fmtDate(iso: string | null | undefined): string {
@@ -451,6 +458,8 @@ export function Commission({ districtConfig }: CommissionProps) {
   const [loading, setLoading]             = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError]                 = useState<string | null>(null);
+  const [coords, setCoords]               = useState<Map<string, LatLng>>(new Map());
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -489,6 +498,36 @@ export function Commission({ districtConfig }: CommissionProps) {
     setFilter(districtConfig.allLabel);
     setExpandedId(null);
   }, [districtConfig.allLabel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Geocode all project addresses once the initial batch loads.
+  // Cache-first (sessionStorage) so re-navigation is instant.
+  useEffect(() => {
+    if (projects.length === 0) return;
+    const addrs = [...new Set(
+      projects.map(p => p.address).filter((a): a is string => !!a),
+    )];
+    geocodeAddresses(addrs).then(m =>
+      setCoords(prev => new Map([...prev, ...m]))
+    );
+  }, [projects]);
+
+  // Also geocode any new addresses that appear in search results.
+  useEffect(() => {
+    if (!searchResults || searchResults.length === 0) return;
+    const addrs = [...new Set(
+      searchResults.map(p => p.address).filter((a): a is string => !!a),
+    )];
+    geocodeAddresses(addrs).then(m =>
+      setCoords(prev => new Map([...prev, ...m]))
+    );
+  }, [searchResults]);
+
+  const handleMarkerClick = useCallback((key: string) => {
+    setExpandedId(key);
+    setTimeout(() => {
+      cardRefs.current.get(key)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 50);
+  }, []);
 
   // Debounced full-text search — queries address, project_description, case_number
   // without any district filter so cross-district projects (like Stonestown) are found.
@@ -562,6 +601,17 @@ export function Commission({ districtConfig }: CommissionProps) {
   // Computed once — used for both the card list and the empty-state check below.
   const grouped = groupAndDedup(visible);
 
+  // Build map markers from whichever addresses have been geocoded.
+  const commissionMarkers: CommissionMarker[] = grouped
+    .filter(p => !!p.address && coords.has(p.address))
+    .map(p => ({
+      key: p.groupKey,
+      address: p.address!,
+      action: normalizeAction(p.action),
+      lat: coords.get(p.address!)!.lat,
+      lng: coords.get(p.address!)!.lng,
+    }));
+
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
       <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
@@ -583,6 +633,23 @@ export function Commission({ districtConfig }: CommissionProps) {
           }}>
             Hearings through {fmtDate(latestHearingDate)}
           </p>
+        )}
+
+        {/* Context map — visible once projects load and geocoding has yielded at least one marker */}
+        {!loading && !error && commissionMarkers.length > 0 && (
+          <Suspense fallback={
+            <div style={{
+              height: 220, borderRadius: 20,
+              background: COLORS.cream, marginBottom: 28,
+            }} />
+          }>
+            <CommissionMapLazy
+              markers={commissionMarkers}
+              selectedKey={expandedId}
+              districtConfig={districtConfig}
+              onSelectMarker={handleMarkerClick}
+            />
+          </Suspense>
         )}
 
         <div className="cp-search-row" style={{ display: "flex", gap: 12, marginBottom: 36 }}>
@@ -661,7 +728,10 @@ export function Commission({ districtConfig }: CommissionProps) {
           const allInCard = p.mergedWith && p.mergedWith.length > 0 ? [p, ...p.mergedWith] : null;
 
           return (
-            <div key={p.groupKey} style={{
+            <div key={p.groupKey} ref={el => {
+              if (el) cardRefs.current.set(p.groupKey, el);
+              else cardRefs.current.delete(p.groupKey);
+            }} style={{
               background: COLORS.white, borderRadius: 16,
               padding: "clamp(16px, 3vw, 28px)", marginBottom: 14,
               border: `1px solid ${isExpanded ? COLORS.orange : COLORS.lightBorder}`,
