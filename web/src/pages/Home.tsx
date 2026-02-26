@@ -128,7 +128,7 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
         lineHeight: 1.05, letterSpacing: "-0.02em",
         marginBottom: 16, maxWidth: 600,
       }}>
-        Urban Intelligence
+        CityPulse
         <br />
         <span style={{ color: COLORS.orange }}>San Francisco</span>
       </h1>
@@ -138,7 +138,7 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
         textAlign: "center", maxWidth: 440,
         lineHeight: 1.6, marginBottom: 44, fontFamily: FONTS.body,
       }}>
-        AI-powered civic briefings from live permit, pipeline, and planning data.
+        Live permit, planning, and development intelligence across all 11 SF Supervisor Districts.
       </p>
 
       {/* District selector */}

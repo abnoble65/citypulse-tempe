@@ -391,28 +391,16 @@ export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookP
           </>
         )}
 
-        {/* CTA */}
-        <div style={{
-          background: COLORS.orangePale, borderRadius: 20, padding: "clamp(24px, 5vw, 44px)",
-          textAlign: "center", border: `1px solid ${COLORS.lightBorder}`,
+        {/* Data freshness */}
+        <p style={{
+          fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray,
+          textAlign: "center", paddingBottom: 8,
         }}>
-          <div style={{
-            fontFamily: "'Urbanist', sans-serif", fontSize: 26,
-            fontWeight: 800, marginBottom: 12, color: COLORS.charcoal,
-          }}>Want fresh intelligence?</div>
-          <p style={{
-            fontFamily: FONTS.body, fontSize: 15, color: COLORS.midGray,
-            marginBottom: 28, fontWeight: 500,
-          }}>Generate a new briefing with the latest data.</p>
-          <button onClick={() => onNavigate("Home")} style={{
-            background: COLORS.orange, color: COLORS.white, border: "none",
-            borderRadius: 28, padding: "14px 36px", fontSize: 15, fontWeight: 700,
-            cursor: "pointer", fontFamily: "'Urbanist', sans-serif",
-            boxShadow: "0 4px 16px rgba(212,100,59,0.2)",
-          }}>
-            ← Back to Home
-          </button>
-        </div>
+          Briefing generated {new Date().toLocaleString("en-US", {
+            month: "short", day: "numeric",
+            hour: "numeric", minute: "2-digit",
+          })} · Data from DataSF
+        </p>
       </div>
     </div>
   );

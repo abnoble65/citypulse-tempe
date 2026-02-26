@@ -120,14 +120,19 @@ function MapController({
   markers,
   selectedKey,
   districtConfig,
+  boundaries,
+  activeNeighborhoodName,
 }: {
   markers: CommissionMarker[];
   selectedKey: string | null;
   districtConfig: DistrictConfig;
+  boundaries?: Map<string, Feature>;
+  activeNeighborhoodName?: string | null;
 }) {
   const map = useMap();
 
   useEffect(() => {
+    // Priority 1: selected marker
     if (selectedKey) {
       const m = markers.find(mk => mk.key === selectedKey);
       if (m) {
@@ -135,11 +140,23 @@ function MapController({
         return;
       }
     }
+    // Priority 2: neighborhood filter → zoom to boundary
+    if (activeNeighborhoodName && boundaries) {
+      const feature = boundaries.get(activeNeighborhoodName);
+      if (feature) {
+        const bounds = L.geoJSON(feature as GeoJsonObject).getBounds();
+        if (bounds.isValid()) {
+          map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 16, duration: 0.6 });
+          return;
+        }
+      }
+    }
+    // Priority 3: district center
     const center = DISTRICT_CENTERS[districtConfig.number] ?? [37.773, -122.431];
     const zoom   = DISTRICT_ZOOM[districtConfig.number]   ?? 14;
     map.flyTo(center, zoom, { duration: 0.5 });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey, districtConfig.number]);
+  }, [selectedKey, activeNeighborhoodName, districtConfig.number]);
 
   return null;
 }
@@ -191,6 +208,8 @@ export function CommissionMap({
           markers={markers}
           selectedKey={selectedKey}
           districtConfig={districtConfig}
+          boundaries={boundaries}
+          activeNeighborhoodName={activeNeighborhoodName}
         />
         {boundaries && boundaries.size > 0 && (
           <BoundaryLayer
