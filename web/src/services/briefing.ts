@@ -215,6 +215,8 @@ export async function generateOutlook(
   // Fetch shadow-flagged projects from Supabase in parallel with data prep.
   // Always district-wide — shadow impact is a D3-level concern regardless of
   // neighborhood filter, and project addresses rarely contain zip codes.
+  console.log('[generateOutlook] STEP 1: starting Supabase shadow query');
+
   const shadowPromise = supabase
     .from('projects')
     .select('address, project_description, shadow_details', { count: 'exact' })
@@ -224,9 +226,10 @@ export async function generateOutlook(
     .limit(8)
     .then(({ data: rows, count, error }) => {
       if (error) {
-        console.warn('[generateOutlook] shadow query failed:', error.message);
+        console.warn('[generateOutlook] STEP 1 FAILED — shadow query error:', error.message, error);
         return { projects: [] as ShadowProject[], total: 0 };
       }
+      console.log(`[generateOutlook] STEP 1 OK — shadow rows returned: ${rows?.length ?? 0}, total count: ${count}`);
       return { projects: (rows ?? []) as ShadowProject[], total: count ?? 0 };
     });
 
@@ -287,6 +290,8 @@ IMPORTANT: Include at least one risk item about shadow impact, citing the total 
 
 Be specific. Reference actual project types, pipeline counts, permit patterns, and shadow-flagged addresses from the data.`;
 
+  console.log(`[generateOutlook] STEP 2: calling Claude Haiku — prompt length: ${userContent.length} chars`);
+
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1536,
@@ -294,9 +299,24 @@ Be specific. Reference actual project types, pipeline counts, permit patterns, a
     messages: [{ role: 'user', content: userContent }],
   });
 
+  console.log(`[generateOutlook] STEP 3: Claude responded — stop_reason: ${message.stop_reason}, content blocks: ${message.content.length}`);
+
   const block = message.content[0];
   if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
 
+  console.log(`[generateOutlook] STEP 4: raw response (first 500 chars):\n${block.text.slice(0, 500)}`);
+
   const raw = block.text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-  return JSON.parse(raw) as OutlookData;
+
+  console.log(`[generateOutlook] STEP 5: parsing JSON — cleaned string starts with: "${raw.slice(0, 80)}"`);
+
+  try {
+    const parsed = JSON.parse(raw) as OutlookData;
+    console.log(`[generateOutlook] STEP 5 OK — events: ${parsed.events?.length}, risks: ${parsed.risks?.length}, engagement: ${parsed.engagement?.length}`);
+    return parsed;
+  } catch (parseErr) {
+    console.error('[generateOutlook] STEP 5 FAILED — JSON.parse threw:', parseErr);
+    console.error('[generateOutlook] Full raw string that failed to parse:\n', raw);
+    throw parseErr;
+  }
 }
