@@ -312,6 +312,8 @@ function ProjectDetailCard({ project }: { project: LiveProject }) {
 interface GroupedProject extends LiveProject {
   groupKey: string;
   allHearingDates: string[];
+  /** Other cases heard on the same address + same date, merged into this card. */
+  mergedWith?: GroupedProject[];
 }
 
 /**
@@ -354,7 +356,29 @@ function groupAndDedup(rows: LiveProject[]): GroupedProject[] {
     ].sort();
     result.push({ ...primary, groupKey, allHearingDates });
   }
-  return result;
+
+  // Pass 4 — merge cards sharing the same (address, hearing_date) into one card.
+  // Same address on different dates = distinct hearings, kept separate.
+  const addrDateBuckets = new Map<string, GroupedProject[]>();
+  for (const p of result) {
+    const addr = (p.address ?? "").toLowerCase().trim();
+    const date = p.hearing?.hearing_date ?? "";
+    const k = addr && date ? `${addr}||${date}` : `solo:${p.groupKey}`;
+    const b = addrDateBuckets.get(k);
+    if (b) b.push(p);
+    else addrDateBuckets.set(k, [p]);
+  }
+
+  const finalResult: GroupedProject[] = [];
+  for (const bucket of addrDateBuckets.values()) {
+    if (bucket.length === 1) {
+      finalResult.push(bucket[0]);
+    } else {
+      const [primary, ...others] = bucket;
+      finalResult.push({ ...primary, mergedWith: others });
+    }
+  }
+  return finalResult;
 }
 
 /**
@@ -630,6 +654,8 @@ export function Commission({ districtConfig }: CommissionProps) {
           // All hearing dates except the most recent (shown separately as the main date)
           const priorDates = p.allHearingDates.slice(0, -1);
           const { title, subtitle } = cardTitle(p);
+          // When multiple cases share the same address + hearing date, they're merged here.
+          const allInCard = p.mergedWith && p.mergedWith.length > 0 ? [p, ...p.mergedWith] : null;
 
           return (
             <div key={p.groupKey} style={{
@@ -696,24 +722,64 @@ export function Commission({ districtConfig }: CommissionProps) {
                       border: "1px solid #C8D8E8",
                     }}>💬 {sentiment.speakers} Comments</span>
                   )}
-                  <span style={{
-                    background: ac.bg, color: ac.text,
-                    padding: "5px 14px", borderRadius: 20,
-                    fontSize: 12, fontWeight: 700, fontFamily: FONTS.body,
-                    border: `1px solid ${ac.border}`,
-                  }}>{p.action ?? norm}</span>
+                  {allInCard
+                    ? allInCard.map((mp, i) => {
+                        const mpNorm = normalizeAction(mp.action);
+                        const mpAc = actionStyle(mpNorm);
+                        return (
+                          <span key={i} style={{
+                            background: mpAc.bg, color: mpAc.text,
+                            padding: "5px 14px", borderRadius: 20,
+                            fontSize: 12, fontWeight: 700, fontFamily: FONTS.body,
+                            border: `1px solid ${mpAc.border}`,
+                          }}>{mp.action ?? mpNorm}</span>
+                        );
+                      })
+                    : (
+                      <span style={{
+                        background: ac.bg, color: ac.text,
+                        padding: "5px 14px", borderRadius: 20,
+                        fontSize: 12, fontWeight: 700, fontFamily: FONTS.body,
+                        border: `1px solid ${ac.border}`,
+                      }}>{p.action ?? norm}</span>
+                    )
+                  }
                 </div>
               </div>
 
-              {p.project_description && (
-                <p style={{
-                  fontSize: 14, color: COLORS.midGray,
-                  lineHeight: 1.65, marginBottom: 16, fontFamily: FONTS.body,
-                }}>
-                  {p.project_description.slice(0, 200)}
-                  {p.project_description.length > 200 ? "…" : ""}
-                </p>
-              )}
+              {allInCard
+                ? (
+                  <div style={{ marginBottom: 16 }}>
+                    {allInCard.map((mp, i) => (
+                      <div key={i} style={{
+                        display: "flex", gap: 10, alignItems: "flex-start",
+                        marginBottom: i < allInCard.length - 1 ? 8 : 0,
+                      }}>
+                        <span style={{
+                          color: COLORS.orange, fontWeight: 700, flexShrink: 0,
+                          fontFamily: FONTS.body, fontSize: 14, lineHeight: "1.65",
+                        }}>•</span>
+                        <p style={{
+                          fontSize: 14, color: COLORS.midGray,
+                          lineHeight: 1.65, margin: 0, fontFamily: FONTS.body,
+                        }}>
+                          {(mp.action ?? mp.project_description ?? "").slice(0, 200)}
+                          {(mp.action ?? mp.project_description ?? "").length > 200 ? "…" : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )
+                : p.project_description && (
+                  <p style={{
+                    fontSize: 14, color: COLORS.midGray,
+                    lineHeight: 1.65, marginBottom: 16, fontFamily: FONTS.body,
+                  }}>
+                    {p.project_description.slice(0, 200)}
+                    {p.project_description.length > 200 ? "…" : ""}
+                  </p>
+                )
+              }
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 {tally.aye > 0 && (
@@ -745,7 +811,26 @@ export function Commission({ districtConfig }: CommissionProps) {
                 </button>
               </div>
 
-              {isExpanded && <ProjectDetailCard project={p} />}
+              {isExpanded && (
+                allInCard
+                  ? allInCard.map((mp, i) => (
+                      <div key={mp.groupKey}>
+                        {i > 0 && (
+                          <div style={{
+                            fontSize: 11, fontWeight: 700, color: COLORS.warmGray,
+                            fontFamily: FONTS.body, letterSpacing: "0.06em",
+                            textTransform: "uppercase", paddingTop: 24,
+                            borderTop: `1px solid ${COLORS.lightBorder}`,
+                            marginTop: 8, marginBottom: 4,
+                          }}>
+                            {mp.case_number ?? `Action ${i + 1}`}
+                          </div>
+                        )}
+                        <ProjectDetailCard project={mp} />
+                      </div>
+                    ))
+                  : <ProjectDetailCard project={p} />
+              )}
             </div>
           );
         })}

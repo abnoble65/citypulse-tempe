@@ -225,7 +225,7 @@ export async function generateSignals(
 
   const userContent = `${JSON.stringify(analysisData, null, 2)}
 
-TASK: Identify 3–5 key signals or trends for ${locationLabel} based on the data above.
+TASK: Identify exactly 4 key signals or trends for ${locationLabel} based on the data above.
 
 For each signal return an object with these exact keys:
 - "title": short title, 5–8 words
@@ -241,7 +241,7 @@ Return ONLY a JSON object in this exact shape (no other text):
   const t0 = performance.now();
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1024,
+    max_tokens: 2048,
     system: signalsSystemPrompt(district.label),
     messages: [{ role: 'user', content: userContent }],
   });
@@ -250,9 +250,7 @@ Return ONLY a JSON object in this exact shape (no other text):
   const block = message.content[0];
   if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
 
-  // Strip any accidental markdown code fences
-  const raw = block.text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-  const parsed = JSON.parse(raw) as { signals: Signal[] };
+  const parsed = repairAndParseJSON<{ signals: Signal[] }>(block.text);
   _signalsCache.set(key, parsed.signals);
   return parsed.signals;
 }
