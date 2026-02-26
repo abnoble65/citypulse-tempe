@@ -168,6 +168,53 @@ async function getBosContext(districtNumber: string): Promise<string> {
   }
 }
 
+// Fetches the 2 most recent recpark_items from the last 60 days and injects
+// them into AI prompts. Cached per district.
+
+const _parksCache = new Map<string, string>(); // districtNumber → context string
+
+async function getParksContext(districtNumber: string): Promise<string> {
+  if (_parksCache.has(districtNumber)) return _parksCache.get(districtNumber)!;
+
+  try {
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+      .toISOString().split('T')[0];
+
+    const { data: meetings } = await supabase
+      .from('recpark_meetings')
+      .select('id')
+      .gte('meeting_date', sixtyDaysAgo);
+
+    const meetingIds = (meetings ?? []).map((m: { id: number }) => m.id);
+    if (meetingIds.length === 0) { _parksCache.set(districtNumber, ''); return ''; }
+
+    const { data: items } = await supabase
+      .from('recpark_items')
+      .select('item_letter, title, action, locations, topics')
+      .in('meeting_id', meetingIds)
+      .limit(30);
+
+    if (!items || items.length === 0) { _parksCache.set(districtNumber, ''); return ''; }
+
+    const relevant = (items as { item_letter: string | null; title: string; action: string | null; locations: string[] | null; topics: string[] | null }[])
+      .filter(item => item.title && item.title.length > 5)
+      .slice(0, 2);
+
+    if (relevant.length === 0) { _parksCache.set(districtNumber, ''); return ''; }
+
+    const lines = relevant.map(item =>
+      `- "${item.title}" — ${item.action ?? 'discussed'} (parks: ${(item.locations ?? []).join(', ') || 'citywide'})`
+    );
+    const ctx = `\nRECENT REC & PARKS COMMISSION ACTIONS (mention if relevant, max 2 references):\n${lines.join('\n')}\n`;
+    _parksCache.set(districtNumber, ctx);
+    return ctx;
+  } catch {
+    // Table may not exist yet — silently skip
+    _parksCache.set(districtNumber, '');
+    return '';
+  }
+}
+
 // ── Session-level AI content caches ───────────────────────────────────────────
 // Keyed by "districtNumber:zip" (neighborhood-filtered) or "districtNumber:all".
 // Switching between previously-visited combos is instant — no Claude call needed.
@@ -267,9 +314,10 @@ export async function generateBriefingFromData(
   const cached = _briefingCache.get(key);
   if (cached) { console.log(`[briefing] cache hit ${key}`); return cached; }
 
-  // Fetch mayor news + BOS context in parallel with data prep (non-blocking)
-  const mayorCtxPromise = getMayorNewsContext(district.number);
-  const bosCtxPromise   = getBosContext(district.number);
+  // Fetch mayor news + BOS + Parks context in parallel with data prep (non-blocking)
+  const mayorCtxPromise  = getMayorNewsContext(district.number);
+  const bosCtxPromise    = getBosContext(district.number);
+  const parksCtxPromise  = getParksContext(district.number);
 
   let briefingData: DistrictData = data;
 
@@ -289,8 +337,8 @@ export async function generateBriefingFromData(
     };
   }
 
-  const [mayorCtx, bosCtx] = await Promise.all([mayorCtxPromise, bosCtxPromise]);
-  const crossRefs = mayorCtx + bosCtx;
+  const [mayorCtx, bosCtx, parksCtx] = await Promise.all([mayorCtxPromise, bosCtxPromise, parksCtxPromise]);
+  const crossRefs = mayorCtx + bosCtx + parksCtx;
 
   const userContent = district.number === '0'
     ? `${JSON.stringify(data.citywide_prompt_summary ?? [], null, 2)}${crossRefs}\n\nFOCUS: Identify the 5 most significant developments across all SF districts. For each finding, tag the district and neighborhood. Focus on what has city-wide implications — displacement pressure, housing supply, major construction, and policy risk.`
@@ -355,11 +403,12 @@ export async function generateSignals(
     ? data.citywide_prompt_summary ?? []
     : forPrompt(analysisData);
 
-  const [mayorCtx, bosCtx] = await Promise.all([
+  const [mayorCtx, bosCtx, parksCtx] = await Promise.all([
     getMayorNewsContext(district.number),
     getBosContext(district.number),
+    getParksContext(district.number),
   ]);
-  const crossRefs = mayorCtx + bosCtx;
+  const crossRefs = mayorCtx + bosCtx + parksCtx;
 
   const userContent = `${JSON.stringify(promptData, null, 2)}${crossRefs}
 
@@ -506,11 +555,12 @@ ${shadowProjects.map(p => `- ${p.address}: ${p.shadow_details ?? p.project_descr
     ? data.citywide_prompt_summary ?? []
     : forPrompt(analysisData);
 
-  const [mayorCtx, bosCtx] = await Promise.all([
+  const [mayorCtx, bosCtx, parksCtx] = await Promise.all([
     getMayorNewsContext(district.number),
     getBosContext(district.number),
+    getParksContext(district.number),
   ]);
-  const crossRefs = mayorCtx + bosCtx;
+  const crossRefs = mayorCtx + bosCtx + parksCtx;
 
   const userContent = `${JSON.stringify(promptData, null, 2)}
 ${shadowBlock}${crossRefs}
