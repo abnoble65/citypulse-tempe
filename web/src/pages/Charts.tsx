@@ -142,26 +142,104 @@ function ChartCard({ title, children, style }: {
   );
 }
 
+/* ─── Charts Skeletons ────────────────────────── */
+
+function ChartsSkeletons() {
+  return (
+    <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
+        {/* Header */}
+        <div className="sk" style={{ height: 13, width: 60, marginBottom: 16 }} />
+        <div className="sk" style={{ height: 42, width: "48%", marginBottom: 10 }} />
+        <div className="sk" style={{ height: 13, width: "28%", marginBottom: 36 }} />
+
+        {/* Row 1: Donut + Bar side by side */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
+          gap: 20, marginBottom: 24,
+        }}>
+          {/* Donut card */}
+          <div style={{
+            background: COLORS.white, borderRadius: 20,
+            padding: "clamp(16px, 3vw, 32px)",
+            border: `1px solid ${COLORS.lightBorder}`,
+          }}>
+            <div className="sk" style={{ height: 13, width: "52%", marginBottom: 24 }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 32, flexWrap: "wrap", justifyContent: "center" }}>
+              {/* Circle donut */}
+              <div className="sk" style={{ width: 170, height: 170, borderRadius: "50%", flexShrink: 0 }} />
+              {/* Legend items */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 140 }}>
+                {[55, 45, 65, 40, 50].map((w, i) => (
+                  <div key={i} className="sk" style={{ height: 13, width: w + "%" }} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Bar card */}
+          <div style={{
+            background: COLORS.white, borderRadius: 20,
+            padding: "clamp(16px, 3vw, 32px)",
+            border: `1px solid ${COLORS.lightBorder}`,
+          }}>
+            <div className="sk" style={{ height: 13, width: "60%", marginBottom: 24 }} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              {[78, 58, 44, 32, 20].map((w, i) => (
+                <div key={i}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <div className="sk" style={{ height: 14, width: `${w}%` }} />
+                    <div className="sk" style={{ height: 18, width: 64 }} />
+                  </div>
+                  <div className="sk" style={{ height: 10, width: "100%" }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Row 2: Notable addresses */}
+        <div style={{
+          background: COLORS.white, borderRadius: 20,
+          padding: "clamp(16px, 3vw, 32px)",
+          border: `1px solid ${COLORS.lightBorder}`,
+        }}>
+          <div className="sk" style={{ height: 13, width: "55%", marginBottom: 24 }} />
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(340px, 100%), 1fr))",
+            gap: "0 48px",
+          }}>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 14,
+                padding: "13px 0", borderBottom: `1px solid ${COLORS.cream}`,
+              }}>
+                <div className="sk" style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <div className="sk" style={{ height: 14, width: "50%" }} />
+                    <div className="sk" style={{ height: 16, width: 52 }} />
+                  </div>
+                  <div className="sk" style={{ height: 6, width: "100%" }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── CHARTS PAGE ─────────────────────────────── */
 
 export function Charts({ aggregatedData, onNavigate }: ChartsProps) {
   const [filter, setFilter] = useState("All District 3");
 
   if (!aggregatedData) {
-    return (
-      <div style={{ background: COLORS.cream, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center", padding: "48px 32px" }}>
-          <p style={{ color: COLORS.midGray, fontSize: 15, fontFamily: FONTS.body, marginBottom: 24 }}>
-            No data yet. Generate a briefing from the home page.
-          </p>
-          <button onClick={() => onNavigate("Home")} style={{
-            background: COLORS.orange, color: COLORS.white, border: "none",
-            borderRadius: 24, padding: "12px 28px", fontSize: 14, fontWeight: 700,
-            cursor: "pointer", fontFamily: FONTS.heading,
-          }}>← Go to Home</button>
-        </div>
-      </div>
-    );
+    return <ChartsSkeletons />;
   }
 
   if (aggregatedData.permit_summary.total === 0) {

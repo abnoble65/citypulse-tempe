@@ -199,26 +199,29 @@ export function Signals({ aggregatedData, onNavigate }: SignalsProps) {
           Powered by live DataSF permit activity and development pipeline data.
         </p>
 
-        {/* Loading spinner */}
+        {/* Loading skeletons */}
         {isGenerating && (
-          <div style={{
-            background: COLORS.white, borderRadius: 20, padding: "60px 32px",
-            border: `1px solid ${COLORS.orange}`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexDirection: "column", gap: 16, marginBottom: 24,
-          }}>
-            <svg width="36" height="36" viewBox="0 0 36 36">
-              <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="3" />
-              <circle cx="18" cy="18" r="14" fill="none" stroke={COLORS.orange} strokeWidth="3"
-                strokeDasharray="66" strokeDashoffset="50" strokeLinecap="round">
-                <animateTransform attributeName="transform" type="rotate"
-                  from="0 18 18" to="360 18 18" dur="0.75s" repeatCount="indefinite" />
-              </circle>
-            </svg>
-            <div style={{ fontFamily: FONTS.body, fontSize: 13, fontWeight: 600, color: COLORS.charcoal }}>
-              Analyzing {locationLabel} permit trends…
-            </div>
-          </div>
+          <>
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} style={{
+                background: COLORS.white, borderRadius: 20,
+                padding: "clamp(20px, 4vw, 32px) clamp(16px, 4vw, 36px)",
+                marginBottom: 20,
+                border: `1px solid ${COLORS.lightBorder}`,
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                  <div className="sk" style={{ height: 22, flex: 1, marginRight: 16 }} />
+                  <div className="sk" style={{ height: 22, width: 70, flexShrink: 0 }} />
+                </div>
+                <div className="sk" style={{ height: 14, width: "100%", marginBottom: 9 }} />
+                <div className="sk" style={{ height: 14, width: "94%", marginBottom: 9 }} />
+                <div className="sk" style={{ height: 14, width: "78%", marginBottom: 16 }} />
+                <div style={{ background: COLORS.cream, borderRadius: 12, padding: "14px 18px" }}>
+                  <div className="sk" style={{ height: 13, width: "86%" }} />
+                </div>
+              </div>
+            ))}
+          </>
         )}
 
         {/* Error state */}

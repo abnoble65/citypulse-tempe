@@ -73,6 +73,40 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
 
   const sections = parseBriefingSections(localText);
 
+  /** Pulsing placeholders shown while the AI is writing the briefing. */
+  function BriefingSkeletons({ bgColors }: { bgColors: string[] }) {
+    return (
+      <>
+        {/* Stat card skeletons */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+          gap: 14, marginBottom: 44,
+        }}>
+          {bgColors.map((bg, i) => (
+            <div key={i} style={{ background: bg, borderRadius: 16, padding: "26px 22px" }}>
+              <div className="sk-lt" style={{ height: 38, width: "60%", marginBottom: 10 }} />
+              <div className="sk-lt" style={{ height: 13, width: "72%" }} />
+            </div>
+          ))}
+        </div>
+        {/* Text body skeleton */}
+        <div style={{
+          background: COLORS.white, borderRadius: 20,
+          padding: "clamp(20px, 5vw, 40px)",
+          border: `1px solid ${COLORS.orange}`,
+        }}>
+          {[92, 100, 88, 100, 76, 100, 84, 58].map((w, i) => (
+            <div key={i} className="sk" style={{ height: 14, width: `${w}%`, marginBottom: i < 7 ? 11 : 0 }} />
+          ))}
+          <div style={{ marginTop: 28 }} />
+          {[96, 100, 82, 100, 90, 46].map((w, i) => (
+            <div key={i} className="sk" style={{ height: 14, width: `${w}%`, marginBottom: i < 5 ? 11 : 0 }} />
+          ))}
+        </div>
+      </>
+    );
+  }
+
   if (!aggregatedData) {
     return (
       <div style={{ background: COLORS.cream, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -139,66 +173,49 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
           )}
         </p>
 
-        <div style={{
-          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
-          gap: 14, marginBottom: 44,
-        }}>
-          {stats.map(s => (
-            <div key={s.label} style={{ background: s.bg, borderRadius: 16, padding: "26px 22px" }}>
-              <div style={{
-                fontFamily: "'Urbanist', sans-serif",
-                fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 800, color: COLORS.charcoal,
-                letterSpacing: "-0.02em",
-              }}>{s.num}</div>
-              <div style={{ fontSize: 13, color: COLORS.midGray, marginTop: 6, fontFamily: FONTS.body, fontWeight: 500 }}>
-                {s.label}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{
-          background: COLORS.white,
-          borderRadius: 20, padding: "clamp(20px, 5vw, 40px)",
-          border: `1px solid ${isGenerating ? COLORS.orange : COLORS.lightBorder}`,
-          fontFamily: FONTS.body,
-          fontSize: 15.5, lineHeight: 1.8,
-          color: COLORS.charcoal,
-          boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
-          transition: "border 0.3s",
-          position: "relative",
-        }}>
-          {isGenerating && (
+        {isGenerating ? (
+          <BriefingSkeletons bgColors={stats.map(s => s.bg)} />
+        ) : (
+          <>
             <div style={{
-              position: "absolute", inset: 0, borderRadius: 20,
-              background: "rgba(255,255,255,0.88)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexDirection: "column", gap: 14,
-              zIndex: 2,
+              display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+              gap: 14, marginBottom: 44,
             }}>
-              <svg width="36" height="36" viewBox="0 0 36 36">
-                <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="3" />
-                <circle cx="18" cy="18" r="14" fill="none" stroke={COLORS.orange} strokeWidth="3"
-                  strokeDasharray="66" strokeDashoffset="50" strokeLinecap="round">
-                  <animateTransform attributeName="transform" type="rotate"
-                    from="0 18 18" to="360 18 18" dur="0.75s" repeatCount="indefinite" />
-                </circle>
-              </svg>
-              <div style={{ fontFamily: FONTS.body, fontSize: 13, fontWeight: 600, color: COLORS.charcoal }}>
-                Analyzing {ps.total > 0 ? `${ps.total.toLocaleString()} permits` : "permit data"} in {locationLabel}…
-              </div>
+              {stats.map(s => (
+                <div key={s.label} style={{ background: s.bg, borderRadius: 16, padding: "26px 22px" }}>
+                  <div style={{
+                    fontFamily: "'Urbanist', sans-serif",
+                    fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 800, color: COLORS.charcoal,
+                    letterSpacing: "-0.02em",
+                  }}>{s.num}</div>
+                  <div style={{ fontSize: 13, color: COLORS.midGray, marginTop: 6, fontFamily: FONTS.body, fontWeight: 500 }}>
+                    {s.label}
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
-          {sections.briefing ? (
-            <p style={{ whiteSpace: "pre-wrap", opacity: isGenerating ? 0.4 : 1, transition: "opacity 0.3s" }}>
-              {sections.briefing}
-            </p>
-          ) : (
-            <p style={{ color: COLORS.warmGray, fontStyle: "italic" }}>
-              Briefing content unavailable — the AI response may not have followed the expected format.
-            </p>
-          )}
-        </div>
+
+            <div style={{
+              background: COLORS.white,
+              borderRadius: 20, padding: "clamp(20px, 5vw, 40px)",
+              border: `1px solid ${COLORS.lightBorder}`,
+              fontFamily: FONTS.body,
+              fontSize: 15.5, lineHeight: 1.8,
+              color: COLORS.charcoal,
+              boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+            }}>
+              {sections.briefing ? (
+                <p style={{ whiteSpace: "pre-wrap" }}>
+                  {sections.briefing}
+                </p>
+              ) : (
+                <p style={{ color: COLORS.warmGray, fontStyle: "italic" }}>
+                  Briefing content unavailable — the AI response may not have followed the expected format.
+                </p>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

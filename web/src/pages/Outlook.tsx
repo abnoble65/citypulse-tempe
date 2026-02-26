@@ -211,26 +211,56 @@ export function Outlook({ aggregatedData, onNavigate }: OutlookProps) {
           Powered by live DataSF permit activity and development pipeline data.
         </p>
 
-        {/* Loading spinner */}
+        {/* Loading skeletons */}
         {isGenerating && (
-          <div style={{
-            background: COLORS.white, borderRadius: 20, padding: "60px 32px",
-            border: `1px solid ${COLORS.orange}`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexDirection: "column", gap: 16, marginBottom: 24,
-          }}>
-            <svg width="36" height="36" viewBox="0 0 36 36">
-              <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="3" />
-              <circle cx="18" cy="18" r="14" fill="none" stroke={COLORS.orange} strokeWidth="3"
-                strokeDasharray="66" strokeDashoffset="50" strokeLinecap="round">
-                <animateTransform attributeName="transform" type="rotate"
-                  from="0 18 18" to="360 18 18" dur="0.75s" repeatCount="indefinite" />
-              </circle>
-            </svg>
-            <div style={{ fontFamily: FONTS.body, fontSize: 13, fontWeight: 600, color: COLORS.charcoal }}>
-              Projecting {locationLabel} development outlook…
+          <>
+            {/* Key Events skeleton */}
+            <SectionLabel text="Key Events" />
+            <div style={{
+              background: COLORS.white, borderRadius: 20,
+              padding: "8px clamp(20px, 4vw, 44px) 4px",
+              border: `1px solid ${COLORS.lightBorder}`,
+              marginBottom: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+            }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{ padding: "24px 0", borderBottom: `1px solid ${COLORS.lightBorder}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 10, flexWrap: "wrap" }}>
+                    <div className="sk" style={{ height: 22, flex: 1, minWidth: 120 }} />
+                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                      <div className="sk" style={{ height: 22, width: 84 }} />
+                      <div className="sk" style={{ height: 22, width: 62 }} />
+                    </div>
+                  </div>
+                  <div className="sk" style={{ height: 13, width: "100%", marginBottom: 8 }} />
+                  <div className="sk" style={{ height: 13, width: "88%", marginBottom: 8 }} />
+                  <div className="sk" style={{ height: 13, width: "60%" }} />
+                </div>
+              ))}
             </div>
-          </div>
+
+            {/* Risks skeleton */}
+            <SectionLabel text="Risks & Downside Scenarios" />
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))",
+              gap: 16, marginBottom: 24,
+            }}>
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} style={{
+                  background: COLORS.cream, borderRadius: 16, padding: "24px 28px",
+                  border: `1px solid ${COLORS.lightBorder}`,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                    <div className="sk" style={{ height: 24, width: "62%" }} />
+                    <div className="sk" style={{ height: 22, width: 60 }} />
+                  </div>
+                  <div className="sk" style={{ height: 13, width: "100%", marginBottom: 8 }} />
+                  <div className="sk" style={{ height: 13, width: "88%", marginBottom: 8 }} />
+                  <div className="sk" style={{ height: 13, width: "70%" }} />
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {/* Error state */}
