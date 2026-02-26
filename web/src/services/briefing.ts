@@ -65,6 +65,55 @@ const client = new Anthropic({
   dangerouslyAllowBrowser: true,
 });
 
+// ── Mayor's Office cross-reference ────────────────────────────────────────────
+// Fetches the 2 most recent mayor_news items relevant to the district and
+// injects them into AI prompts as a short context block. Cached per district.
+
+const _mayorCache = new Map<string, string>(); // districtNumber → context string
+
+async function getMayorNewsContext(districtNumber: string): Promise<string> {
+  if (_mayorCache.has(districtNumber)) return _mayorCache.get(districtNumber)!;
+
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      .toISOString().split('T')[0];
+
+    const { data } = await supabase
+      .from('mayor_news')
+      .select('title, date, topics, districts')
+      .gte('date', thirtyDaysAgo)
+      .order('date', { ascending: false })
+      .limit(20);
+
+    if (!data || data.length === 0) {
+      _mayorCache.set(districtNumber, '');
+      return '';
+    }
+
+    const relevant = data.filter((item: { districts: string[] | null }) => {
+      if (districtNumber === '0') return true;
+      const dists: string[] = item.districts ?? [];
+      return dists.length === 0 || dists.includes(districtNumber) || dists.includes('citywide');
+    }).slice(0, 2);
+
+    if (relevant.length === 0) {
+      _mayorCache.set(districtNumber, '');
+      return '';
+    }
+
+    const lines = relevant.map((item: { date: string; title: string; topics: string[] | null }) =>
+      `- ${item.date}: "${item.title}" (topics: ${(item.topics ?? []).join(', ') || 'general'})`
+    );
+    const ctx = `\nRECENT MAYOR'S OFFICE ANNOUNCEMENTS (mention if relevant, max 2 references):\n${lines.join('\n')}\n`;
+    _mayorCache.set(districtNumber, ctx);
+    return ctx;
+  } catch {
+    // Table may not exist yet — silently skip
+    _mayorCache.set(districtNumber, '');
+    return '';
+  }
+}
+
 // ── Session-level AI content caches ───────────────────────────────────────────
 // Keyed by "districtNumber:zip" (neighborhood-filtered) or "districtNumber:all".
 // Switching between previously-visited combos is instant — no Claude call needed.
@@ -164,6 +213,9 @@ export async function generateBriefingFromData(
   const cached = _briefingCache.get(key);
   if (cached) { console.log(`[briefing] cache hit ${key}`); return cached; }
 
+  // Fetch mayor news context in parallel with data prep (non-blocking)
+  const mayorCtxPromise = getMayorNewsContext(district.number);
+
   let briefingData: DistrictData = data;
 
   if (focus) {
@@ -182,11 +234,13 @@ export async function generateBriefingFromData(
     };
   }
 
+  const mayorCtx = await mayorCtxPromise;
+
   const userContent = district.number === '0'
-    ? `${JSON.stringify(data.citywide_prompt_summary ?? [], null, 2)}\n\nFOCUS: Identify the 5 most significant developments across all SF districts. For each finding, tag the district and neighborhood. Focus on what has city-wide implications — displacement pressure, housing supply, major construction, and policy risk.`
+    ? `${JSON.stringify(data.citywide_prompt_summary ?? [], null, 2)}${mayorCtx}\n\nFOCUS: Identify the 5 most significant developments across all SF districts. For each finding, tag the district and neighborhood. Focus on what has city-wide implications — displacement pressure, housing supply, major construction, and policy risk.`
     : focus
-      ? `${JSON.stringify(forPrompt(briefingData), null, 2)}\n\nFOCUS: Write this briefing specifically for the ${focus.name} neighborhood (zip ${focus.zip}). Reference ${focus.name} by name throughout. Pipeline and zoning data above reflect all of ${district.label} — note this where relevant.`
-      : JSON.stringify(forPrompt(briefingData), null, 2);
+      ? `${JSON.stringify(forPrompt(briefingData), null, 2)}${mayorCtx}\n\nFOCUS: Write this briefing specifically for the ${focus.name} neighborhood (zip ${focus.zip}). Reference ${focus.name} by name throughout. Pipeline and zoning data above reflect all of ${district.label} — note this where relevant.`
+      : `${JSON.stringify(forPrompt(briefingData), null, 2)}${mayorCtx}`;
 
   const t0 = performance.now();
   const message = await client.messages.create({
@@ -245,7 +299,9 @@ export async function generateSignals(
     ? data.citywide_prompt_summary ?? []
     : forPrompt(analysisData);
 
-  const userContent = `${JSON.stringify(promptData, null, 2)}
+  const mayorCtx = await getMayorNewsContext(district.number);
+
+  const userContent = `${JSON.stringify(promptData, null, 2)}${mayorCtx}
 
 TASK: ${citywideTask ?? `Identify exactly 4 key signals or trends for ${locationLabel} based on the data above.`}
 
@@ -390,8 +446,10 @@ ${shadowProjects.map(p => `- ${p.address}: ${p.shadow_details ?? p.project_descr
     ? data.citywide_prompt_summary ?? []
     : forPrompt(analysisData);
 
+  const mayorCtx = await getMayorNewsContext(district.number);
+
   const userContent = `${JSON.stringify(promptData, null, 2)}
-${shadowBlock}
+${shadowBlock}${mayorCtx}
 ${citywideOutlookTask ?? `TASK: Generate a forward-looking outlook for ${locationLabel} based on the data above.`}
 
 Return ONLY a JSON object in this exact shape (no other text):
