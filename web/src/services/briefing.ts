@@ -51,11 +51,12 @@ export interface OutlookData {
   engagement: OutlookEngagement[];
 }
 
-/** Strip map_permits before serialising DistrictData to an AI prompt — the
- *  200-item geocoded list inflates the prompt by ~15K tokens for no benefit. */
-function forPrompt(data: DistrictData): Omit<DistrictData, 'map_permits'> {
+/** Strip non-essential fields before serialising DistrictData to an AI prompt.
+ *  Removes map_permits (geocoded list, ~15K tokens), by_district (citywide index,
+ *  ~300K tokens), and citywide_prompt_summary (handled separately). */
+function forPrompt(data: DistrictData): Omit<DistrictData, 'map_permits' | 'by_district' | 'citywide_prompt_summary'> {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { map_permits: _, ...rest } = data;
+  const { map_permits: _, by_district: __, citywide_prompt_summary: ___, ...rest } = data;
   return rest;
 }
 
