@@ -301,6 +301,75 @@ function ProjectDetailCard({ project }: { project: LiveProject }) {
   );
 }
 
+/* ─── Grouping helpers ───────────────────────── */
+
+/**
+ * LiveProject enriched with cross-hearing metadata after dedup + grouping.
+ * groupKey  = case_number (or row id when no case number) — used as React key
+ *             and expandedId identifier.
+ * allHearingDates = all unique hearing dates for this case, sorted ascending.
+ */
+interface GroupedProject extends LiveProject {
+  groupKey: string;
+  allHearingDates: string[];
+}
+
+/**
+ * Two-pass dedup + group:
+ *   1. Remove true DB duplicates: same (case_number, hearing_id) pair
+ *   2. Group remaining rows by case_number → one card per project
+ *      with the most-recent hearing as the representative row.
+ */
+function groupAndDedup(rows: LiveProject[]): GroupedProject[] {
+  // Pass 1 — kill true duplicates (same case + same hearing)
+  const seen = new Set<string>();
+  const deduped: LiveProject[] = [];
+  for (const r of rows) {
+    const key = r.case_number
+      ? `${r.case_number}||${r.hearing?.id ?? r.id}`
+      : r.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(r);
+  }
+
+  // Pass 2 — group by case_number
+  const groups = new Map<string, LiveProject[]>();
+  for (const r of deduped) {
+    const key = r.case_number ?? r.id;
+    const g = groups.get(key);
+    if (g) g.push(r);
+    else groups.set(key, [r]);
+  }
+
+  // Pass 3 — pick most-recent hearing as primary; collect all hearing dates
+  const result: GroupedProject[] = [];
+  for (const [groupKey, group] of groups) {
+    const sorted = [...group].sort((a, b) =>
+      (b.hearing?.hearing_date ?? "").localeCompare(a.hearing?.hearing_date ?? "")
+    );
+    const primary = sorted[0];
+    const allHearingDates = [
+      ...new Set(group.map(r => r.hearing?.hearing_date).filter((d): d is string => !!d)),
+    ].sort();
+    result.push({ ...primary, groupKey, allHearingDates });
+  }
+  return result;
+}
+
+/**
+ * Return a short card title and optional subtitle.
+ * If the address is a long boundary description (>60 chars), the case_number
+ * becomes the headline and the address is shown as a truncated subtitle.
+ */
+function cardTitle(p: GroupedProject): { title: string; subtitle: string | null } {
+  const addr = p.address ?? "";
+  if (addr.length <= 60) return { title: addr, subtitle: null };
+  const title = p.case_number ?? addr.slice(0, 40) + "…";
+  const subtitle = addr.length > 80 ? addr.slice(0, 77) + "…" : addr;
+  return { title, subtitle };
+}
+
 /* ─── Skeleton Card ──────────────────────────── */
 
 function SkeletonCard() {
@@ -551,18 +620,19 @@ export function Commission({ districtConfig }: CommissionProps) {
         )}
 
         {/* Project cards */}
-        {!loading && !searchLoading && !error && visible.map((p) => {
+        {!loading && !searchLoading && !error && groupAndDedup(visible).map((p) => {
           const norm = normalizeAction(p.action);
           const ac   = actionStyle(norm);
           const tally = tallyVotes(p.votes);
           const sentiment = p.hearing?.public_sentiment?.[0] ?? null;
-          const isExpanded = expandedId === p.id;
-          const dateStr = p.hearing?.hearing_date
-            ? formatDate(p.hearing.hearing_date)
-            : "";
+          const isExpanded = expandedId === p.groupKey;
+          const latestDate = p.hearing?.hearing_date ? formatDate(p.hearing.hearing_date) : "";
+          // All hearing dates except the most recent (shown separately as the main date)
+          const priorDates = p.allHearingDates.slice(0, -1);
+          const { title, subtitle } = cardTitle(p);
 
           return (
-            <div key={p.id} style={{
+            <div key={p.groupKey} style={{
               background: COLORS.white, borderRadius: 16,
               padding: "clamp(16px, 3vw, 28px)", marginBottom: 14,
               border: `1px solid ${isExpanded ? COLORS.orange : COLORS.lightBorder}`,
@@ -575,19 +645,41 @@ export function Commission({ districtConfig }: CommissionProps) {
                 display: "flex", justifyContent: "space-between",
                 alignItems: "flex-start", marginBottom: 14, flexWrap: "wrap", gap: 8,
               }}>
-                <div>
+                <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                  {/* Card headline — case_number when address is a long description */}
                   <div style={{
                     fontSize: 20, fontWeight: 800, color: COLORS.charcoal,
                     fontFamily: "'Urbanist', sans-serif",
-                  }}>{p.address}</div>
-                  {dateStr && (
+                  }}>{title}</div>
+
+                  {/* Subtitle: only shown when title is the case_number */}
+                  {subtitle && (
+                    <div style={{
+                      fontSize: 12, color: COLORS.warmGray, marginTop: 3,
+                      fontFamily: FONTS.body, fontWeight: 400, lineHeight: 1.4,
+                    }}>{subtitle}</div>
+                  )}
+
+                  {/* Most recent hearing date */}
+                  {latestDate && (
                     <div style={{
                       fontSize: 13, color: COLORS.warmGray, marginTop: 4,
                       fontFamily: FONTS.body, fontWeight: 500,
-                    }}>{dateStr}</div>
+                    }}>{latestDate}</div>
+                  )}
+
+                  {/* Prior hearing dates for multi-hearing projects */}
+                  {priorDates.length > 0 && (
+                    <div style={{
+                      fontSize: 12, color: COLORS.warmGray, marginTop: 3,
+                      fontFamily: FONTS.body, fontWeight: 400,
+                    }}>
+                      Also heard: {priorDates.map(d => formatDate(d)).join(" · ")}
+                    </div>
                   )}
                 </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flexShrink: 0 }}>
                   {p.shadow_flag && (
                     <span style={{
                       background: "#FEF5EC", color: "#B47A2E",
@@ -638,7 +730,7 @@ export function Commission({ districtConfig }: CommissionProps) {
                   </div>
                 )}
                 <button
-                  onClick={() => setExpandedId(isExpanded ? null : p.id)}
+                  onClick={() => setExpandedId(isExpanded ? null : p.groupKey)}
                   style={{
                     background: isExpanded ? COLORS.charcoal : COLORS.cream,
                     color: isExpanded ? COLORS.white : COLORS.charcoal,
@@ -658,7 +750,7 @@ export function Commission({ districtConfig }: CommissionProps) {
           );
         })}
 
-        {!loading && !searchLoading && !error && visible.length === 0 && (
+        {!loading && !searchLoading && !error && groupAndDedup(visible).length === 0 && (
           <div style={{ textAlign: "center", padding: "48px 0", color: COLORS.warmGray, fontFamily: FONTS.body }}>
             No hearings found{search ? ` matching "${search}"` : ""}
             {!search && selectedNeighborhood?.name ? ` in ${selectedNeighborhood.name}` : ""}.
