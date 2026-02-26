@@ -6,6 +6,17 @@ import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { supabase } from "../services/supabase";
 import { NEIGHBORHOODS } from "../data";
 
+/** Format an ISO date string as "Feb 25, 2026" */
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const datePart = iso.split("T")[0];
+  const [y, m, d] = datePart.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+  });
+}
+
 /* ─── Types ──────────────────────────────────── */
 
 interface Sentiment {
@@ -364,6 +375,13 @@ export function Commission() {
 
   const selectedNeighborhood = NEIGHBORHOODS.find(n => n.name === filter) ?? null;
 
+  // Most recent hearing date from already-loaded data — no extra query needed.
+  const latestHearingDate = projects
+    .map(p => p.hearing?.hearing_date)
+    .filter((d): d is string => !!d)
+    .sort()
+    .at(-1) ?? null;
+
   const visible = projects.filter(p => {
     if (!p.address) return false;
     if (search && !p.address.toLowerCase().includes(search.toLowerCase())) return false;
@@ -393,10 +411,18 @@ export function Commission() {
           fontFamily: "'Urbanist', sans-serif",
           fontSize: "clamp(28px, 5vw, 42px)",
           fontWeight: 800, color: COLORS.charcoal,
-          lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: 28,
+          lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: 8,
         }}>
           Planning Commission Record
         </h2>
+        {latestHearingDate && (
+          <p style={{
+            fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,
+            marginBottom: 28,
+          }}>
+            Hearings through {fmtDate(latestHearingDate)}
+          </p>
+        )}
 
         <div className="cp-search-row" style={{ display: "flex", gap: 12, marginBottom: 36 }}>
           <input

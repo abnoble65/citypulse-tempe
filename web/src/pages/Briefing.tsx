@@ -6,6 +6,19 @@ import { SectionLabel } from "../components/SectionLabel";
 import { parseBriefingSections, generateBriefingFromData } from "../services/briefing";
 import type { DistrictData } from "../services/briefing";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
+import { supabase } from "../services/supabase";
+
+/** Format an ISO date string (YYYY-MM-DD or ISO timestamp) as "Feb 25, 2026" */
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  // Parse just the date part as local to avoid UTC-shift
+  const datePart = iso.split("T")[0];
+  const [y, m, d] = datePart.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+  });
+}
 
 interface BriefingProps {
   briefingText: string;
@@ -17,6 +30,19 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
   const [filter, setFilter]           = useState("All District 3");
   const [localText, setLocalText]     = useState(briefingText);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [latestHearing, setLatestHearing] = useState<string | null>(null);
+
+  // Fetch the most recent Planning Commission hearing date once on mount.
+  useEffect(() => {
+    supabase
+      .from("hearings")
+      .select("hearing_date")
+      .order("hearing_date", { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        setLatestHearing(data?.[0]?.hearing_date ?? null);
+      });
+  }, []);
 
   // When a new district-wide briefing arrives (user re-generated from Home),
   // reset to it and clear any neighborhood filter.
@@ -96,10 +122,22 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
           fontSize: "clamp(28px, 5vw, 44px)",
           fontWeight: 800, color: COLORS.charcoal,
           lineHeight: 1.12, letterSpacing: "-0.02em",
-          marginBottom: 36,
+          marginBottom: 8,
         }}>
           {locationLabel} urban intelligence, powered by live DataSF data.
         </h2>
+        <p style={{
+          fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,
+          marginBottom: 32, lineHeight: 1.5,
+        }}>
+          {aggregatedData?.date_range.end && (
+            <>Permit data through {fmtDate(aggregatedData.date_range.end)}</>
+          )}
+          {aggregatedData?.date_range.end && latestHearing && " · "}
+          {latestHearing && (
+            <>Commission hearings through {fmtDate(latestHearing)}</>
+          )}
+        </p>
 
         <div style={{
           display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
