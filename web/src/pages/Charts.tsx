@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
-import type { DistrictData, ZipPermitSummary, EvictionSummary, AssessmentSummary } from "../services/aggregator";
+import type { DistrictData, ZipPermitSummary, EvictionSummary, AssessmentSummary, AffordableHousingSummary } from "../services/aggregator";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import type { DistrictConfig } from "../districts";
 
@@ -414,6 +414,204 @@ function AssessmentChart({ summary }: { summary: AssessmentSummary }) {
   );
 }
 
+/* ─── AFFORDABLE HOUSING CHART ───────────────── */
+
+const STATUS_COLORS_AH: Record<string, string> = {
+  "Construction":                          "#5B9A5F",
+  "Building Rehabilitation (Construction)": "#7AB87E",
+  "Pre-Construction":                      "#D4963B",
+  "Building Rehabilitation (Pre-Construction)": "#E8B86E",
+};
+const AMI_COLORS = ["#B44040", "#D4643B", "#D4963B", "#8E6B5E", "#B0A89E"];
+const AMI_LABELS = ["Deep Affordable (≤50% AMI)", "Low Income (51–80%)", "Moderate (81–120%)", "Workforce (>120%)", "Undeclared"];
+
+function AffordableHousingChart({ summary }: { summary: AffordableHousingSummary }) {
+  if (summary.total_projects === 0) {
+    return (
+      <p style={{ fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray, fontStyle: "italic" }}>
+        No affordable housing pipeline data found for this district.
+      </p>
+    );
+  }
+
+  const pct = Math.round(summary.affordable_ratio * 100);
+  const ami = summary.ami_distribution;
+  const amiEntries = [
+    { label: AMI_LABELS[0], value: ami.deep_affordable },
+    { label: AMI_LABELS[1], value: ami.low_income },
+    { label: AMI_LABELS[2], value: ami.moderate },
+    { label: AMI_LABELS[3], value: ami.workforce },
+    { label: AMI_LABELS[4], value: ami.undeclared },
+  ].filter(e => e.value > 0);
+  const maxAmi = Math.max(...amiEntries.map(e => e.value), 1);
+
+  const statusEntries = Object.entries(summary.by_status_units)
+    .sort((a, b) => (STATUS_ORDER_AH[a[0]] ?? 9) - (STATUS_ORDER_AH[b[0]] ?? 9));
+  const maxStatusUnits = Math.max(...statusEntries.map(e => e[1]), 1);
+
+  return (
+    <div>
+      {/* Headline row */}
+      <div style={{ display: "flex", gap: 32, flexWrap: "wrap", marginBottom: 28 }}>
+        {[
+          { label: "Projects in pipeline", value: summary.total_projects.toLocaleString(), sub: null },
+          { label: "Affordable units", value: summary.total_affordable_units.toLocaleString(), sub: `${pct}% of pipeline` },
+          { label: "Market-rate units", value: summary.total_market_rate_units.toLocaleString(), sub: `${100 - pct}% of pipeline` },
+        ].map(stat => (
+          <div key={stat.label} style={{ minWidth: 120 }}>
+            <div style={{
+              fontFamily: "'Urbanist', sans-serif", fontSize: 32, fontWeight: 800,
+              color: COLORS.charcoal, letterSpacing: "-0.02em", lineHeight: 1,
+            }}>{stat.value}</div>
+            <div style={{ fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray, marginTop: 4 }}>
+              {stat.label}
+              {stat.sub && <span style={{ display: "block", color: COLORS.midGray }}>{stat.sub}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+        {/* Left: by status */}
+        <div style={{ flex: "1 1 200px", minWidth: 180 }}>
+          <div style={{
+            fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
+            color: COLORS.warmGray, textTransform: "uppercase",
+            letterSpacing: "0.06em", marginBottom: 14,
+          }}>Affordable Units by Phase</div>
+
+          {statusEntries.map(([status, units]) => (
+            <div key={status} style={{ marginBottom: 12 }}>
+              <div style={{
+                display: "flex", justifyContent: "space-between",
+                alignItems: "baseline", marginBottom: 5,
+              }}>
+                <span style={{
+                  fontFamily: FONTS.body, fontSize: 12, fontWeight: 500,
+                  color: COLORS.charcoal,
+                  maxWidth: "70%",
+                }}>{STATUS_LABELS_AH[status] ?? status}</span>
+                <span style={{
+                  fontFamily: "'Urbanist', sans-serif", fontSize: 15,
+                  fontWeight: 800, color: COLORS.charcoal,
+                }}>{units.toLocaleString()}</span>
+              </div>
+              <div style={{ height: 8, background: COLORS.cream, borderRadius: 4, overflow: "hidden" }}>
+                <div style={{
+                  width: `${(units / maxStatusUnits) * 100}%`,
+                  height: "100%",
+                  background: STATUS_COLORS_AH[status] ?? COLORS.orange,
+                  borderRadius: 4,
+                  transition: "width 0.6s ease",
+                }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Right: AMI distribution */}
+        <div style={{ flex: "1 1 200px", minWidth: 180 }}>
+          <div style={{
+            fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
+            color: COLORS.warmGray, textTransform: "uppercase",
+            letterSpacing: "0.06em", marginBottom: 14,
+          }}>Income Targeting (AMI)</div>
+
+          {amiEntries.map((e, i) => (
+            <div key={e.label} style={{ marginBottom: 12 }}>
+              <div style={{
+                display: "flex", justifyContent: "space-between",
+                alignItems: "baseline", marginBottom: 5,
+              }}>
+                <span style={{
+                  fontFamily: FONTS.body, fontSize: 12, fontWeight: 500,
+                  color: COLORS.charcoal, maxWidth: "70%",
+                }}>{e.label}</span>
+                <span style={{
+                  fontFamily: "'Urbanist', sans-serif", fontSize: 15,
+                  fontWeight: 800, color: COLORS.charcoal,
+                }}>{e.value.toLocaleString()}</span>
+              </div>
+              <div style={{ height: 8, background: COLORS.cream, borderRadius: 4, overflow: "hidden" }}>
+                <div style={{
+                  width: `${(e.value / maxAmi) * 100}%`,
+                  height: "100%",
+                  background: AMI_COLORS[i % AMI_COLORS.length],
+                  borderRadius: 4,
+                  transition: "width 0.6s ease",
+                }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Far right: active project list */}
+        <div style={{ flex: "2 1 260px", minWidth: 220 }}>
+          <div style={{
+            fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
+            color: COLORS.warmGray, textTransform: "uppercase",
+            letterSpacing: "0.06em", marginBottom: 14,
+          }}>Active Projects</div>
+
+          {summary.projects.slice(0, 8).map((p, i) => (
+            <div key={p.project_id} style={{
+              padding: "10px 0",
+              borderBottom: `1px solid ${COLORS.cream}`,
+            }}>
+              <div style={{
+                display: "flex", justifyContent: "space-between",
+                alignItems: "flex-start", gap: 8, marginBottom: 3,
+              }}>
+                <span style={{
+                  fontFamily: FONTS.body, fontSize: 13, fontWeight: 600,
+                  color: COLORS.charcoal,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  maxWidth: "65%",
+                }}>{p.name || p.address || p.project_id}</span>
+                <span style={{
+                  fontFamily: "'Urbanist', sans-serif", fontSize: 13, fontWeight: 800,
+                  color: COLORS.charcoal, flexShrink: 0,
+                }}>{p.affordable_units} units</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{
+                  fontFamily: FONTS.body, fontSize: 11,
+                  color: STATUS_COLORS_AH[p.status] ?? COLORS.warmGray,
+                  fontWeight: 600,
+                }}>{STATUS_LABELS_AH[p.status] ?? p.status}</span>
+                {p.neighborhood && (
+                  <span style={{ fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray }}>
+                    · {p.neighborhood}
+                  </span>
+                )}
+                {p.affordable_pct > 0 && (
+                  <span style={{ fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray }}>
+                    · {p.affordable_pct}% affordable
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Readable labels and sort order for project status
+const STATUS_LABELS_AH: Record<string, string> = {
+  "Construction":                               "Under Construction",
+  "Building Rehabilitation (Construction)":     "Rehab (Active)",
+  "Pre-Construction":                           "Pre-Construction",
+  "Building Rehabilitation (Pre-Construction)": "Rehab (Pre-Construction)",
+};
+const STATUS_ORDER_AH: Record<string, number> = {
+  "Construction": 0,
+  "Building Rehabilitation (Construction)": 1,
+  "Pre-Construction": 2,
+  "Building Rehabilitation (Pre-Construction)": 3,
+};
+
 /* ─── Charts Skeletons ────────────────────────── */
 
 function ChartsSkeletons() {
@@ -568,6 +766,41 @@ function ChartsSkeletons() {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Row 5: Affordable housing skeleton */}
+        <div style={{
+          background: COLORS.white, borderRadius: 20, marginTop: 24,
+          padding: "clamp(16px, 3vw, 32px)",
+          border: `1px solid ${COLORS.lightBorder}`,
+        }}>
+          <div className="sk" style={{ height: 13, width: "48%", marginBottom: 24 }} />
+          {/* Headline stats */}
+          <div style={{ display: "flex", gap: 32, marginBottom: 28 }}>
+            {[80, 60, 60].map((w, i) => (
+              <div key={i}>
+                <div className="sk" style={{ height: 32, width: w, marginBottom: 6 }} />
+                <div className="sk" style={{ height: 11, width: w + 20 }} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+            {[0, 1, 2].map(col => (
+              <div key={col} style={{ flex: col === 2 ? "2 1 260px" : "1 1 200px", minWidth: 180 }}>
+                <div className="sk" style={{ height: 11, width: "55%", marginBottom: 14 }} />
+                {Array.from({ length: col === 2 ? 6 : 4 }).map((_, i) => (
+                  <div key={i} style={{ marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                      <div className="sk" style={{ height: 12, width: `${60 - i * 8}%` }} />
+                      <div className="sk" style={{ height: 14, width: 36 }} />
+                    </div>
+                    {col < 2 && <div className="sk" style={{ height: 8, width: "100%" }} />}
+                    {col === 2 && <div className="sk" style={{ height: 10, width: "45%" }} />}
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -809,8 +1042,15 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
 
         {/* Row 4: Property Assessment — always district-wide */}
         {aggregatedData.assessment_summary && (
-          <ChartCard title={`Property Assessment — ${districtConfig.label}`}>
+          <ChartCard title={`Property Assessment — ${districtConfig.label}`} style={{ marginBottom: 24 }}>
             <AssessmentChart summary={aggregatedData.assessment_summary} />
+          </ChartCard>
+        )}
+
+        {/* Row 5: Affordable Housing Pipeline — always district-wide */}
+        {aggregatedData.affordable_housing_summary && (
+          <ChartCard title={`Affordable Housing Pipeline — ${districtConfig.label}`}>
+            <AffordableHousingChart summary={aggregatedData.affordable_housing_summary} />
           </ChartCard>
         )}
       </div>

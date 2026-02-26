@@ -12,12 +12,14 @@ import {
   fetchEvictions,
   fetchAssessmentStats,
   fetchTopAssessedProperties,
+  fetchAffordableHousingPipeline,
   type BuildingPermit,
   type DevelopmentProject,
   type ZoningDistrict,
   type EvictionNotice,
   type AssessmentAggrRow,
   type AssessmentParcel,
+  type AffordableHousingProject,
 } from './dataSF';
 import type { DistrictConfig } from '../districts';
 
@@ -102,6 +104,39 @@ export interface AssessmentSummary {
   top_properties: TopAssessedProperty[];
 }
 
+export interface AmiDistribution {
+  deep_affordable: number;  // ≤50% AMI: units targeted to lowest-income households
+  low_income: number;       // 51–80% AMI
+  moderate: number;         // 81–120% AMI
+  workforce: number;        // >120% AMI (up to 150%)
+  undeclared: number;
+}
+
+export interface AffordableHousingPipelineProject {
+  project_id: string;
+  name: string;
+  address: string;
+  neighborhood: string;
+  status: string;
+  total_units: number;
+  affordable_units: number;
+  affordable_pct: number;
+  tenure: string;             // "Rental" | "Ownership"
+  estimated_completion: string | null;
+}
+
+export interface AffordableHousingSummary {
+  total_projects: number;
+  total_pipeline_units: number;
+  total_affordable_units: number;
+  total_market_rate_units: number;
+  affordable_ratio: number;                   // 0–1 fraction
+  by_status: Record<string, number>;          // status label → project count
+  by_status_units: Record<string, number>;    // status label → affordable unit count
+  ami_distribution: AmiDistribution;
+  projects: AffordableHousingPipelineProject[];
+}
+
 export interface DistrictData {
   permit_summary: PermitSummary;
   pipeline_summary: PipelineSummary;
@@ -109,6 +144,7 @@ export interface DistrictData {
   date_range: DateRange;
   eviction_summary: EvictionSummary;
   assessment_summary: AssessmentSummary;
+  affordable_housing_summary: AffordableHousingSummary;
 }
 
 function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {
@@ -376,8 +412,92 @@ const EMPTY_ASSESSMENT_SUMMARY: AssessmentSummary = {
   top_properties: [],
 };
 
+function parseUnits(val: string | undefined): number {
+  return parseInt(val ?? '0', 10) || 0;
+}
+
+const STATUS_ORDER: Record<string, number> = {
+  'Construction': 0,
+  'Building Rehabilitation (Construction)': 1,
+  'Pre-Construction': 2,
+  'Building Rehabilitation (Pre-Construction)': 3,
+};
+
+function buildAffordableHousingSummary(projects: AffordableHousingProject[]): AffordableHousingSummary {
+  let total_pipeline_units = 0;
+  let total_affordable_units = 0;
+  const by_status: Record<string, number> = {};
+  const by_status_units: Record<string, number> = {};
+  const ami: AmiDistribution = { deep_affordable: 0, low_income: 0, moderate: 0, workforce: 0, undeclared: 0 };
+  const projectList: AffordableHousingPipelineProject[] = [];
+
+  for (const p of projects) {
+    const totalUnits      = parseUnits(p.total_project_units);
+    const affordableUnits = parseUnits(p.mohcd_affordable_units);
+
+    total_pipeline_units  += totalUnits;
+    total_affordable_units += affordableUnits;
+
+    const status = p.project_status;
+    by_status[status]       = (by_status[status]       ?? 0) + 1;
+    by_status_units[status] = (by_status_units[status] ?? 0) + affordableUnits;
+
+    // AMI bucketing: deep ≤50%, low 51–80%, moderate 81–120%, workforce >120%
+    ami.deep_affordable += parseUnits(p._20_ami) + parseUnits(p._30_ami) +
+                           parseUnits(p._40_ami) + parseUnits(p._50_ami);
+    ami.low_income      += parseUnits(p._55_ami) + parseUnits(p._60_ami) + parseUnits(p._80_ami);
+    ami.moderate        += parseUnits(p._90_ami) + parseUnits(p._100_ami) + parseUnits(p._105_ami) +
+                           parseUnits(p._110_ami) + parseUnits(p._120_ami);
+    ami.workforce       += parseUnits(p._130_ami) + parseUnits(p._150_ami);
+    ami.undeclared      += parseUnits(p.ami_undeclared);
+
+    projectList.push({
+      project_id:           p.project_id,
+      name:                 p.project_name ?? p.project_id,
+      address:              p.plannning_approval_address ?? '',
+      neighborhood:         p.city_analysis_neighborhood ?? '',
+      status:               p.project_status,
+      total_units:          totalUnits,
+      affordable_units:     affordableUnits,
+      affordable_pct:       totalUnits > 0 ? Math.round((affordableUnits / totalUnits) * 100) : 0,
+      tenure:               p.housing_tenure ?? '',
+      estimated_completion: p.estimated_construction_completion ?? null,
+    });
+  }
+
+  // Sort: active construction first, then pre-construction; within each tier by unit count desc
+  projectList.sort((a, b) => {
+    const so = (STATUS_ORDER[a.status] ?? 4) - (STATUS_ORDER[b.status] ?? 4);
+    return so !== 0 ? so : b.affordable_units - a.affordable_units;
+  });
+
+  return {
+    total_projects:         projects.length,
+    total_pipeline_units,
+    total_affordable_units,
+    total_market_rate_units: total_pipeline_units - total_affordable_units,
+    affordable_ratio:        total_pipeline_units > 0 ? total_affordable_units / total_pipeline_units : 0,
+    by_status,
+    by_status_units,
+    ami_distribution:       ami,
+    projects:               projectList.slice(0, 15),
+  };
+}
+
+const EMPTY_AFFORDABLE_HOUSING_SUMMARY: AffordableHousingSummary = {
+  total_projects: 0,
+  total_pipeline_units: 0,
+  total_affordable_units: 0,
+  total_market_rate_units: 0,
+  affordable_ratio: 0,
+  by_status: {},
+  by_status_units: {},
+  ami_distribution: { deep_affordable: 0, low_income: 0, moderate: 0, workforce: 0, undeclared: 0 },
+  projects: [],
+};
+
 export async function aggregateDistrictData(district: DistrictConfig): Promise<DistrictData> {
-  const [permits, allProjects, allZones, evictions, assessmentStats, assessmentParcels] = await Promise.all([
+  const [permits, allProjects, allZones, evictions, assessmentStats, assessmentParcels, affordableProjects] = await Promise.all([
     fetchBuildingPermits(district.number),
     fetchDevelopmentPipeline(),
     fetchZoningDistricts(),
@@ -393,8 +513,12 @@ export async function aggregateDistrictData(district: DistrictConfig): Promise<D
       console.warn('[aggregator] Assessment parcels fetch failed (non-fatal):', err);
       return [] as AssessmentParcel[];
     }),
+    fetchAffordableHousingPipeline(district.number).catch(err => {
+      console.warn('[aggregator] Affordable housing fetch failed (non-fatal):', err);
+      return [] as AffordableHousingProject[];
+    }),
   ]);
-  console.log(`[aggregator] DataSF results — permits: ${permits.length}, pipeline: ${allProjects.length}, zoning: ${allZones.length}, evictions: ${evictions.length}, assessment rows: ${assessmentStats.length}, parcels: ${assessmentParcels.length}`);
+  console.log(`[aggregator] DataSF results — permits: ${permits.length}, pipeline: ${allProjects.length}, zoning: ${allZones.length}, evictions: ${evictions.length}, assessment rows: ${assessmentStats.length}, parcels: ${assessmentParcels.length}, affordable housing: ${affordableProjects.length}`);
 
   const projects = allProjects.filter((p) => {
     const hood = (p.nhood41 ?? '').toLowerCase();
@@ -424,6 +548,10 @@ export async function aggregateDistrictData(district: DistrictConfig): Promise<D
     ? buildAssessmentSummary(assessmentStats, assessmentParcels)
     : EMPTY_ASSESSMENT_SUMMARY;
 
+  const affordable_housing_summary = affordableProjects.length > 0
+    ? buildAffordableHousingSummary(affordableProjects)
+    : EMPTY_AFFORDABLE_HOUSING_SUMMARY;
+
   return {
     permit_summary: buildPermitSummary(permits),
     pipeline_summary,
@@ -431,5 +559,6 @@ export async function aggregateDistrictData(district: DistrictConfig): Promise<D
     date_range: buildDateRange(permits, projects, []),
     eviction_summary,
     assessment_summary,
+    affordable_housing_summary,
   };
 }

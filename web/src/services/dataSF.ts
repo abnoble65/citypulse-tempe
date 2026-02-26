@@ -213,6 +213,53 @@ export async function fetchTopAssessedProperties(district: string): Promise<Asse
   return socrataFetch<AssessmentParcel>('wv5m-vpq2', params);
 }
 
+// ── Affordable Housing Pipeline (MOHCD) ───────────────────────────────────────
+// Dataset ID: aaxw-2cb8
+// 194 projects citywide; filter by supervisor_district (text field)
+
+export interface AffordableHousingProject {
+  project_id: string;
+  project_name?: string;
+  plannning_approval_address?: string; // Note: DataSF typo — three n's
+  zip_code?: string;
+  supervisor_district?: string;
+  city_analysis_neighborhood?: string;
+  project_status: string;              // Pre-Construction | Construction | Building Rehabilitation (…)
+  construction_status?: string;
+  project_type?: string;               // New Construction | Rehabilitation
+  housing_tenure?: string;             // Rental | Ownership
+  general_housing_program?: string;
+  total_project_units?: string;
+  mohcd_affordable_units?: string;
+  affordable_percent?: string;         // stored as text
+  estimated_construction_completion?: string;
+  // AMI brackets (all stored as text numbers by Socrata)
+  _20_ami?: string;
+  _30_ami?: string;
+  _40_ami?: string;
+  _50_ami?: string;
+  _55_ami?: string;
+  _60_ami?: string;
+  _80_ami?: string;
+  _90_ami?: string;
+  _100_ami?: string;
+  _105_ami?: string;
+  _110_ami?: string;
+  _120_ami?: string;
+  _130_ami?: string;
+  _150_ami?: string;
+  ami_undeclared?: string;
+}
+
+export async function fetchAffordableHousingPipeline(district: string): Promise<AffordableHousingProject[]> {
+  const params = new URLSearchParams({
+    $where: `supervisor_district='${district}'`,
+    $limit: '200',
+    $order: 'project_status ASC',
+  });
+  return socrataFetch<AffordableHousingProject>('aaxw-2cb8', params);
+}
+
 export async function fetchEvictions(district: string, limit = 1000): Promise<EvictionNotice[]> {
   const cutoff = new Date();
   cutoff.setFullYear(cutoff.getFullYear() - 2);

@@ -190,7 +190,7 @@ For each signal return an object with these exact keys:
 - "severity": exactly one of "low", "medium", or "high"
 - "concern": 1–2 sentences on why residents should care
 
-Focus on: unusual permit volume, clustering of similar project types, potential displacement risk (pay close attention to eviction data — Ellis Act and owner move-in notices are strong indicators of involuntary tenant displacement), affordability impact, infrastructure strain, and property value trends (use assessment_summary.yoy_change_pct and the split between residential vs commercial assessed values to flag gentrification pressure or investment shifts). If eviction_summary shows elevated totals or a rising monthly trend, flag this as a signal.
+Focus on: unusual permit volume, clustering of similar project types, potential displacement risk (pay close attention to eviction data — Ellis Act and owner move-in notices are strong indicators of involuntary tenant displacement), affordability impact, infrastructure strain, and property value trends (use assessment_summary.yoy_change_pct and the split between residential vs commercial assessed values to flag gentrification pressure or investment shifts). Also examine affordable_housing_summary: flag if affordable_ratio is below 0.20 (market-rate development dominating), if Construction-phase affordable units are low relative to total pipeline, or if deep affordable (≤50% AMI) units are a small share of ami_distribution. If eviction_summary shows elevated totals or a rising monthly trend, flag this as a signal.
 
 Return ONLY a JSON object in this exact shape (no other text):
 {"signals": [{"title":"...","body":"...","severity":"...","concern":"..."}]}`;
@@ -340,7 +340,7 @@ For each engagement item use these exact keys:
 - "title": specific opportunity name (6–10 words)
 - "detail": 1 sentence on how residents can participate
 
-IMPORTANT: Include one risk about shadow impact (☀️ icon) and, if eviction_summary.total > 0, one displacement risk (🏘️ icon) citing eviction counts and types. If assessment_summary.yoy_change_pct is notable (> 5% or < −2%), mention property value trajectory in a risk or event.`;
+IMPORTANT: Include one risk about shadow impact (☀️ icon) and, if eviction_summary.total > 0, one displacement risk (🏘️ icon) citing eviction counts and types. If assessment_summary.yoy_change_pct is notable (> 5% or < −2%), mention property value trajectory in a risk or event. If the data shows the displacement trifecta — rising assessed values AND elevated evictions AND a low affordable_housing_summary.affordable_ratio or few active construction-phase affordable units — flag this as a critical combined risk (🚨 icon) citing all three signals together.`;
 
   console.log(`[generateOutlook] STEP 2: calling Claude Haiku — prompt length: ${userContent.length} chars`);
 
