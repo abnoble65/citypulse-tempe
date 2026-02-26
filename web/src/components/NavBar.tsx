@@ -6,7 +6,7 @@ interface NavBarProps {
   onNavigate: (page: string) => void;
 }
 
-const PAGES = ["Briefing", "Charts", "Signals", "Outlook", "Commission", "Mayor"];
+const PAGES = ["Briefing", "Charts", "Signals", "Outlook", "Commission", "Board", "Mayor"];
 
 export function NavBar({ activePage, onNavigate }: NavBarProps) {
   return (

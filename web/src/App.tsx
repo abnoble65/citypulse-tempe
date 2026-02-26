@@ -14,6 +14,7 @@ const Charts     = lazy(() => import("./pages/Charts").then(m => ({ default: m.C
 const Signals    = lazy(() => import("./pages/Signals").then(m => ({ default: m.Signals })));
 const Outlook    = lazy(() => import("./pages/Outlook").then(m => ({ default: m.Outlook })));
 const Commission = lazy(() => import("./pages/Commission").then(m => ({ default: m.Commission })));
+const Board      = lazy(() => import("./pages/Board").then(m => ({ default: m.Board })));
 const Mayor      = lazy(() => import("./pages/Mayor").then(m => ({ default: m.Mayor })));
 
 const SPLASH_KEY = "citypulse_splash_seen";
@@ -65,6 +66,8 @@ export default function App() {
         return <Outlook aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={setPage} />;
       case "Commission":
         return <Commission districtConfig={districtConfig} />;
+      case "Board":
+        return <Board districtConfig={districtConfig} />;
       case "Mayor":
         return <Mayor districtConfig={districtConfig} />;
       default:

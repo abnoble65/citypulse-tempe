@@ -114,6 +114,60 @@ async function getMayorNewsContext(districtNumber: string): Promise<string> {
   }
 }
 
+// ── Board of Supervisors cross-reference ──────────────────────────────────────
+// Fetches the 2 most recent bos_items relevant to the district from the last
+// 60 days and injects them into AI prompts. Cached per district.
+
+const _bosCache = new Map<string, string>(); // districtNumber → context string
+
+async function getBosContext(districtNumber: string): Promise<string> {
+  if (_bosCache.has(districtNumber)) return _bosCache.get(districtNumber)!;
+
+  try {
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+      .toISOString().split('T')[0];
+
+    // Fetch recent meeting IDs
+    const { data: meetings } = await supabase
+      .from('bos_meetings')
+      .select('id')
+      .gte('meeting_date', sixtyDaysAgo);
+
+    const meetingIds = (meetings ?? []).map((m: { id: number }) => m.id);
+    if (meetingIds.length === 0) { _bosCache.set(districtNumber, ''); return ''; }
+
+    // Fetch items for those meetings
+    const { data: items } = await supabase
+      .from('bos_items')
+      .select('file_number, title, action_taken, districts, topics')
+      .in('meeting_id', meetingIds)
+      .limit(40);
+
+    if (!items || items.length === 0) { _bosCache.set(districtNumber, ''); return ''; }
+
+    const relevant = (items as { file_number: string; title: string; action_taken: string | null; districts: string[] | null; topics: string[] | null }[])
+      .filter(item => {
+        if (districtNumber === '0') return true;
+        const dists = item.districts ?? [];
+        return dists.length === 0 || dists.includes(districtNumber) || dists.includes('citywide');
+      })
+      .slice(0, 2);
+
+    if (relevant.length === 0) { _bosCache.set(districtNumber, ''); return ''; }
+
+    const lines = relevant.map(item =>
+      `- File ${item.file_number}: "${item.title}" — ${item.action_taken ?? 'pending'} (topics: ${(item.topics ?? []).join(', ') || 'general'})`
+    );
+    const ctx = `\nRECENT BOARD OF SUPERVISORS ACTIONS (mention if relevant, max 2 references):\n${lines.join('\n')}\n`;
+    _bosCache.set(districtNumber, ctx);
+    return ctx;
+  } catch {
+    // Table may not exist yet — silently skip
+    _bosCache.set(districtNumber, '');
+    return '';
+  }
+}
+
 // ── Session-level AI content caches ───────────────────────────────────────────
 // Keyed by "districtNumber:zip" (neighborhood-filtered) or "districtNumber:all".
 // Switching between previously-visited combos is instant — no Claude call needed.
@@ -213,8 +267,9 @@ export async function generateBriefingFromData(
   const cached = _briefingCache.get(key);
   if (cached) { console.log(`[briefing] cache hit ${key}`); return cached; }
 
-  // Fetch mayor news context in parallel with data prep (non-blocking)
+  // Fetch mayor news + BOS context in parallel with data prep (non-blocking)
   const mayorCtxPromise = getMayorNewsContext(district.number);
+  const bosCtxPromise   = getBosContext(district.number);
 
   let briefingData: DistrictData = data;
 
@@ -234,13 +289,14 @@ export async function generateBriefingFromData(
     };
   }
 
-  const mayorCtx = await mayorCtxPromise;
+  const [mayorCtx, bosCtx] = await Promise.all([mayorCtxPromise, bosCtxPromise]);
+  const crossRefs = mayorCtx + bosCtx;
 
   const userContent = district.number === '0'
-    ? `${JSON.stringify(data.citywide_prompt_summary ?? [], null, 2)}${mayorCtx}\n\nFOCUS: Identify the 5 most significant developments across all SF districts. For each finding, tag the district and neighborhood. Focus on what has city-wide implications — displacement pressure, housing supply, major construction, and policy risk.`
+    ? `${JSON.stringify(data.citywide_prompt_summary ?? [], null, 2)}${crossRefs}\n\nFOCUS: Identify the 5 most significant developments across all SF districts. For each finding, tag the district and neighborhood. Focus on what has city-wide implications — displacement pressure, housing supply, major construction, and policy risk.`
     : focus
-      ? `${JSON.stringify(forPrompt(briefingData), null, 2)}${mayorCtx}\n\nFOCUS: Write this briefing specifically for the ${focus.name} neighborhood (zip ${focus.zip}). Reference ${focus.name} by name throughout. Pipeline and zoning data above reflect all of ${district.label} — note this where relevant.`
-      : `${JSON.stringify(forPrompt(briefingData), null, 2)}${mayorCtx}`;
+      ? `${JSON.stringify(forPrompt(briefingData), null, 2)}${crossRefs}\n\nFOCUS: Write this briefing specifically for the ${focus.name} neighborhood (zip ${focus.zip}). Reference ${focus.name} by name throughout. Pipeline and zoning data above reflect all of ${district.label} — note this where relevant.`
+      : `${JSON.stringify(forPrompt(briefingData), null, 2)}${crossRefs}`;
 
   const t0 = performance.now();
   const message = await client.messages.create({
@@ -299,9 +355,13 @@ export async function generateSignals(
     ? data.citywide_prompt_summary ?? []
     : forPrompt(analysisData);
 
-  const mayorCtx = await getMayorNewsContext(district.number);
+  const [mayorCtx, bosCtx] = await Promise.all([
+    getMayorNewsContext(district.number),
+    getBosContext(district.number),
+  ]);
+  const crossRefs = mayorCtx + bosCtx;
 
-  const userContent = `${JSON.stringify(promptData, null, 2)}${mayorCtx}
+  const userContent = `${JSON.stringify(promptData, null, 2)}${crossRefs}
 
 TASK: ${citywideTask ?? `Identify exactly 4 key signals or trends for ${locationLabel} based on the data above.`}
 
@@ -446,10 +506,14 @@ ${shadowProjects.map(p => `- ${p.address}: ${p.shadow_details ?? p.project_descr
     ? data.citywide_prompt_summary ?? []
     : forPrompt(analysisData);
 
-  const mayorCtx = await getMayorNewsContext(district.number);
+  const [mayorCtx, bosCtx] = await Promise.all([
+    getMayorNewsContext(district.number),
+    getBosContext(district.number),
+  ]);
+  const crossRefs = mayorCtx + bosCtx;
 
   const userContent = `${JSON.stringify(promptData, null, 2)}
-${shadowBlock}${mayorCtx}
+${shadowBlock}${crossRefs}
 ${citywideOutlookTask ?? `TASK: Generate a forward-looking outlook for ${locationLabel} based on the data above.`}
 
 Return ONLY a JSON object in this exact shape (no other text):
