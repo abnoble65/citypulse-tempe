@@ -47,6 +47,18 @@ export interface NotablePermit {
   status: string;
 }
 
+/** Lightweight permit record used exclusively for map rendering. */
+export interface MapPermit {
+  permit_number: string;
+  address: string;
+  permit_type_definition: string;
+  status: string;
+  filed_date: string;
+  lat: number;
+  lng: number;
+  zipcode?: string;
+}
+
 export interface ZipPermitSummary {
   total: number;
   by_type: Record<string, number>;
@@ -161,6 +173,8 @@ export interface DistrictData {
   eviction_summary: EvictionSummary;
   assessment_summary: AssessmentSummary;
   affordable_housing_summary: AffordableHousingSummary;
+  /** Up to 200 geocoded permits for map rendering. Excluded from AI prompts. */
+  map_permits: MapPermit[];
 }
 
 function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {
@@ -576,6 +590,20 @@ export async function aggregateDistrictData(district: DistrictConfig): Promise<D
     ? buildAffordableHousingSummary(affordableProjects)
     : EMPTY_AFFORDABLE_HOUSING_SUMMARY;
 
+  const map_permits: MapPermit[] = permits
+    .filter(p => p.location?.coordinates)
+    .slice(0, 200)
+    .map(p => ({
+      permit_number: p.permit_number,
+      address: [p.street_number, p.street_name, p.street_suffix].filter(Boolean).join(' '),
+      permit_type_definition: p.permit_type_definition ?? p.permit_type,
+      status: p.status,
+      filed_date: (p.filed_date ?? '').split('T')[0],
+      lat: p.location!.coordinates[1],
+      lng: p.location!.coordinates[0],
+      zipcode: p.zipcode,
+    }));
+
   const result: DistrictData = {
     permit_summary: buildPermitSummary(permits),
     pipeline_summary,
@@ -584,6 +612,7 @@ export async function aggregateDistrictData(district: DistrictConfig): Promise<D
     eviction_summary,
     assessment_summary,
     affordable_housing_summary,
+    map_permits,
   };
 
   districtCache.set(district.number, { data: result, ts: Date.now() });

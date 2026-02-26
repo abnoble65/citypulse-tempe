@@ -51,6 +51,14 @@ export interface OutlookData {
   engagement: OutlookEngagement[];
 }
 
+/** Strip map_permits before serialising DistrictData to an AI prompt — the
+ *  200-item geocoded list inflates the prompt by ~15K tokens for no benefit. */
+function forPrompt(data: DistrictData): Omit<DistrictData, 'map_permits'> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { map_permits: _, ...rest } = data;
+  return rest;
+}
+
 const client = new Anthropic({
   apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY as string,
   dangerouslyAllowBrowser: true,
@@ -172,8 +180,8 @@ export async function generateBriefingFromData(
   }
 
   const userContent = focus
-    ? `${JSON.stringify(briefingData, null, 2)}\n\nFOCUS: Write this briefing specifically for the ${focus.name} neighborhood (zip ${focus.zip}). Reference ${focus.name} by name throughout. Pipeline and zoning data above reflect all of ${district.label} — note this where relevant.`
-    : JSON.stringify(briefingData, null, 2);
+    ? `${JSON.stringify(forPrompt(briefingData), null, 2)}\n\nFOCUS: Write this briefing specifically for the ${focus.name} neighborhood (zip ${focus.zip}). Reference ${focus.name} by name throughout. Pipeline and zoning data above reflect all of ${district.label} — note this where relevant.`
+    : JSON.stringify(forPrompt(briefingData), null, 2);
 
   const t0 = performance.now();
   const message = await client.messages.create({
@@ -223,7 +231,7 @@ export async function generateSignals(
 
   const locationLabel = focus ? focus.name : district.label;
 
-  const userContent = `${JSON.stringify(analysisData, null, 2)}
+  const userContent = `${JSON.stringify(forPrompt(analysisData), null, 2)}
 
 TASK: Identify exactly 4 key signals or trends for ${locationLabel} based on the data above.
 
@@ -359,7 +367,7 @@ export async function generateOutlook(
 ${shadowProjects.map(p => `- ${p.address}: ${p.shadow_details ?? p.project_description ?? '(no detail)'}`).join('\n')}\n`
     : '';
 
-  const userContent = `${JSON.stringify(analysisData, null, 2)}
+  const userContent = `${JSON.stringify(forPrompt(analysisData), null, 2)}
 ${shadowBlock}
 TASK: Generate a forward-looking outlook for ${locationLabel} based on the data above.
 

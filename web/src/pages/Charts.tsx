@@ -1,10 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { COLORS, FONTS } from "../theme";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import type { DistrictData, ZipPermitSummary, EvictionSummary, AssessmentSummary, AffordableHousingSummary } from "../services/aggregator";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import type { DistrictConfig } from "../districts";
+
+const MapViewLazy = lazy(() =>
+  import("../components/MapView").then(m => ({ default: m.MapView }))
+);
 
 interface ChartsProps {
   aggregatedData: DistrictData | null;
@@ -908,6 +912,41 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
           <p style={{ fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray, marginBottom: 32, fontStyle: "italic" }}>
             Limited permit activity in this neighborhood — showing available data.
           </p>
+        )}
+
+        {/* Row 0: Permit location map */}
+        {aggregatedData.map_permits.length > 0 && (
+          <div style={{ marginBottom: 24 }}>
+            <SectionLabel text="Permit Map" />
+            <h3 style={{
+              fontFamily: "'Urbanist', sans-serif", fontSize: "clamp(18px, 2.5vw, 24px)",
+              fontWeight: 800, color: COLORS.charcoal, letterSpacing: "-0.01em",
+              marginBottom: 4,
+            }}>
+              Active Permit Locations
+            </h3>
+            <p style={{ fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray, marginBottom: 16 }}>
+              {selectedZip
+                ? `Showing permits in zip ${selectedZip} · select a marker for details`
+                : `Showing up to ${aggregatedData.map_permits.length} most-recent permits · select a marker for details`}
+            </p>
+            <Suspense fallback={
+              <div style={{
+                height: 420, borderRadius: 16,
+                background: COLORS.lightBorder,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray,
+              }}>
+                Loading map…
+              </div>
+            }>
+              <MapViewLazy
+                permits={aggregatedData.map_permits}
+                districtConfig={districtConfig}
+                activeZip={selectedZip}
+              />
+            </Suspense>
+          </div>
         )}
 
         {/* Row 1: Donut + Value Bars side by side */}
