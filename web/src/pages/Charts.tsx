@@ -127,7 +127,7 @@ function ChartCard({ title, children, style }: {
 }) {
   return (
     <div style={{
-      background: COLORS.white, borderRadius: 20, padding: "32px",
+      background: COLORS.white, borderRadius: 20, padding: "clamp(16px, 3vw, 32px)",
       border: `1px solid ${COLORS.lightBorder}`,
       boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
       ...style,
@@ -230,7 +230,7 @@ export function Charts({ aggregatedData, onNavigate }: ChartsProps) {
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
       <FilterBar selected={filter} onSelect={setFilter} />
       <NeighborhoodHero selected={filter} />
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "52px 24px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
         <SectionLabel text="Charts" />
         <h2 style={{
           fontFamily: "'Urbanist', sans-serif",
@@ -255,7 +255,7 @@ export function Charts({ aggregatedData, onNavigate }: ChartsProps) {
         {/* Row 1: Donut + Value Bars side by side */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
           gap: 20, marginBottom: 24,
         }}>
           <ChartCard title="Permit Status Breakdown">
@@ -298,7 +298,7 @@ export function Charts({ aggregatedData, onNavigate }: ChartsProps) {
           <ChartCard title="Top 10 Addresses by Permit Value (District-wide)">
             <div style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(340px, 100%), 1fr))",
               gap: "0 48px",
             }}>
               {notable.map((p, i) => (

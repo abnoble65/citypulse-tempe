@@ -43,18 +43,18 @@ export function NeighborhoodHero({ selected, aggregatedData }: NeighborhoodHeroP
 
   return (
     <div style={{
-      maxHeight: isActive ? 72 : 0,
+      maxHeight: isActive ? 200 : 0,
       opacity: isActive ? 1 : 0,
       overflow: "hidden",
       transition: "max-height 0.4s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease",
     }}>
       {theme && neighborhood && (
-        <div style={{
-          height: 72,
+        <div className="cp-hero-content" style={{
+          minHeight: 60,
           background: theme.gradient,
           display: "flex",
           alignItems: "center",
-          padding: "0 32px",
+          padding: "12px clamp(16px, 3vw, 32px)",
           justifyContent: "space-between",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -76,7 +76,7 @@ export function NeighborhoodHero({ selected, aggregatedData }: NeighborhoodHeroP
             </div>
           </div>
           {permitTotal > 0 && (
-            <div style={{ display: "flex", gap: 28 }}>
+            <div style={{ display: "flex", gap: "clamp(12px, 3vw, 28px)", flexShrink: 0 }}>
               <div style={{ textAlign: "right" }}>
                 <div style={{
                   fontFamily: "'Urbanist', sans-serif",

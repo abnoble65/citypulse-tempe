@@ -8,6 +8,11 @@
   box-sizing: border-box;
 }
 
+/* Prevent any stray horizontal scroll on mobile */
+html, body {
+  overflow-x: hidden;
+}
+
 body {
   background: #FAF8F5;
   -webkit-font-smoothing: antialiased;
@@ -36,17 +41,51 @@ input:focus {
   background: rgba(212, 100, 59, 0.15);
 }
 
+/* NavBar pill row: hide scrollbar, smooth iOS scroll */
 .nav-pills {
+  -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
-
 .nav-pills::-webkit-scrollbar {
   display: none;
 }
 
+/* FilterBar: hide scrollbar, smooth iOS scroll */
+.cp-filter {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.cp-filter::-webkit-scrollbar {
+  display: none;
+}
+
 @media (max-width: 640px) {
+  /* NavBar outer padding */
   nav {
     padding: 0 14px !important;
+  }
+
+  /* NeighborhoodHero: allow icon+name and stats to stack */
+  .cp-hero-content {
+    flex-wrap: wrap !important;
+    padding: 10px 16px !important;
+    height: auto !important;
+    min-height: 60px !important;
+    gap: 6px !important;
+    align-items: center !important;
+  }
+
+  /* FilterBar: tighter padding on mobile */
+  .cp-filter {
+    padding: 10px 12px !important;
+  }
+
+  /* Commission search row: stack vertically */
+  .cp-search-row {
+    flex-direction: column !important;
+  }
+  .cp-search-row button {
+    width: 100% !important;
   }
 }
 

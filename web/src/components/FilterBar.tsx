@@ -8,12 +8,12 @@ interface FilterBarProps {
 
 export function FilterBar({ selected, onSelect }: FilterBarProps) {
   return (
-    <div style={{
-      display: "flex", gap: 8, padding: "14px 32px",
+    <div className="cp-filter" style={{
+      display: "flex", gap: 8, padding: "14px 16px",
       background: COLORS.white,
       borderBottom: `1px solid ${COLORS.lightBorder}`,
       overflowX: "auto",
-      flexWrap: "wrap",
+      flexWrap: "nowrap",
     }}>
       {NEIGHBORHOODS.map(n => {
         const active = selected === n.name;

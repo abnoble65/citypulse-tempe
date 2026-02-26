@@ -387,7 +387,7 @@ export function Commission() {
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
       <FilterBar selected={filter} onSelect={setFilter} />
       <NeighborhoodHero selected={filter} />
-      <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 24px" }}>
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
         <SectionLabel text="Commission Hearings" />
         <h2 style={{
           fontFamily: "'Urbanist', sans-serif",
@@ -398,7 +398,7 @@ export function Commission() {
           Planning Commission Record
         </h2>
 
-        <div style={{ display: "flex", gap: 12, marginBottom: 36 }}>
+        <div className="cp-search-row" style={{ display: "flex", gap: 12, marginBottom: 36 }}>
           <input
             type="text" placeholder="Search by address..."
             value={search} onChange={e => setSearch(e.target.value)}
@@ -432,7 +432,7 @@ export function Commission() {
         {!loading && error && (
           <div style={{
             background: "#FDEEEE", border: "1px solid #F0C8C8",
-            borderRadius: 16, padding: "36px 32px", textAlign: "center",
+            borderRadius: 16, padding: "clamp(20px, 4vw, 36px) clamp(16px, 3vw, 32px)", textAlign: "center",
           }}>
             <p style={{
               fontFamily: "'Urbanist', sans-serif", fontSize: 17, fontWeight: 800,
@@ -473,7 +473,7 @@ export function Commission() {
           return (
             <div key={p.id} style={{
               background: COLORS.white, borderRadius: 16,
-              padding: "28px", marginBottom: 14,
+              padding: "clamp(16px, 3vw, 28px)", marginBottom: 14,
               border: `1px solid ${isExpanded ? COLORS.orange : COLORS.lightBorder}`,
               boxShadow: isExpanded
                 ? "0 4px 20px rgba(212,100,59,0.08)"

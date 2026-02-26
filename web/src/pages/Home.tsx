@@ -84,7 +84,7 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
 
           {/* Progress bar */}
           <div style={{
-            width: 240, height: 4, background: COLORS.lightBorder,
+            width: "min(240px, 80vw)", height: 4, background: COLORS.lightBorder,
             borderRadius: 2, marginTop: 24, overflow: "hidden",
           }}>
             <div style={{

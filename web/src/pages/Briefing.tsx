@@ -89,7 +89,7 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
       <FilterBar selected={filter} onSelect={setFilter} />
       <NeighborhoodHero selected={filter} aggregatedData={aggregatedData} />
-      <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 24px" }}>
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
         <SectionLabel text="The Briefing" />
         <h2 style={{
           fontFamily: "'Urbanist', sans-serif",
@@ -102,7 +102,7 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
         </h2>
 
         <div style={{
-          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
           gap: 14, marginBottom: 44,
         }}>
           {stats.map(s => (
@@ -121,7 +121,7 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
 
         <div style={{
           background: COLORS.white,
-          borderRadius: 20, padding: "40px",
+          borderRadius: 20, padding: "clamp(20px, 5vw, 40px)",
           border: `1px solid ${isGenerating ? COLORS.orange : COLORS.lightBorder}`,
           fontFamily: FONTS.body,
           fontSize: 15.5, lineHeight: 1.8,

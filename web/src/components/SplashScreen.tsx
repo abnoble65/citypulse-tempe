@@ -111,7 +111,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
           <h1
             style={{
               fontFamily: FONTS.heading,
-              fontSize: "clamp(48px, 10vw, 88px)",
+              fontSize: "clamp(36px, 10vw, 88px)",
               fontWeight: 800,
               letterSpacing: "-0.02em",
               lineHeight: 1,

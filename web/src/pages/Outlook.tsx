@@ -193,7 +193,7 @@ export function Outlook({ aggregatedData, onNavigate }: OutlookProps) {
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
       <FilterBar selected={filter} onSelect={setFilter} />
       <NeighborhoodHero selected={filter} aggregatedData={aggregatedData} />
-      <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 24px" }}>
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
 
         <SectionLabel text="The Outlook" />
         <h2 style={{
@@ -256,7 +256,7 @@ export function Outlook({ aggregatedData, onNavigate }: OutlookProps) {
               <>
                 <SectionLabel text="Key Events" />
                 <div style={{
-                  background: COLORS.white, borderRadius: 20, padding: "8px 44px 4px",
+                  background: COLORS.white, borderRadius: 20, padding: "8px clamp(20px, 4vw, 44px) 4px",
                   border: `1px solid ${COLORS.lightBorder}`,
                   marginBottom: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
                 }}>
@@ -273,7 +273,7 @@ export function Outlook({ aggregatedData, onNavigate }: OutlookProps) {
                 <SectionLabel text="Risks & Downside Scenarios" />
                 <div style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))",
                   gap: 16, marginBottom: 24,
                 }}>
                   {outlook.risks.map((risk, i) => (
@@ -312,7 +312,7 @@ export function Outlook({ aggregatedData, onNavigate }: OutlookProps) {
 
         {/* CTA */}
         <div style={{
-          background: COLORS.orangePale, borderRadius: 20, padding: "44px",
+          background: COLORS.orangePale, borderRadius: 20, padding: "clamp(24px, 5vw, 44px)",
           textAlign: "center", border: `1px solid ${COLORS.lightBorder}`,
         }}>
           <div style={{

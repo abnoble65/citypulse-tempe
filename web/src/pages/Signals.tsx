@@ -27,7 +27,7 @@ function SignalCard({ signal }: { signal: Signal }) {
   return (
     <div style={{
       background: COLORS.white, borderRadius: 20,
-      padding: "32px 36px", marginBottom: 20,
+      padding: "clamp(20px, 4vw, 32px) clamp(16px, 4vw, 36px)", marginBottom: 20,
       border: `1px solid ${COLORS.lightBorder}`,
       boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
     }}>
@@ -181,7 +181,7 @@ export function Signals({ aggregatedData, onNavigate }: SignalsProps) {
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
       <FilterBar selected={filter} onSelect={setFilter} />
       <NeighborhoodHero selected={filter} aggregatedData={aggregatedData} />
-      <div style={{ maxWidth: 820, margin: "0 auto", padding: "52px 24px" }}>
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
         <SectionLabel text="Signals" />
         <h2 style={{
           fontFamily: "'Urbanist', sans-serif",
@@ -247,7 +247,7 @@ export function Signals({ aggregatedData, onNavigate }: SignalsProps) {
           <>
             <SectionLabel text="Public Concerns" />
             <div style={{
-              background: COLORS.white, borderRadius: 20, padding: "40px 44px",
+              background: COLORS.white, borderRadius: 20, padding: "clamp(20px, 5vw, 40px) clamp(16px, 4vw, 44px)",
               border: `1px solid ${COLORS.lightBorder}`,
               boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
             }}>
