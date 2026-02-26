@@ -14,7 +14,7 @@ import {
   type DevelopmentProject,
   type ZoningDistrict,
   type EvictionNotice,
-} from './DataSF';
+} from './dataSF';
 import type { DistrictConfig } from '../districts';
 
 export interface NotablePermit {

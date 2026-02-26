@@ -390,7 +390,7 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
   if (aggregatedData.permit_summary.total === 0) {
     return (
       <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
-        <FilterBar selected={filter} onSelect={setFilter} />
+        <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "70vh" }}>
           <div style={{ textAlign: "center", padding: "48px 32px", maxWidth: 380 }}>
             <p style={{
