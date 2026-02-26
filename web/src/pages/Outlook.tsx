@@ -3,7 +3,7 @@ import { COLORS, FONTS } from "../theme";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
-import { generateOutlook } from "../services/briefing";
+import { generateOutlook, getCachedOutlook } from "../services/briefing";
 import type { OutlookData, OutlookEvent, OutlookRisk, OutlookEngagement } from "../services/briefing";
 import type { DistrictData } from "../services/aggregator";
 import type { DistrictConfig } from "../districts";
@@ -139,8 +139,10 @@ function EngagementCard({ item }: { item: OutlookEngagement }) {
 export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookProps) {
   const [filter, setFilter]             = useState(districtConfig.allLabel);
   const [outlook, setOutlook]           = useState<OutlookData | null>(null);
-  // Start generating immediately if we already have data (avoids blank flash)
-  const [isGenerating, setIsGenerating] = useState(!!aggregatedData);
+  // Init: if we have a cached result for the initial "all district" view, don't show spinner
+  const [isGenerating, setIsGenerating] = useState(
+    () => !!aggregatedData && !getCachedOutlook(districtConfig, undefined),
+  );
   const [genError, setGenError]         = useState<string | null>(null);
 
   // Reset filter when district changes
@@ -148,16 +150,12 @@ export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookP
     setFilter(districtConfig.allLabel);
   }, [districtConfig.allLabel]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function doGenerate(currentFilter: string) {
+  // Immediate (no debounce) generate — used by Retry button
+  function doGenerate(focus?: { zip: string; name: string }) {
     if (!aggregatedData) return;
-    const neighborhood = districtConfig.neighborhoods.find(n => n.name === currentFilter);
     setIsGenerating(true);
     setGenError(null);
-    generateOutlook(
-      aggregatedData,
-      districtConfig,
-      neighborhood ? { zip: neighborhood.zip, name: neighborhood.name } : undefined,
-    )
+    generateOutlook(aggregatedData, districtConfig, focus)
       .then(d => setOutlook(d))
       .catch(err => {
         console.error("[Outlook] generation failed:", err);
@@ -168,7 +166,23 @@ export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookP
 
   // Generate when filter changes (also fires on mount).
   useEffect(() => {
-    doGenerate(filter);
+    if (!aggregatedData) return;
+    const neighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
+    const focus = neighborhood ? { zip: neighborhood.zip, name: neighborhood.name } : undefined;
+
+    // Synchronous cache check — instant display, no loading flash
+    const cached = getCachedOutlook(districtConfig, focus);
+    if (cached) {
+      setOutlook(cached);
+      setIsGenerating(false);
+      return;
+    }
+
+    // Not cached — debounce 300ms before calling Claude
+    setIsGenerating(true);
+    setGenError(null);
+    const timer = setTimeout(() => doGenerate(focus), 300);
+    return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]); // intentionally only re-run when filter changes
 
@@ -301,7 +315,10 @@ export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookP
               {genError}
             </p>
             <button
-              onClick={() => doGenerate(filter)}
+              onClick={() => {
+                const nb = districtConfig.neighborhoods.find(n => n.name === filter);
+                doGenerate(nb ? { zip: nb.zip, name: nb.name } : undefined);
+              }}
               style={{
                 background: COLORS.orange, color: COLORS.white, border: "none",
                 borderRadius: 24, padding: "11px 28px", fontSize: 14, fontWeight: 700,

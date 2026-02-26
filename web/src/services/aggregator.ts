@@ -23,6 +23,22 @@ import {
 } from './dataSF';
 import type { DistrictConfig } from '../districts';
 
+// ── Session-level DataSF cache ────────────────────────────────────────────────
+// Re-fetching 7 datasets on every filter change is wasteful. Cache per district
+// for 5 minutes — DataSF data doesn't change meaningfully within a session.
+const CACHE_TTL_MS = 5 * 60 * 1000;
+interface DistrictCacheEntry { data: DistrictData; ts: number }
+const districtCache = new Map<string, DistrictCacheEntry>();
+
+// Wraps a promise with performance.now() logging
+function timed<T>(label: string, p: Promise<T>): Promise<T> {
+  const t0 = performance.now();
+  return p.then(
+    v  => { console.log(`[datasf] ${label}: ${(performance.now() - t0).toFixed(0)}ms`); return v; },
+    e  => { console.warn(`[datasf] ${label}: FAILED ${(performance.now() - t0).toFixed(0)}ms`); return Promise.reject(e); },
+  );
+}
+
 export interface NotablePermit {
   permit_number: string;
   address: string;
@@ -497,28 +513,36 @@ const EMPTY_AFFORDABLE_HOUSING_SUMMARY: AffordableHousingSummary = {
 };
 
 export async function aggregateDistrictData(district: DistrictConfig): Promise<DistrictData> {
+  // Return cached data if fresh
+  const cached = districtCache.get(district.number);
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+    console.log(`[aggregator] cache hit — district ${district.number} (age ${Math.round((Date.now() - cached.ts) / 1000)}s)`);
+    return cached.data;
+  }
+
+  const t0 = performance.now();
   const [permits, allProjects, allZones, evictions, assessmentStats, assessmentParcels, affordableProjects] = await Promise.all([
-    fetchBuildingPermits(district.number),
-    fetchDevelopmentPipeline(),
-    fetchZoningDistricts(),
-    fetchEvictions(district.number).catch(err => {
+    timed('permits',           fetchBuildingPermits(district.number)),
+    timed('pipeline',          fetchDevelopmentPipeline()),
+    timed('zoning',            fetchZoningDistricts()),
+    timed('evictions',         fetchEvictions(district.number).catch(err => {
       console.warn('[aggregator] Eviction fetch failed (non-fatal):', err);
       return [] as EvictionNotice[];
-    }),
-    fetchAssessmentStats(district.number).catch(err => {
+    })),
+    timed('assessment-stats',  fetchAssessmentStats(district.number).catch(err => {
       console.warn('[aggregator] Assessment stats fetch failed (non-fatal):', err);
       return [] as AssessmentAggrRow[];
-    }),
-    fetchTopAssessedProperties(district.number).catch(err => {
+    })),
+    timed('assessment-parcels',fetchTopAssessedProperties(district.number).catch(err => {
       console.warn('[aggregator] Assessment parcels fetch failed (non-fatal):', err);
       return [] as AssessmentParcel[];
-    }),
-    fetchAffordableHousingPipeline(district.number).catch(err => {
+    })),
+    timed('affordable-housing',fetchAffordableHousingPipeline(district.number).catch(err => {
       console.warn('[aggregator] Affordable housing fetch failed (non-fatal):', err);
       return [] as AffordableHousingProject[];
-    }),
+    })),
   ]);
-  console.log(`[aggregator] DataSF results — permits: ${permits.length}, pipeline: ${allProjects.length}, zoning: ${allZones.length}, evictions: ${evictions.length}, assessment rows: ${assessmentStats.length}, parcels: ${assessmentParcels.length}, affordable housing: ${affordableProjects.length}`);
+  console.log(`[aggregator] all 7 fetches complete: ${(performance.now() - t0).toFixed(0)}ms | permits: ${permits.length}, pipeline: ${allProjects.length}, evictions: ${evictions.length}, assessment: ${assessmentStats.length}, parcels: ${assessmentParcels.length}, affordable: ${affordableProjects.length}`);
 
   const projects = allProjects.filter((p) => {
     const hood = (p.nhood41 ?? '').toLowerCase();
@@ -552,7 +576,7 @@ export async function aggregateDistrictData(district: DistrictConfig): Promise<D
     ? buildAffordableHousingSummary(affordableProjects)
     : EMPTY_AFFORDABLE_HOUSING_SUMMARY;
 
-  return {
+  const result: DistrictData = {
     permit_summary: buildPermitSummary(permits),
     pipeline_summary,
     zoning_profile,
@@ -561,4 +585,8 @@ export async function aggregateDistrictData(district: DistrictConfig): Promise<D
     assessment_summary,
     affordable_housing_summary,
   };
+
+  districtCache.set(district.number, { data: result, ts: Date.now() });
+  console.log(`[aggregator] district ${district.number} cached`);
+  return result;
 }

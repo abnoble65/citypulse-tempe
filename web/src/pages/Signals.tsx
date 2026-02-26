@@ -3,7 +3,7 @@ import { COLORS, FONTS } from "../theme";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
-import { generateSignals } from "../services/briefing";
+import { generateSignals, getCachedSignals } from "../services/briefing";
 import type { Signal } from "../services/briefing";
 import type { DistrictData } from "../services/aggregator";
 import type { DistrictConfig } from "../districts";
@@ -133,21 +133,29 @@ export function Signals({ aggregatedData, districtConfig, onNavigate }: SignalsP
     if (!aggregatedData) return;
 
     const neighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
+    const focus = neighborhood ? { zip: neighborhood.zip, name: neighborhood.name } : undefined;
 
+    // Synchronous cache check — instant display, no loading flash
+    const cached = getCachedSignals(districtConfig, focus);
+    if (cached) {
+      setSignals(cached);
+      setIsGenerating(false);
+      return;
+    }
+
+    // Not cached — debounce 300ms before calling Claude
     setIsGenerating(true);
     setGenError(null);
-
-    generateSignals(
-      aggregatedData,
-      districtConfig,
-      neighborhood ? { zip: neighborhood.zip, name: neighborhood.name } : undefined,
-    )
-      .then(s => setSignals(s))
-      .catch(err => {
-        console.error("[Signals] generation failed:", err);
-        setGenError(err instanceof Error ? err.message : "Generation failed");
-      })
-      .finally(() => setIsGenerating(false));
+    const timer = setTimeout(() => {
+      generateSignals(aggregatedData, districtConfig, focus)
+        .then(s => setSignals(s))
+        .catch(err => {
+          console.error("[Signals] generation failed:", err);
+          setGenError(err instanceof Error ? err.message : "Generation failed");
+        })
+        .finally(() => setIsGenerating(false));
+    }, 300);
+    return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]); // intentionally only re-run when filter changes
 

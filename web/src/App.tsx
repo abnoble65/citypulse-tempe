@@ -1,17 +1,19 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { NavBar } from "./components/NavBar";
 import { SplashScreen } from "./components/SplashScreen";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Home } from "./pages/Home";
-import { Briefing } from "./pages/Briefing";
-import { Charts } from "./pages/Charts";
-import { Signals } from "./pages/Signals";
-import { Outlook } from "./pages/Outlook";
-import { Commission } from "./pages/Commission";
 import { generateBriefing } from "./services/briefing";
 import type { DistrictData } from "./services/briefing";
 import { DEFAULT_DISTRICT } from "./districts";
 import type { DistrictConfig } from "./districts";
+
+// Lazy-load all pages except Home (initial view) — each becomes its own JS chunk
+const Briefing   = lazy(() => import("./pages/Briefing").then(m => ({ default: m.Briefing })));
+const Charts     = lazy(() => import("./pages/Charts").then(m => ({ default: m.Charts })));
+const Signals    = lazy(() => import("./pages/Signals").then(m => ({ default: m.Signals })));
+const Outlook    = lazy(() => import("./pages/Outlook").then(m => ({ default: m.Outlook })));
+const Commission = lazy(() => import("./pages/Commission").then(m => ({ default: m.Commission })));
 
 const SPLASH_KEY = "citypulse_splash_seen";
 
@@ -31,6 +33,7 @@ export default function App() {
   const [error, setError]                     = useState<string | null>(null);
 
   async function handleGenerate(district: DistrictConfig) {
+    console.time(`[app] generate ${district.label}`);
     setLoading(true);
     setError(null);
     try {
@@ -43,6 +46,7 @@ export default function App() {
       setError(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
       setLoading(false);
+      console.timeEnd(`[app] generate ${district.label}`);
     }
   }
 
@@ -70,7 +74,9 @@ export default function App() {
       {!splashDone && <SplashScreen onComplete={handleSplashComplete} />}
       {page !== "Home" && <NavBar activePage={page} onNavigate={setPage} />}
       <ErrorBoundary label={page}>
-        {renderPage()}
+        <Suspense fallback={<div />}>
+          {renderPage()}
+        </Suspense>
       </ErrorBoundary>
     </ErrorBoundary>
   );

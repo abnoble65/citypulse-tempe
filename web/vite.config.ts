@@ -8,6 +8,17 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react':    ['react', 'react-dom'],
+            'vendor-anthropic': ['@anthropic-ai/sdk'],
+            'vendor-supabase': ['@supabase/supabase-js'],
+          },
+        },
+      },
+    },
     server: {
       host: true,
       port: 5173,

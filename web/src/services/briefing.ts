@@ -56,6 +56,36 @@ const client = new Anthropic({
   dangerouslyAllowBrowser: true,
 });
 
+// ── Session-level AI content caches ───────────────────────────────────────────
+// Keyed by "districtNumber:zip" (neighborhood-filtered) or "districtNumber:all".
+// Switching between previously-visited combos is instant — no Claude call needed.
+const _briefingCache = new Map<string, string>();
+const _signalsCache  = new Map<string, Signal[]>();
+const _outlookCache  = new Map<string, OutlookData>();
+
+function contentCacheKey(
+  district: DistrictConfig,
+  focus?: { zip: string; name: string },
+): string {
+  return `${district.number}:${focus?.zip ?? 'all'}`;
+}
+
+/** Synchronous cache read — use in lazy useState initialisers to skip loading flash. */
+export function getCachedSignals(
+  district: DistrictConfig,
+  focus?: { zip: string; name: string },
+): Signal[] | null {
+  return _signalsCache.get(contentCacheKey(district, focus)) ?? null;
+}
+
+/** Synchronous cache read — use in lazy useState initialisers to skip loading flash. */
+export function getCachedOutlook(
+  district: DistrictConfig,
+  focus?: { zip: string; name: string },
+): OutlookData | null {
+  return _outlookCache.get(contentCacheKey(district, focus)) ?? null;
+}
+
 const SYSTEM_PROMPT = `You are CityPulse, an urban intelligence analyst specializing in San Francisco's built environment. Your role is to synthesize permit activity, development pipeline data, and zoning context into clear, narrative-driven briefings for urban planners, developers, and municipal clients. Always produce exactly four sections with these exact headings: THE BRIEFING, THE SIGNAL, THE ZONING CONTEXT, THE OUTLOOK. Total length 450-600 words. Write in confident prose, no bullet points. Use specific numbers from the data.`;
 
 function signalsSystemPrompt(districtLabel: string): string {
@@ -102,8 +132,10 @@ export function parseBriefingSections(text: string): BriefingSections {
 }
 
 export async function generateBriefing(district: DistrictConfig): Promise<{ text: string; data: DistrictData }> {
+  const t0 = performance.now();
   const data = await aggregateDistrictData(district);
   const text = await generateBriefingFromData(data, district);
+  console.log(`[briefing] full generate (data + text): ${(performance.now() - t0).toFixed(0)}ms`);
   return { text, data };
 }
 
@@ -117,6 +149,10 @@ export async function generateBriefingFromData(
   district: DistrictConfig,
   focus?: { zip: string; name: string },
 ): Promise<string> {
+  const key = contentCacheKey(district, focus);
+  const cached = _briefingCache.get(key);
+  if (cached) { console.log(`[briefing] cache hit ${key}`); return cached; }
+
   let briefingData: DistrictData = data;
 
   if (focus) {
@@ -139,15 +175,18 @@ export async function generateBriefingFromData(
     ? `${JSON.stringify(briefingData, null, 2)}\n\nFOCUS: Write this briefing specifically for the ${focus.name} neighborhood (zip ${focus.zip}). Reference ${focus.name} by name throughout. Pipeline and zoning data above reflect all of ${district.label} — note this where relevant.`
     : JSON.stringify(briefingData, null, 2);
 
+  const t0 = performance.now();
   const message = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userContent }],
   });
+  console.log(`[briefing] claude-sonnet-4-6: ${(performance.now() - t0).toFixed(0)}ms`);
 
   const block = message.content[0];
   if (block.type !== 'text') throw new Error(`Unexpected response block type: ${block.type}`);
+  _briefingCache.set(key, block.text);
   return block.text;
 }
 
@@ -160,6 +199,10 @@ export async function generateSignals(
   district: DistrictConfig,
   focus?: { zip: string; name: string },
 ): Promise<Signal[]> {
+  const key = contentCacheKey(district, focus);
+  const cached = _signalsCache.get(key);
+  if (cached) { console.log(`[signals] cache hit ${key}`); return cached; }
+
   let analysisData = data;
 
   if (focus) {
@@ -195,12 +238,14 @@ Focus on: unusual permit volume, clustering of similar project types, potential 
 Return ONLY a JSON object in this exact shape (no other text):
 {"signals": [{"title":"...","body":"...","severity":"...","concern":"..."}]}`;
 
+  const t0 = performance.now();
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,
     system: signalsSystemPrompt(district.label),
     messages: [{ role: 'user', content: userContent }],
   });
+  console.log(`[signals] claude-haiku: ${(performance.now() - t0).toFixed(0)}ms`);
 
   const block = message.content[0];
   if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
@@ -208,6 +253,7 @@ Return ONLY a JSON object in this exact shape (no other text):
   // Strip any accidental markdown code fences
   const raw = block.text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
   const parsed = JSON.parse(raw) as { signals: Signal[] };
+  _signalsCache.set(key, parsed.signals);
   return parsed.signals;
 }
 
@@ -266,6 +312,9 @@ export async function generateOutlook(
   district: DistrictConfig,
   focus?: { zip: string; name: string },
 ): Promise<OutlookData> {
+  const key = contentCacheKey(district, focus);
+  const cached = _outlookCache.get(key);
+  if (cached) { console.log(`[outlook] cache hit ${key}`); return cached; }
   // Fetch shadow-flagged projects from Supabase in parallel with data prep.
   // Always district-wide — shadow impact is a D3-level concern regardless of
   // neighborhood filter, and project addresses rarely contain zip codes.
@@ -344,6 +393,7 @@ IMPORTANT: Include one risk about shadow impact (☀️ icon) and, if eviction_s
 
   console.log(`[generateOutlook] STEP 2: calling Claude Haiku — prompt length: ${userContent.length} chars`);
 
+  const t0outlook = performance.now();
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
@@ -351,7 +401,7 @@ IMPORTANT: Include one risk about shadow impact (☀️ icon) and, if eviction_s
     messages: [{ role: 'user', content: userContent }],
   });
 
-  console.log(`[generateOutlook] STEP 3: Claude responded — stop_reason: ${message.stop_reason}, content blocks: ${message.content.length}`);
+  console.log(`[generateOutlook] STEP 3: Claude responded in ${(performance.now() - t0outlook).toFixed(0)}ms — stop_reason: ${message.stop_reason}, content blocks: ${message.content.length}`);
 
   const block = message.content[0];
   if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
@@ -360,5 +410,6 @@ IMPORTANT: Include one risk about shadow impact (☀️ icon) and, if eviction_s
 
   const parsed = repairAndParseJSON<OutlookData>(block.text);
   console.log(`[generateOutlook] STEP 5 OK — events: ${parsed.events?.length}, risks: ${parsed.risks?.length}, engagement: ${parsed.engagement?.length}`);
+  _outlookCache.set(key, parsed);
   return parsed;
 }
