@@ -116,8 +116,8 @@ async function fetchPressReleaseList(): Promise<PressRelease[]> {
 
   const items: PressRelease[] = [];
 
-  // Each item: <p data-block-key="..."><b>Month DD, YYYY: </b><a href="url">Title</a></p>
-  const itemRegex = /<p\s+data-block-key="[^"]+"><b>(.*?)<\/b>\s*<a\s+href="([^"]+)"[^>]*>(.*?)<\/a>/gi;
+  // Each item: <p class="..." data-block-key="..."><b>Month DD, YYYY: </b><a href="url">Title</a></p>
+  const itemRegex = /<p\b[^>]*data-block-key="[^"]+"><b>(.*?)<\/b>\s*<a\b[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi;
   let match: RegExpExecArray | null;
 
   while ((match = itemRegex.exec(html)) !== null) {
@@ -146,9 +146,9 @@ async function fetchArticleBody(url: string): Promise<string | null> {
     if (!res.ok) return null;
     const html = await res.text();
 
-    // Extract all <p data-block-key="..."> elements
+    // Extract all <p data-block-key="..."> elements (class may appear before data-block-key)
     const paragraphs: string[] = [];
-    const pRegex = /<p\s+data-block-key="[^"]+">[\s\S]*?<\/p>/gi;
+    const pRegex = /<p\b[^>]*data-block-key="[^"]+"[^>]*>[\s\S]*?<\/p>/gi;
     let match: RegExpExecArray | null;
 
     while ((match = pRegex.exec(html)) !== null) {
