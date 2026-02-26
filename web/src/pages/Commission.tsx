@@ -741,6 +741,14 @@ export function Commission({ districtConfig }: CommissionProps) {
           const { title, subtitle } = cardTitle(p);
           // When multiple cases share the same address + hearing date, they're merged here.
           const allInCard = p.mergedWith && p.mergedWith.length > 0 ? [p, ...p.mergedWith] : null;
+          // Bullet list only for sub-projects whose description adds information beyond
+          // the action badge — skip when description is absent or identical to action text.
+          const mergedBullets = allInCard
+            ? allInCard.filter(mp => {
+                const desc = mp.project_description?.trim() ?? "";
+                return desc && desc.toLowerCase() !== (mp.action ?? "").trim().toLowerCase();
+              })
+            : null;
 
           return (
             <div key={p.groupKey} ref={el => {
@@ -836,26 +844,28 @@ export function Commission({ districtConfig }: CommissionProps) {
               </div>
 
               {allInCard
-                ? (
+                ? mergedBullets && mergedBullets.length > 0 && (
                   <div style={{ marginBottom: 16 }}>
-                    {allInCard.map((mp, i) => (
-                      <div key={i} style={{
-                        display: "flex", gap: 10, alignItems: "flex-start",
-                        marginBottom: i < allInCard.length - 1 ? 8 : 0,
-                      }}>
-                        <span style={{
-                          color: COLORS.orange, fontWeight: 700, flexShrink: 0,
-                          fontFamily: FONTS.body, fontSize: 14, lineHeight: "1.65",
-                        }}>•</span>
-                        <p style={{
-                          fontSize: 14, color: COLORS.midGray,
-                          lineHeight: 1.65, margin: 0, fontFamily: FONTS.body,
+                    {mergedBullets.map((mp, i) => {
+                      const desc = mp.project_description!.trim();
+                      return (
+                        <div key={i} style={{
+                          display: "flex", gap: 10, alignItems: "flex-start",
+                          marginBottom: i < mergedBullets.length - 1 ? 8 : 0,
                         }}>
-                          {(mp.action ?? mp.project_description ?? "").slice(0, 200)}
-                          {(mp.action ?? mp.project_description ?? "").length > 200 ? "…" : ""}
-                        </p>
-                      </div>
-                    ))}
+                          <span style={{
+                            color: COLORS.orange, fontWeight: 700, flexShrink: 0,
+                            fontFamily: FONTS.body, fontSize: 14, lineHeight: "1.65",
+                          }}>•</span>
+                          <p style={{
+                            fontSize: 14, color: COLORS.midGray,
+                            lineHeight: 1.65, margin: 0, fontFamily: FONTS.body,
+                          }}>
+                            {desc.slice(0, 200)}{desc.length > 200 ? "…" : ""}
+                          </p>
+                        </div>
+                      );
+                    })}
                   </div>
                 )
                 : p.project_description && (
