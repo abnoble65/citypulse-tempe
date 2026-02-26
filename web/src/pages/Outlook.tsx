@@ -139,7 +139,8 @@ function EngagementCard({ item }: { item: OutlookEngagement }) {
 export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookProps) {
   const [filter, setFilter]             = useState(districtConfig.allLabel);
   const [outlook, setOutlook]           = useState<OutlookData | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
+  // Start generating immediately if we already have data (avoids blank flash)
+  const [isGenerating, setIsGenerating] = useState(!!aggregatedData);
   const [genError, setGenError]         = useState<string | null>(null);
 
   // Reset filter when district changes
@@ -147,15 +148,11 @@ export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookP
     setFilter(districtConfig.allLabel);
   }, [districtConfig.allLabel]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Generate when filter changes (also fires on mount).
-  useEffect(() => {
+  function doGenerate(currentFilter: string) {
     if (!aggregatedData) return;
-
-    const neighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
-
+    const neighborhood = districtConfig.neighborhoods.find(n => n.name === currentFilter);
     setIsGenerating(true);
     setGenError(null);
-
     generateOutlook(
       aggregatedData,
       districtConfig,
@@ -167,6 +164,11 @@ export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookP
         setGenError(err instanceof Error ? err.message : "Generation failed");
       })
       .finally(() => setIsGenerating(false));
+  }
+
+  // Generate when filter changes (also fires on mount).
+  useEffect(() => {
+    doGenerate(filter);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]); // intentionally only re-run when filter changes
 
@@ -218,9 +220,24 @@ export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookP
           Powered by live DataSF permit activity and development pipeline data.
         </p>
 
-        {/* Loading skeletons */}
+        {/* Loading spinner + skeletons */}
         {isGenerating && (
           <>
+            <style>{`@keyframes cp-spin { to { transform: rotate(360deg); } }`}</style>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 28 }}>
+              <div style={{
+                width: 20, height: 20, flexShrink: 0,
+                border: "2.5px solid #EDE8E3", borderTopColor: COLORS.orange,
+                borderRadius: "50%", animation: "cp-spin 0.75s linear infinite",
+              }} />
+              <p style={{
+                fontFamily: FONTS.body, fontSize: 14, fontWeight: 500,
+                color: COLORS.warmGray, margin: 0,
+              }}>
+                Building your {locationLabel} outlook…
+              </p>
+            </div>
+
             {/* Key Events skeleton */}
             <SectionLabel text="Key Events" />
             <div style={{
@@ -280,9 +297,19 @@ export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookP
               fontFamily: "'Urbanist', sans-serif", fontSize: 17, fontWeight: 800,
               color: "#B44040", marginBottom: 10,
             }}>Failed to generate outlook</p>
-            <p style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.midGray, lineHeight: 1.6, margin: 0 }}>
+            <p style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.midGray, lineHeight: 1.6, marginBottom: 24 }}>
               {genError}
             </p>
+            <button
+              onClick={() => doGenerate(filter)}
+              style={{
+                background: COLORS.orange, color: COLORS.white, border: "none",
+                borderRadius: 24, padding: "11px 28px", fontSize: 14, fontWeight: 700,
+                cursor: "pointer", fontFamily: "'Urbanist', sans-serif",
+              }}
+            >
+              Retry
+            </button>
           </div>
         )}
 

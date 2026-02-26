@@ -334,12 +334,29 @@ interface CommissionProps {
   districtConfig: DistrictConfig;
 }
 
+// Reusable select string for both the district load and search queries
+const PROJECT_SELECT = `
+  id, address, district, action, project_description,
+  shadow_flag, shadow_details, case_number,
+  hearing:hearing_id(
+    id, hearing_date,
+    public_sentiment(
+      speakers, for_project, against_project, neutral,
+      top_themes, notable_quotes, source, clip_id
+    )
+  ),
+  votes(commissioner_name, vote),
+  commissioner_comments(commissioner_name, comment_text)
+` as const;
+
 export function Commission({ districtConfig }: CommissionProps) {
   const [filter, setFilter]               = useState(districtConfig.allLabel);
   const [search, setSearch]               = useState("");
   const [expandedId, setExpandedId]       = useState<string | null>(null);
   const [projects, setProjects]           = useState<LiveProject[]>([]);
+  const [searchResults, setSearchResults] = useState<LiveProject[] | null>(null);
   const [loading, setLoading]             = useState(true);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError]                 = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -356,19 +373,7 @@ export function Commission({ districtConfig }: CommissionProps) {
 
     const { data, error: err } = await supabase
       .from("projects")
-      .select(`
-        id, address, district, action, project_description,
-        shadow_flag, shadow_details, case_number,
-        hearing:hearing_id(
-          id, hearing_date,
-          public_sentiment(
-            speakers, for_project, against_project, neutral,
-            top_themes, notable_quotes, source, clip_id
-          )
-        ),
-        votes(commissioner_name, vote),
-        commissioner_comments(commissioner_name, comment_text)
-      `)
+      .select(PROJECT_SELECT)
       .not("address", "is", null)
       .or(orTerms)
       .order("hearing_id", { ascending: false })
@@ -392,6 +397,33 @@ export function Commission({ districtConfig }: CommissionProps) {
     setExpandedId(null);
   }, [districtConfig.allLabel]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Debounced full-text search — queries address, project_description, case_number
+  // without any district filter so cross-district projects (like Stonestown) are found.
+  useEffect(() => {
+    const term = search.trim();
+    if (!term) {
+      setSearchResults(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSearchLoading(true);
+      const { data, error: err } = await supabase
+        .from("projects")
+        .select(PROJECT_SELECT)
+        .not("address", "is", null)
+        .or(
+          `address.ilike.%${term}%,` +
+          `project_description.ilike.%${term}%,` +
+          `case_number.ilike.%${term}%`
+        )
+        .order("hearing_id", { ascending: false })
+        .limit(50);
+      if (!err) setSearchResults((data ?? []) as unknown as LiveProject[]);
+      setSearchLoading(false);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const selectedNeighborhood = districtConfig.neighborhoods.find(n => n.name === filter) ?? null;
 
   // Most recent hearing date from already-loaded data — no extra query needed.
@@ -407,32 +439,32 @@ export function Commission({ districtConfig }: CommissionProps) {
     ...districtConfig.pipelineNeighborhoods,
   ];
 
-  const visible = projects.filter(p => {
-    if (!p.address) return false;
-    if (search && !p.address.toLowerCase().includes(search.toLowerCase())) return false;
+  // When search is active, use server search results directly (no district filter —
+  // intentional, so cross-district projects like Stonestown are visible).
+  // When idle, apply district + neighbourhood client-side filter on loaded projects.
+  const visible = searchResults !== null
+    ? searchResults
+    : projects.filter(p => {
+        if (!p.address) return false;
 
-    // District-level filter: project must mention the district or one of its neighbourhoods
-    const addr = (p.address ?? "").toLowerCase();
-    const dist = (p.district ?? "").toLowerCase();
-    const desc = (p.project_description ?? "").toLowerCase();
-    const matchesDistrict = districtTerms.some(term =>
-      addr.includes(term) || dist.includes(term) || desc.includes(term),
-    );
-    if (!matchesDistrict) return false;
+        const addr = (p.address ?? "").toLowerCase();
+        const dist = (p.district ?? "").toLowerCase();
+        const desc = (p.project_description ?? "").toLowerCase();
+        const matchesDistrict = districtTerms.some(term =>
+          addr.includes(term) || dist.includes(term) || desc.includes(term),
+        );
+        if (!matchesDistrict) return false;
 
-    // Neighbourhood sub-filter
-    if (selectedNeighborhood) {
-      const name = selectedNeighborhood.name.toLowerCase();
-      const zip  = selectedNeighborhood.zip;
-      const matches =
-        addr.includes(zip) ||
-        addr.includes(name) ||
-        dist.includes(name) ||
-        desc.includes(name);
-      if (!matches) return false;
-    }
-    return true;
-  });
+        if (selectedNeighborhood) {
+          const name = selectedNeighborhood.name.toLowerCase();
+          const zip  = selectedNeighborhood.zip;
+          const matches =
+            addr.includes(zip) || addr.includes(name) ||
+            dist.includes(name) || desc.includes(name);
+          if (!matches) return false;
+        }
+        return true;
+      });
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
@@ -485,7 +517,7 @@ export function Commission({ districtConfig }: CommissionProps) {
         }}>Recent Hearings</div>
 
         {/* Loading skeleton */}
-        {loading && [0, 1, 2].map(i => <SkeletonCard key={i} />)}
+        {(loading || searchLoading) && [0, 1, 2].map(i => <SkeletonCard key={i} />)}
 
         {/* Error */}
         {!loading && error && (
@@ -519,7 +551,7 @@ export function Commission({ districtConfig }: CommissionProps) {
         )}
 
         {/* Project cards */}
-        {!loading && !error && visible.map((p) => {
+        {!loading && !searchLoading && !error && visible.map((p) => {
           const norm = normalizeAction(p.action);
           const ac   = actionStyle(norm);
           const tally = tallyVotes(p.votes);
@@ -626,10 +658,10 @@ export function Commission({ districtConfig }: CommissionProps) {
           );
         })}
 
-        {!loading && !error && visible.length === 0 && (
+        {!loading && !searchLoading && !error && visible.length === 0 && (
           <div style={{ textAlign: "center", padding: "48px 0", color: COLORS.warmGray, fontFamily: FONTS.body }}>
             No hearings found{search ? ` matching "${search}"` : ""}
-            {selectedNeighborhood?.zip ? ` in ${selectedNeighborhood.name}` : ""}.
+            {!search && selectedNeighborhood?.name ? ` in ${selectedNeighborhood.name}` : ""}.
           </div>
         )}
       </div>
