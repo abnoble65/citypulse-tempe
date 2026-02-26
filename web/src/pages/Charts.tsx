@@ -6,6 +6,7 @@ import type { DistrictData, ZipPermitSummary, EvictionSummary, AssessmentSummary
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { fetchDistrictBoundaries } from "../services/neighborhoodBoundaries";
 import type { GeoFeature } from "../services/neighborhoodBoundaries";
+import { DISTRICTS } from "../districts";
 import type { DistrictConfig } from "../districts";
 
 const MapViewLazy = lazy(() =>
@@ -618,6 +619,71 @@ const STATUS_ORDER_AH: Record<string, number> = {
   "Building Rehabilitation (Pre-Construction)": 3,
 };
 
+/* ─── DISTRICT COMPARISON CHART (citywide only) ─ */
+
+const DISTRICT_COLORS = [
+  "#D4643B","#E8845E","#D4963B","#5B9A5F","#4A7FD0",
+  "#8E6B5E","#B44040","#7AB87E","#C85C3A","#B0A89E","#9A5828",
+];
+
+function DistrictComparisonChart({ ps }: { ps: PermitSummary }) {
+  const entries = Object.values(DISTRICTS)
+    .map((d, i) => {
+      const bucket = ps.by_zip[d.number];
+      return {
+        label: `D${d.number}`,
+        fullName: d.label,
+        count: bucket?.total ?? 0,
+        cost: (bucket?.total_estimated_cost_usd ?? 0) / 1_000_000,
+        color: DISTRICT_COLORS[i % DISTRICT_COLORS.length],
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+
+  const maxCount = Math.max(...entries.map(e => e.count), 1);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {entries.map(e => (
+        <div key={e.label}>
+          <div style={{
+            display: "flex", justifyContent: "space-between",
+            alignItems: "baseline", marginBottom: 5,
+          }}>
+            <span style={{
+              fontFamily: FONTS.body, fontSize: 13, fontWeight: 600,
+              color: COLORS.charcoal,
+            }}>{e.fullName}</span>
+            <div style={{ display: "flex", gap: 16, alignItems: "baseline" }}>
+              <span style={{
+                fontFamily: "'Urbanist', sans-serif", fontSize: 15,
+                fontWeight: 800, color: COLORS.charcoal,
+              }}>{e.count.toLocaleString()}</span>
+              {e.cost > 0 && (
+                <span style={{
+                  fontFamily: FONTS.body, fontSize: 11,
+                  color: COLORS.warmGray, minWidth: 48, textAlign: "right",
+                }}>
+                  ${e.cost.toFixed(0)}M
+                </span>
+              )}
+            </div>
+          </div>
+          <div style={{ height: 9, background: COLORS.cream, borderRadius: 5, overflow: "hidden" }}>
+            <div style={{
+              width: `${(e.count / maxCount) * 100}%`,
+              height: "100%",
+              background: `linear-gradient(90deg, ${e.color}, ${e.color}cc)`,
+              borderRadius: 5,
+              transition: "width 0.6s ease",
+            }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ─── Charts Skeletons ────────────────────────── */
 
 function ChartsSkeletons() {
@@ -864,9 +930,18 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
     );
   }
 
-  // Resolve active permit summary
+  // ── Citywide vs single-district data routing ──────────────────────────────
+  const isCitywide = districtConfig.number === "0";
+  // In citywide mode the "zip" field of a neighborhood is the district number ("1"–"11").
   const selectedZip = districtConfig.neighborhoods.find(n => n.name === filter)?.zip ?? null;
-  const ps = aggregatedData.permit_summary;
+
+  // When a district pill is selected in citywide mode, use that district's full data
+  // for eviction / assessment / affordable housing charts.
+  const activeFullData = isCitywide && selectedZip && aggregatedData.by_district?.[selectedZip]
+    ? aggregatedData.by_district[selectedZip]
+    : aggregatedData;
+
+  const ps = activeFullData.permit_summary;
   const activePs: ZipPermitSummary = selectedZip && ps.by_zip?.[selectedZip]
     ? ps.by_zip[selectedZip]
     : ps;
@@ -891,8 +966,8 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
       color: TYPE_COLORS[i % TYPE_COLORS.length],
     }));
 
-  // Notable permits — always district-wide
-  const notable = ps.notable_permits
+  // Notable permits — from active data
+  const notable = activeFullData.permit_summary.notable_permits
     .sort((a, b) => b.estimated_cost_usd - a.estimated_cost_usd)
     .slice(0, 10);
   const maxVal = notable[0]?.estimated_cost_usd ?? 1;
@@ -952,10 +1027,10 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
               <MapViewLazy
                 permits={aggregatedData.map_permits}
                 districtConfig={districtConfig}
-                activeZip={selectedZip}
-                boundaries={boundaries}
+                activeZip={isCitywide ? null : selectedZip}
+                boundaries={isCitywide ? new Map() : boundaries}
                 activeNeighborhoodName={
-                  districtConfig.neighborhoods.find(n => n.name === filter)?.name ?? null
+                  isCitywide ? null : (districtConfig.neighborhoods.find(n => n.name === filter)?.name ?? null)
                 }
               />
             </Suspense>
@@ -1005,7 +1080,7 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
 
         {/* Row 2: Top addresses — district-wide */}
         {notable.length > 0 && (
-          <ChartCard title={`Top 10 Addresses by Permit Value (${districtConfig.label})`} style={{ marginBottom: 24 }}>
+          <ChartCard title={`Top Addresses by Permit Value — ${selectedZip && isCitywide ? districtConfig.neighborhoods.find(n=>n.zip===selectedZip)?.name ?? districtConfig.label : districtConfig.label}`} style={{ marginBottom: 24 }}>
             <div style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(min(340px, 100%), 1fr))",
@@ -1061,48 +1136,60 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
           </ChartCard>
         )}
 
-        {/* Row 3: Eviction trend — always district-wide */}
-        {aggregatedData.eviction_summary && (
-          <ChartCard title={`Eviction Notices — ${districtConfig.label}`} style={{ marginBottom: 24 }}>
+        {/* Row 2b: District comparison (citywide mode only) */}
+        {isCitywide && !selectedZip && (
+          <ChartCard title="Permits by District — All San Francisco" style={{ marginBottom: 24 }}>
+            <DistrictComparisonChart ps={aggregatedData.permit_summary} />
+          </ChartCard>
+        )}
+
+        {/* Row 3: Eviction trend */}
+        {activeFullData.eviction_summary && (
+          <ChartCard
+            title={`Eviction Notices — ${selectedZip && isCitywide ? districtConfig.neighborhoods.find(n=>n.zip===selectedZip)?.name ?? districtConfig.label : districtConfig.label}`}
+            style={{ marginBottom: 24 }}
+          >
             <div style={{ marginBottom: 20 }}>
               <span style={{
                 fontFamily: "'Urbanist', sans-serif", fontSize: 36, fontWeight: 800,
                 color: COLORS.charcoal, letterSpacing: "-0.02em",
               }}>
-                {aggregatedData.eviction_summary.total.toLocaleString()}
+                {activeFullData.eviction_summary.total.toLocaleString()}
               </span>
               <span style={{
                 fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,
                 marginLeft: 10, fontWeight: 500,
               }}>
                 notices filed in the last 2 years
-                {selectedZip && <span style={{ color: COLORS.lightBorder }}> · chart shows district-wide</span>}
               </span>
             </div>
-            {aggregatedData.eviction_summary.total === 0 ? (
+            {activeFullData.eviction_summary.total === 0 ? (
               <p style={{
                 fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,
                 fontStyle: "italic",
               }}>
-                No eviction notices found for this district in the last 2 years.
+                No eviction notices found for this selection in the last 2 years.
               </p>
             ) : (
-              <EvictionChart summary={aggregatedData.eviction_summary} />
+              <EvictionChart summary={activeFullData.eviction_summary} />
             )}
           </ChartCard>
         )}
 
-        {/* Row 4: Property Assessment — always district-wide */}
-        {aggregatedData.assessment_summary && (
-          <ChartCard title={`Property Assessment — ${districtConfig.label}`} style={{ marginBottom: 24 }}>
-            <AssessmentChart summary={aggregatedData.assessment_summary} />
+        {/* Row 4: Property Assessment */}
+        {activeFullData.assessment_summary && (
+          <ChartCard
+            title={`Property Assessment — ${selectedZip && isCitywide ? districtConfig.neighborhoods.find(n=>n.zip===selectedZip)?.name ?? districtConfig.label : districtConfig.label}`}
+            style={{ marginBottom: 24 }}
+          >
+            <AssessmentChart summary={activeFullData.assessment_summary} />
           </ChartCard>
         )}
 
-        {/* Row 5: Affordable Housing Pipeline — always district-wide */}
-        {aggregatedData.affordable_housing_summary && (
-          <ChartCard title={`Affordable Housing Pipeline — ${districtConfig.label}`}>
-            <AffordableHousingChart summary={aggregatedData.affordable_housing_summary} />
+        {/* Row 5: Affordable Housing Pipeline */}
+        {activeFullData.affordable_housing_summary && (
+          <ChartCard title={`Affordable Housing Pipeline — ${selectedZip && isCitywide ? districtConfig.neighborhoods.find(n=>n.zip===selectedZip)?.name ?? districtConfig.label : districtConfig.label}`}>
+            <AffordableHousingChart summary={activeFullData.affordable_housing_summary} />
           </ChartCard>
         )}
       </div>

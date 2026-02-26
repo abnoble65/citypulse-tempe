@@ -21,6 +21,7 @@ import {
   type AssessmentParcel,
   type AffordableHousingProject,
 } from './dataSF';
+import { DISTRICTS } from '../districts';
 import type { DistrictConfig } from '../districts';
 
 // ── Session-level DataSF cache ────────────────────────────────────────────────
@@ -175,6 +176,8 @@ export interface DistrictData {
   affordable_housing_summary: AffordableHousingSummary;
   /** Up to 200 geocoded permits for map rendering. Excluded from AI prompts. */
   map_permits: MapPermit[];
+  /** Only populated in citywide (number="0") mode. Keys are district numbers "1"–"11". */
+  by_district?: Record<string, DistrictData>;
 }
 
 function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {
@@ -617,5 +620,164 @@ export async function aggregateDistrictData(district: DistrictConfig): Promise<D
 
   districtCache.set(district.number, { data: result, ts: Date.now() });
   console.log(`[aggregator] district ${district.number} cached`);
+  return result;
+}
+
+// ── Citywide merge helpers ────────────────────────────────────────────────────
+
+function mergeCountMaps(maps: Record<string, number>[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const m of maps) for (const [k, v] of Object.entries(m)) out[k] = (out[k] ?? 0) + v;
+  return out;
+}
+
+function mergePermitSummaries(summaries: PermitSummary[]): PermitSummary {
+  const total = summaries.reduce((s, p) => s + p.total, 0);
+  const total_estimated_cost_usd = summaries.reduce((s, p) => s + p.total_estimated_cost_usd, 0);
+  const notable_permits = summaries
+    .flatMap(p => p.notable_permits)
+    .sort((a, b) => b.estimated_cost_usd - a.estimated_cost_usd)
+    .slice(0, 10);
+  const by_zip: Record<string, ZipPermitSummary> = {};
+  for (const p of summaries) for (const [z, s] of Object.entries(p.by_zip)) by_zip[z] = s;
+  return {
+    total,
+    by_type:                mergeCountMaps(summaries.map(p => p.by_type)),
+    by_status:              mergeCountMaps(summaries.map(p => p.by_status)),
+    cost_by_type:           mergeCountMaps(summaries.map(p => p.cost_by_type)),
+    total_estimated_cost_usd,
+    notable_permits,
+    by_zip,
+  };
+}
+
+function mergeEvictionSummaries(summaries: EvictionSummary[]): EvictionSummary {
+  const monthMap: Record<string, number> = {};
+  for (const s of summaries) for (const { month, count } of s.by_month) monthMap[month] = (monthMap[month] ?? 0) + count;
+  const by_month: EvictionMonthly[] = Object.entries(monthMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, count]) => ({ month, count }));
+  return {
+    total:           summaries.reduce((s, e) => s + e.total, 0),
+    by_type:         mergeCountMaps(summaries.map(e => e.by_type)),
+    by_month,
+    by_neighborhood: mergeCountMaps(summaries.map(e => e.by_neighborhood)),
+  };
+}
+
+function mergeAssessmentSummaries(summaries: AssessmentSummary[]): AssessmentSummary {
+  const yearMap: Record<string, AssessmentYearSummary> = {};
+  for (const s of summaries) {
+    for (const yr of s.years) {
+      if (!yearMap[yr.year]) yearMap[yr.year] = { year: yr.year, use_groups: [], total_land_usd: 0, total_improvement_usd: 0, total_assessed_usd: 0 };
+      yearMap[yr.year].total_land_usd        += yr.total_land_usd;
+      yearMap[yr.year].total_improvement_usd += yr.total_improvement_usd;
+      yearMap[yr.year].total_assessed_usd    += yr.total_assessed_usd;
+      for (const g of yr.use_groups) {
+        const ex = yearMap[yr.year].use_groups.find(x => x.use_code === g.use_code);
+        if (ex) { ex.total_assessed_usd += g.total_assessed_usd; ex.count += g.count; }
+        else     yearMap[yr.year].use_groups.push({ ...g });
+      }
+    }
+  }
+  const years = Object.values(yearMap).sort((a, b) => a.year.localeCompare(b.year));
+  let yoy_change_pct: number | null = null;
+  if (years.length >= 2) {
+    const older = years[years.length - 2].total_assessed_usd;
+    const newer = years[years.length - 1].total_assessed_usd;
+    if (older > 0) yoy_change_pct = Math.round(((newer - older) / older) * 1000) / 10;
+  }
+  return {
+    years,
+    yoy_change_pct,
+    top_properties: summaries
+      .flatMap(s => s.top_properties)
+      .sort((a, b) => b.total_assessed_usd - a.total_assessed_usd)
+      .slice(0, 10),
+  };
+}
+
+function mergeAffordableHousingSummaries(summaries: AffordableHousingSummary[]): AffordableHousingSummary {
+  const total_pipeline_units   = summaries.reduce((s, a) => s + a.total_pipeline_units,   0);
+  const total_affordable_units = summaries.reduce((s, a) => s + a.total_affordable_units, 0);
+  const ami: AmiDistribution = {
+    deep_affordable: summaries.reduce((s, a) => s + a.ami_distribution.deep_affordable, 0),
+    low_income:      summaries.reduce((s, a) => s + a.ami_distribution.low_income,      0),
+    moderate:        summaries.reduce((s, a) => s + a.ami_distribution.moderate,        0),
+    workforce:       summaries.reduce((s, a) => s + a.ami_distribution.workforce,       0),
+    undeclared:      summaries.reduce((s, a) => s + a.ami_distribution.undeclared,      0),
+  };
+  return {
+    total_projects:         summaries.reduce((s, a) => s + a.total_projects,         0),
+    total_pipeline_units,
+    total_affordable_units,
+    total_market_rate_units: total_pipeline_units - total_affordable_units,
+    affordable_ratio:        total_pipeline_units > 0 ? total_affordable_units / total_pipeline_units : 0,
+    by_status:       mergeCountMaps(summaries.map(a => a.by_status)),
+    by_status_units: mergeCountMaps(summaries.map(a => a.by_status_units)),
+    ami_distribution: ami,
+    projects: summaries
+      .flatMap(a => a.projects)
+      .sort((a, b) => b.affordable_units - a.affordable_units)
+      .slice(0, 15),
+  };
+}
+
+// ── Citywide aggregation ──────────────────────────────────────────────────────
+
+export async function aggregateCitywideData(): Promise<DistrictData> {
+  const cached = districtCache.get('0');
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+    console.log(`[aggregator] cache hit — citywide (age ${Math.round((Date.now() - cached.ts) / 1000)}s)`);
+    return cached.data;
+  }
+
+  console.time('[aggregator] citywide total fetch');
+  const t0 = performance.now();
+
+  const districtNums = ['1','2','3','4','5','6','7','8','9','10','11'];
+  const allData = await Promise.all(districtNums.map(n => aggregateDistrictData(DISTRICTS[n])));
+
+  const totalMs = (performance.now() - t0).toFixed(0);
+  console.timeEnd('[aggregator] citywide total fetch');
+  console.log(`[aggregator] citywide: all 11 districts done in ${totalMs}ms`);
+
+  // Index per district
+  const by_district: Record<string, DistrictData> = {};
+  for (let i = 0; i < districtNums.length; i++) by_district[districtNums[i]] = allData[i];
+
+  // Merge city-wide summaries
+  const mergedPermits = mergePermitSummaries(allData.map(d => d.permit_summary));
+
+  // Expose each district's permit summary at by_zip[districtNumber] so that
+  // NeighborhoodHero and Charts can do a simple by_zip[zip] lookup in citywide mode.
+  for (const num of districtNums) mergedPermits.by_zip[num] = by_district[num].permit_summary;
+
+  const result: DistrictData = {
+    permit_summary:             mergedPermits,
+    pipeline_summary:           {
+      total:                  allData.reduce((s, d) => s + d.pipeline_summary.total, 0),
+      net_pipeline_units:     allData.reduce((s, d) => s + d.pipeline_summary.net_pipeline_units, 0),
+      by_status:              mergeCountMaps(allData.map(d => d.pipeline_summary.by_status)),
+      total_affordable_units: allData.reduce((s, d) => s + d.pipeline_summary.total_affordable_units, 0),
+    },
+    zoning_profile:             {
+      unique_zoning_codes:  [...new Set(allData.flatMap(d => d.zoning_profile.unique_zoning_codes))].sort(),
+      special_use_districts: [...new Set(allData.flatMap(d => d.zoning_profile.special_use_districts))].sort(),
+      height_range: null,
+    },
+    date_range: {
+      start: allData.map(d => d.date_range.start).filter(Boolean).sort()[0]  ?? '',
+      end:   [...allData.map(d => d.date_range.end).filter(Boolean)].sort().at(-1) ?? '',
+    },
+    eviction_summary:           mergeEvictionSummaries(allData.map(d => d.eviction_summary)),
+    assessment_summary:         mergeAssessmentSummaries(allData.map(d => d.assessment_summary)),
+    affordable_housing_summary: mergeAffordableHousingSummaries(allData.map(d => d.affordable_housing_summary)),
+    map_permits:                allData.flatMap(d => d.map_permits).slice(0, 400),
+    by_district,
+  };
+
+  districtCache.set('0', { data: result, ts: Date.now() });
+  console.log(`[aggregator] citywide cached — ${result.permit_summary.total.toLocaleString()} total permits, ${result.eviction_summary.total} evictions`);
   return result;
 }

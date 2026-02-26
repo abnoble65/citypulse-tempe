@@ -15,6 +15,7 @@ import type { DistrictConfig } from "../districts";
 
 // ── District center coordinates (lat, lng) for "show all" view ─────────────
 const DISTRICT_CENTERS: Record<string, [number, number]> = {
+  "0":  [37.757, -122.440], // SF citywide
   "1":  [37.778, -122.477],
   "2":  [37.793, -122.434],
   "3":  [37.797, -122.406],
@@ -29,6 +30,7 @@ const DISTRICT_CENTERS: Record<string, [number, number]> = {
 };
 
 const DISTRICT_ZOOM: Record<string, number> = {
+  "0": 12,
   "1": 14, "2": 14, "3": 15, "4": 13, "5": 14,
   "6": 14, "7": 14, "8": 14, "9": 14, "10": 13, "11": 14,
 };

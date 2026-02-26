@@ -468,21 +468,26 @@ export function Commission({ districtConfig }: CommissionProps) {
     setLoading(true);
     setError(null);
 
-    // Build a server-side OR filter so we only fetch projects relevant to the
-    // selected district. Matches on the `district` column (e.g. "District 3")
-    // or any of the district's pipeline neighbourhood names in the address.
-    const orTerms = [
-      `district.ilike.%${districtConfig.label}%`,
-      ...districtConfig.pipelineNeighborhoods.map(n => `address.ilike.%${n}%`),
-    ].join(",");
+    const isCitywide = districtConfig.number === "0";
 
-    const { data, error: err } = await supabase
+    let baseQuery = supabase
       .from("projects")
       .select(PROJECT_SELECT)
       .not("address", "is", null)
-      .or(orTerms)
-      .order("hearing_id", { ascending: false })
-      .limit(300);
+      .order("hearing_id", { ascending: false });
+
+    if (!isCitywide) {
+      // Build a server-side OR filter so we only fetch projects relevant to the
+      // selected district. Matches on the `district` column (e.g. "District 3")
+      // or any of the district's pipeline neighbourhood names in the address.
+      const orTerms = [
+        `district.ilike.%${districtConfig.label}%`,
+        ...districtConfig.pipelineNeighborhoods.map(n => `address.ilike.%${n}%`),
+      ].join(",");
+      baseQuery = baseQuery.or(orTerms);
+    }
+
+    const { data, error: err } = await baseQuery.limit(isCitywide ? 100 : 300);
 
     if (err) {
       console.error("[Commission] Supabase query failed:", err);
@@ -580,6 +585,8 @@ export function Commission({ districtConfig }: CommissionProps) {
     ...districtConfig.pipelineNeighborhoods,
   ];
 
+  const isCitywideCommission = districtConfig.number === "0";
+
   // When search is active, use server search results directly (no district filter —
   // intentional, so cross-district projects like Stonestown are visible).
   // When idle, apply district + neighbourhood client-side filter on loaded projects.
@@ -591,18 +598,29 @@ export function Commission({ districtConfig }: CommissionProps) {
         const addr = (p.address ?? "").toLowerCase();
         const dist = (p.district ?? "").toLowerCase();
         const desc = (p.project_description ?? "").toLowerCase();
-        const matchesDistrict = districtTerms.some(term =>
-          addr.includes(term) || dist.includes(term) || desc.includes(term),
-        );
-        if (!matchesDistrict) return false;
 
+        // In single-district mode, filter by district terms.
+        if (!isCitywideCommission) {
+          const matchesDistrict = districtTerms.some(term =>
+            addr.includes(term) || dist.includes(term) || desc.includes(term),
+          );
+          if (!matchesDistrict) return false;
+        }
+
+        // Neighborhood/district pill filter.
         if (selectedNeighborhood) {
-          const name = selectedNeighborhood.name.toLowerCase();
-          const zip  = selectedNeighborhood.zip;
-          const matches =
-            addr.includes(zip) || addr.includes(name) ||
-            dist.includes(name) || desc.includes(name);
-          if (!matches) return false;
+          if (isCitywideCommission) {
+            // In citywide mode the "neighborhood" is a district — filter by district label.
+            const distLabel = selectedNeighborhood.name.toLowerCase(); // "district 3"
+            if (!dist.includes(distLabel) && !addr.includes(distLabel) && !desc.includes(distLabel)) return false;
+          } else {
+            const name = selectedNeighborhood.name.toLowerCase();
+            const zip  = selectedNeighborhood.zip;
+            const matches =
+              addr.includes(zip) || addr.includes(name) ||
+              dist.includes(name) || desc.includes(name);
+            if (!matches) return false;
+          }
         }
         return true;
       });

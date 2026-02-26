@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
 import { CityPulseLogo } from "../components/Icons";
-import { DISTRICTS, DEFAULT_DISTRICT } from "../districts";
+import { DISTRICTS, DEFAULT_DISTRICT, CITYWIDE_DISTRICT } from "../districts";
 import type { DistrictConfig } from "../districts";
 
 interface HomeProps {
@@ -20,7 +20,7 @@ const LOADING_MESSAGES = [
   "Almost ready…",
 ];
 
-const DISTRICT_LIST = Object.values(DISTRICTS);
+const DISTRICT_LIST = [CITYWIDE_DISTRICT, ...Object.values(DISTRICTS)];
 
 export function Home({ onGenerate, loading, error }: HomeProps) {
   const [selectedDistrict, setSelectedDistrict] = useState<DistrictConfig>(DEFAULT_DISTRICT);
@@ -176,26 +176,53 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
                   opacity: loading ? 0.6 : 1,
                 }}
               >
-                <div style={{
-                  fontFamily: "'Urbanist', sans-serif",
-                  fontSize: 26, fontWeight: 800,
-                  color: isSelected ? COLORS.orange : COLORS.charcoal,
-                  lineHeight: 1, marginBottom: 2,
-                  letterSpacing: "-0.02em",
-                }}>{d.number}</div>
-                <div style={{
-                  fontFamily: FONTS.body, fontSize: 10,
-                  fontWeight: 700, color: isSelected ? COLORS.orange : COLORS.warmGray,
-                  textTransform: "uppercase", letterSpacing: "0.05em",
-                  marginBottom: 5,
-                }}>District</div>
-                <div style={{
-                  fontFamily: FONTS.body, fontSize: 11,
-                  color: isSelected ? COLORS.charcoal : COLORS.warmGray,
-                  lineHeight: 1.45, fontWeight: 500,
-                }}>
-                  {d.neighborhoods.map(n => n.name).join(" · ")}
-                </div>
+                {d.number === "0" ? (
+                  <>
+                    <div style={{
+                      fontFamily: "'Urbanist', sans-serif",
+                      fontSize: 22, fontWeight: 800,
+                      color: isSelected ? COLORS.orange : COLORS.charcoal,
+                      lineHeight: 1, marginBottom: 2,
+                      letterSpacing: "-0.02em",
+                    }}>🌁 SF</div>
+                    <div style={{
+                      fontFamily: FONTS.body, fontSize: 10,
+                      fontWeight: 700, color: isSelected ? COLORS.orange : COLORS.warmGray,
+                      textTransform: "uppercase", letterSpacing: "0.05em",
+                      marginBottom: 5,
+                    }}>All Districts</div>
+                    <div style={{
+                      fontFamily: FONTS.body, fontSize: 11,
+                      color: isSelected ? COLORS.charcoal : COLORS.warmGray,
+                      lineHeight: 1.45, fontWeight: 500,
+                    }}>
+                      11 Supervisor Districts
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{
+                      fontFamily: "'Urbanist', sans-serif",
+                      fontSize: 26, fontWeight: 800,
+                      color: isSelected ? COLORS.orange : COLORS.charcoal,
+                      lineHeight: 1, marginBottom: 2,
+                      letterSpacing: "-0.02em",
+                    }}>{d.number}</div>
+                    <div style={{
+                      fontFamily: FONTS.body, fontSize: 10,
+                      fontWeight: 700, color: isSelected ? COLORS.orange : COLORS.warmGray,
+                      textTransform: "uppercase", letterSpacing: "0.05em",
+                      marginBottom: 5,
+                    }}>District</div>
+                    <div style={{
+                      fontFamily: FONTS.body, fontSize: 11,
+                      color: isSelected ? COLORS.charcoal : COLORS.warmGray,
+                      lineHeight: 1.45, fontWeight: 500,
+                    }}>
+                      {d.neighborhoods.map(n => n.name).join(" · ")}
+                    </div>
+                  </>
+                )}
               </button>
             );
           })}

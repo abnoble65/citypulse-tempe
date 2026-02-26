@@ -6,7 +6,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { aggregateDistrictData, type DistrictData } from './aggregator';
+import { aggregateDistrictData, aggregateCitywideData, type DistrictData } from './aggregator';
 import { supabase } from './supabase';
 import type { DistrictConfig } from '../districts';
 
@@ -141,7 +141,9 @@ export function parseBriefingSections(text: string): BriefingSections {
 
 export async function generateBriefing(district: DistrictConfig): Promise<{ text: string; data: DistrictData }> {
   const t0 = performance.now();
-  const data = await aggregateDistrictData(district);
+  const data = district.number === '0'
+    ? await aggregateCitywideData()
+    : await aggregateDistrictData(district);
   const text = await generateBriefingFromData(data, district);
   console.log(`[briefing] full generate (data + text): ${(performance.now() - t0).toFixed(0)}ms`);
   return { text, data };
@@ -179,9 +181,11 @@ export async function generateBriefingFromData(
     };
   }
 
-  const userContent = focus
-    ? `${JSON.stringify(forPrompt(briefingData), null, 2)}\n\nFOCUS: Write this briefing specifically for the ${focus.name} neighborhood (zip ${focus.zip}). Reference ${focus.name} by name throughout. Pipeline and zoning data above reflect all of ${district.label} — note this where relevant.`
-    : JSON.stringify(forPrompt(briefingData), null, 2);
+  const userContent = district.number === '0'
+    ? `${JSON.stringify(forPrompt(briefingData), null, 2)}\n\nFOCUS: Identify the 5 most significant developments across all SF districts. For each finding, tag the district and neighborhood. Focus on what has city-wide implications — displacement pressure, housing supply, major construction, and policy risk.`
+    : focus
+      ? `${JSON.stringify(forPrompt(briefingData), null, 2)}\n\nFOCUS: Write this briefing specifically for the ${focus.name} neighborhood (zip ${focus.zip}). Reference ${focus.name} by name throughout. Pipeline and zoning data above reflect all of ${district.label} — note this where relevant.`
+      : JSON.stringify(forPrompt(briefingData), null, 2);
 
   const t0 = performance.now();
   const message = await client.messages.create({
@@ -231,9 +235,13 @@ export async function generateSignals(
 
   const locationLabel = focus ? focus.name : district.label;
 
+  const citywideTask = district.number === '0' && !focus
+    ? `TASK: Identify the top 5 city-wide trends across all SF districts. Flag which districts are most affected by each trend. Compare patterns between districts — e.g., which areas have rising evictions vs rising permit values. Each signal must include a "districts_affected" note in its body.`
+    : null;
+
   const userContent = `${JSON.stringify(forPrompt(analysisData), null, 2)}
 
-TASK: Identify exactly 4 key signals or trends for ${locationLabel} based on the data above.
+TASK: ${citywideTask ?? `Identify exactly 4 key signals or trends for ${locationLabel} based on the data above.`}
 
 For each signal return an object with these exact keys:
 - "title": short title, 5–8 words
@@ -367,9 +375,13 @@ export async function generateOutlook(
 ${shadowProjects.map(p => `- ${p.address}: ${p.shadow_details ?? p.project_description ?? '(no detail)'}`).join('\n')}\n`
     : '';
 
+  const citywideOutlookTask = district.number === '0' && !focus
+    ? `TASK: Generate a forward-looking outlook for all of San Francisco based on the data above. Identify the biggest risks and opportunities across all districts. Highlight where multiple districts face similar challenges. Flag the displacement trifecta (rising assessed values + elevated evictions + low affordable ratio) wherever it appears across districts.`
+    : null;
+
   const userContent = `${JSON.stringify(forPrompt(analysisData), null, 2)}
 ${shadowBlock}
-TASK: Generate a forward-looking outlook for ${locationLabel} based on the data above.
+${citywideOutlookTask ?? `TASK: Generate a forward-looking outlook for ${locationLabel} based on the data above.`}
 
 Return ONLY a JSON object in this exact shape (no other text):
 {

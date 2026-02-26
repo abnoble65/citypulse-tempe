@@ -246,3 +246,19 @@ export const DISTRICTS: Record<string, DistrictConfig> = {
 };
 
 export const DEFAULT_DISTRICT = DISTRICTS["3"];
+
+/** Sentinel config representing all 11 SF supervisor districts combined. */
+export const CITYWIDE_DISTRICT: DistrictConfig = {
+  number: "0",
+  label: "All San Francisco",
+  fullName: "All San Francisco — 11 Supervisor Districts",
+  allLabel: "All San Francisco",
+  neighborhoods: Object.values(DISTRICTS).map(d => ({
+    name: d.label,        // "District 1" … "District 11"
+    zip:  d.number,       // "1" … "11" — used as district key in by_zip
+    Icon: DistrictIcon,
+    gradient: DEFAULT_GRADIENT,
+    subtitle: d.fullName,
+  })),
+  pipelineNeighborhoods: [], // no filter — all neighborhoods included
+};
