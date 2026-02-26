@@ -346,6 +346,14 @@ export function Commission({ districtConfig }: CommissionProps) {
     setLoading(true);
     setError(null);
 
+    // Build a server-side OR filter so we only fetch projects relevant to the
+    // selected district. Matches on the `district` column (e.g. "District 3")
+    // or any of the district's pipeline neighbourhood names in the address.
+    const orTerms = [
+      `district.ilike.%${districtConfig.label}%`,
+      ...districtConfig.pipelineNeighborhoods.map(n => `address.ilike.%${n}%`),
+    ].join(",");
+
     const { data, error: err } = await supabase
       .from("projects")
       .select(`
@@ -362,8 +370,9 @@ export function Commission({ districtConfig }: CommissionProps) {
         commissioner_comments(commissioner_name, comment_text)
       `)
       .not("address", "is", null)
+      .or(orTerms)
       .order("hearing_id", { ascending: false })
-      .limit(30);
+      .limit(300);
 
     if (err) {
       console.error("[Commission] Supabase query failed:", err);
@@ -373,13 +382,14 @@ export function Commission({ districtConfig }: CommissionProps) {
     }
     setProjects((data ?? []) as unknown as LiveProject[]);
     setLoading(false);
-  }, []);
+  }, [districtConfig]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Reset filter when district changes
+  // Reset neighbourhood filter pill and clear expanded card when district changes
   useEffect(() => {
     setFilter(districtConfig.allLabel);
+    setExpandedId(null);
   }, [districtConfig.allLabel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedNeighborhood = districtConfig.neighborhoods.find(n => n.name === filter) ?? null;
