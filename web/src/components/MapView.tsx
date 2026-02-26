@@ -5,9 +5,11 @@
  * Color-coded by permit type. Zooms to the active neighborhood zip
  * when the filter changes. Lazy-loadable (no SSR concerns — Vite SPA).
  */
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
+import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import type { Feature, GeoJsonObject } from "geojson";
 import type { MapPermit } from "../services/aggregator";
 import type { DistrictConfig } from "../districts";
 
@@ -47,6 +49,62 @@ const LEGEND_ITEMS = [
   { color: "#D4643B", label: "Demolition" },
   { color: "#4D9A6A", label: "Other" },
 ];
+
+// ── Boundary path style ──────────────────────────────────────────────────────
+function boundaryStyle(name: string, activeNeighborhoodName: string | null): L.PathOptions {
+  const hasActive = !!activeNeighborhoodName;
+  const isActive  = name === activeNeighborhoodName;
+  return {
+    className:   "cp-boundary",
+    color:       "#D4643B",
+    fillColor:   "#D4643B",
+    weight:      hasActive && isActive ? 2 : 1,
+    opacity:     hasActive ? (isActive ? 0.85 : 0.12) : 0.30,
+    fillOpacity: hasActive ? (isActive ? 0.10 : 0.02) : 0.04,
+    fill:        true,
+  };
+}
+
+// ── Neighborhood boundary layer ──────────────────────────────────────────────
+function BoundaryLayer({
+  boundaries,
+  activeNeighborhoodName,
+}: {
+  boundaries: Map<string, Feature>;
+  activeNeighborhoodName: string | null;
+}) {
+  const map = useMap();
+  const layersRef = useRef<Map<string, L.GeoJSON>>(new Map());
+
+  // Re-create all boundary layers when boundaries Map changes (district switch).
+  useEffect(() => {
+    for (const [, layer] of layersRef.current) map.removeLayer(layer);
+    layersRef.current.clear();
+
+    for (const [name, feature] of boundaries) {
+      const layer = L.geoJSON(feature as GeoJsonObject, {
+        style: () => boundaryStyle(name, activeNeighborhoodName),
+      }).addTo(map);
+      layersRef.current.set(name, layer);
+    }
+
+    return () => {
+      for (const [, layer] of layersRef.current) map.removeLayer(layer);
+      layersRef.current.clear();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boundaries]);
+
+  // Re-style (no re-add) when the active neighborhood changes.
+  useEffect(() => {
+    for (const [name, layer] of layersRef.current) {
+      layer.setStyle(boundaryStyle(name, activeNeighborhoodName));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeNeighborhoodName]);
+
+  return null;
+}
 
 // ── Inner controller (must live inside MapContainer) ────────────────────────
 function MapController({
@@ -89,9 +147,11 @@ export interface MapViewProps {
   permits: MapPermit[];
   districtConfig: DistrictConfig;
   activeZip: string | null;
+  boundaries?: Map<string, Feature>;
+  activeNeighborhoodName?: string | null;
 }
 
-export function MapView({ permits, districtConfig, activeZip }: MapViewProps) {
+export function MapView({ permits, districtConfig, activeZip, boundaries, activeNeighborhoodName = null }: MapViewProps) {
   const center = DISTRICT_CENTERS[districtConfig.number] ?? [37.773, -122.431];
   const zoom   = DISTRICT_ZOOM[districtConfig.number]   ?? 14;
 
@@ -116,6 +176,12 @@ export function MapView({ permits, districtConfig, activeZip }: MapViewProps) {
           districtConfig={districtConfig}
           activeZip={activeZip}
         />
+        {boundaries && boundaries.size > 0 && (
+          <BoundaryLayer
+            boundaries={boundaries}
+            activeNeighborhoodName={activeNeighborhoodName}
+          />
+        )}
         {visiblePermits.map(p => (
           <CircleMarker
             key={p.permit_number}

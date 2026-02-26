@@ -7,6 +7,8 @@ import { supabase } from "../services/supabase";
 import { geocodeAddresses } from "../services/geocoder";
 import type { LatLng } from "../services/geocoder";
 import type { CommissionMarker } from "../components/CommissionMap";
+import { fetchDistrictBoundaries } from "../services/neighborhoodBoundaries";
+import type { GeoFeature } from "../services/neighborhoodBoundaries";
 import type { DistrictConfig } from "../districts";
 
 const CommissionMapLazy = lazy(() =>
@@ -459,6 +461,7 @@ export function Commission({ districtConfig }: CommissionProps) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError]                 = useState<string | null>(null);
   const [coords, setCoords]               = useState<Map<string, LatLng>>(new Map());
+  const [boundaries, setBoundaries]       = useState<Map<string, GeoFeature>>(new Map());
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const load = useCallback(async () => {
@@ -521,6 +524,12 @@ export function Commission({ districtConfig }: CommissionProps) {
       setCoords(prev => new Map([...prev, ...m]))
     );
   }, [searchResults]);
+
+  // Fetch neighborhood boundaries whenever the district changes.
+  useEffect(() => {
+    setBoundaries(new Map());
+    fetchDistrictBoundaries(districtConfig).then(setBoundaries);
+  }, [districtConfig.number]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMarkerClick = useCallback((key: string) => {
     setExpandedId(key);
@@ -648,6 +657,10 @@ export function Commission({ districtConfig }: CommissionProps) {
               selectedKey={expandedId}
               districtConfig={districtConfig}
               onSelectMarker={handleMarkerClick}
+              boundaries={boundaries}
+              activeNeighborhoodName={
+                districtConfig.neighborhoods.find(n => n.name === filter)?.name ?? null
+              }
             />
           </Suspense>
         )}

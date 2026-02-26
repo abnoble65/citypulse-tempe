@@ -5,9 +5,11 @@
  * Markers are color-coded by action outcome (green / amber / red).
  * Clicking a marker fires onSelectMarker(key) for two-way card↔map sync.
  */
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
+import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import type { Feature, GeoJsonObject } from "geojson";
 import type { DistrictConfig } from "../districts";
 
 // ── District center coordinates ─────────────────────────────────────────────
@@ -46,6 +48,59 @@ function markerColor(action: "Approved" | "Continued" | "Disapproved"): string {
   return "#D4943B";                               // amber — Continued / unknown
 }
 
+// ── Boundary path style (shared logic with MapView) ─────────────────────────
+function boundaryStyle(name: string, activeNeighborhoodName: string | null): L.PathOptions {
+  const hasActive = !!activeNeighborhoodName;
+  const isActive  = name === activeNeighborhoodName;
+  return {
+    className:   "cp-boundary",
+    color:       "#D4643B",
+    fillColor:   "#D4643B",
+    weight:      hasActive && isActive ? 2 : 1,
+    opacity:     hasActive ? (isActive ? 0.85 : 0.12) : 0.30,
+    fillOpacity: hasActive ? (isActive ? 0.10 : 0.02) : 0.04,
+    fill:        true,
+  };
+}
+
+function BoundaryLayer({
+  boundaries,
+  activeNeighborhoodName,
+}: {
+  boundaries: Map<string, Feature>;
+  activeNeighborhoodName: string | null;
+}) {
+  const map = useMap();
+  const layersRef = useRef<Map<string, L.GeoJSON>>(new Map());
+
+  useEffect(() => {
+    for (const [, layer] of layersRef.current) map.removeLayer(layer);
+    layersRef.current.clear();
+
+    for (const [name, feature] of boundaries) {
+      const layer = L.geoJSON(feature as GeoJsonObject, {
+        style: () => boundaryStyle(name, activeNeighborhoodName),
+      }).addTo(map);
+      layersRef.current.set(name, layer);
+    }
+
+    return () => {
+      for (const [, layer] of layersRef.current) map.removeLayer(layer);
+      layersRef.current.clear();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boundaries]);
+
+  useEffect(() => {
+    for (const [name, layer] of layersRef.current) {
+      layer.setStyle(boundaryStyle(name, activeNeighborhoodName));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeNeighborhoodName]);
+
+  return null;
+}
+
 // ── Inner controller (must live inside MapContainer) ────────────────────────
 function MapController({
   markers,
@@ -81,6 +136,8 @@ export interface CommissionMapProps {
   selectedKey: string | null;
   districtConfig: DistrictConfig;
   onSelectMarker: (key: string) => void;
+  boundaries?: Map<string, Feature>;
+  activeNeighborhoodName?: string | null;
 }
 
 export function CommissionMap({
@@ -88,6 +145,8 @@ export function CommissionMap({
   selectedKey,
   districtConfig,
   onSelectMarker,
+  boundaries,
+  activeNeighborhoodName = null,
 }: CommissionMapProps) {
   const center = DISTRICT_CENTERS[districtConfig.number] ?? [37.773, -122.431];
   const zoom   = DISTRICT_ZOOM[districtConfig.number]   ?? 14;
@@ -113,6 +172,12 @@ export function CommissionMap({
           selectedKey={selectedKey}
           districtConfig={districtConfig}
         />
+        {boundaries && boundaries.size > 0 && (
+          <BoundaryLayer
+            boundaries={boundaries}
+            activeNeighborhoodName={activeNeighborhoodName}
+          />
+        )}
         {markers.map(m => {
           const isSelected = m.key === selectedKey;
           const color = markerColor(m.action);

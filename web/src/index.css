@@ -107,6 +107,11 @@ input:focus {
   border-radius: 5px;
 }
 
+/* Neighborhood boundary polygons (Leaflet SVG paths) */
+.cp-boundary {
+  transition: fill-opacity 0.35s ease, stroke-opacity 0.35s ease, stroke-width 0.35s ease;
+}
+
 /* Splash screen pulse line animation */
 .pulse-draw {
   stroke-dasharray: 300;

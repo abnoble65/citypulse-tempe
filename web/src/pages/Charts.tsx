@@ -4,6 +4,8 @@ import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import type { DistrictData, ZipPermitSummary, EvictionSummary, AssessmentSummary, AffordableHousingSummary } from "../services/aggregator";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
+import { fetchDistrictBoundaries } from "../services/neighborhoodBoundaries";
+import type { GeoFeature } from "../services/neighborhoodBoundaries";
 import type { DistrictConfig } from "../districts";
 
 const MapViewLazy = lazy(() =>
@@ -816,11 +818,18 @@ function ChartsSkeletons() {
 
 export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsProps) {
   const [filter, setFilter] = useState(districtConfig.allLabel);
+  const [boundaries, setBoundaries] = useState<Map<string, GeoFeature>>(new Map());
 
   // Reset filter when district changes (new generation)
   useEffect(() => {
     setFilter(districtConfig.allLabel);
   }, [districtConfig.allLabel]);
+
+  // Fetch neighborhood boundaries whenever the district changes.
+  useEffect(() => {
+    setBoundaries(new Map());
+    fetchDistrictBoundaries(districtConfig).then(setBoundaries);
+  }, [districtConfig.number]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!aggregatedData) {
     return <ChartsSkeletons />;
@@ -944,6 +953,10 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
                 permits={aggregatedData.map_permits}
                 districtConfig={districtConfig}
                 activeZip={selectedZip}
+                boundaries={boundaries}
+                activeNeighborhoodName={
+                  districtConfig.neighborhoods.find(n => n.name === filter)?.name ?? null
+                }
               />
             </Suspense>
           </div>
