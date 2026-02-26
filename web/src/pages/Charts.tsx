@@ -553,7 +553,7 @@ function AffordableHousingChart({ summary }: { summary: AffordableHousingSummary
             letterSpacing: "0.06em", marginBottom: 14,
           }}>Active Projects</div>
 
-          {summary.projects.slice(0, 8).map((p, i) => (
+          {summary.projects.slice(0, 8).map((p) => (
             <div key={p.project_id} style={{
               padding: "10px 0",
               borderBottom: `1px solid ${COLORS.cream}`,
