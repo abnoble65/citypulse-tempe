@@ -10,10 +10,14 @@ import {
   fetchDevelopmentPipeline,
   fetchZoningDistricts,
   fetchEvictions,
+  fetchAssessmentStats,
+  fetchTopAssessedProperties,
   type BuildingPermit,
   type DevelopmentProject,
   type ZoningDistrict,
   type EvictionNotice,
+  type AssessmentAggrRow,
+  type AssessmentParcel,
 } from './dataSF';
 import type { DistrictConfig } from '../districts';
 
@@ -68,12 +72,43 @@ export interface EvictionSummary {
   by_neighborhood: Record<string, number>; // neighborhood name → count
 }
 
+export interface AssessmentUseGroup {
+  use_code: string;           // e.g. "RES", "COMM", "MISC"
+  avg_land_usd: number;
+  avg_improvement_usd: number;
+  total_assessed_usd: number;
+  count: number;
+}
+
+export interface AssessmentYearSummary {
+  year: string;               // "2023" or "2024"
+  use_groups: AssessmentUseGroup[];
+  total_land_usd: number;
+  total_improvement_usd: number;
+  total_assessed_usd: number;
+}
+
+export interface TopAssessedProperty {
+  address: string;
+  parcel_number: string;
+  use_code: string;
+  total_assessed_usd: number;
+  neighborhood: string;
+}
+
+export interface AssessmentSummary {
+  years: AssessmentYearSummary[];   // usually 2 entries (older + newer roll year)
+  yoy_change_pct: number | null;    // null if insufficient data
+  top_properties: TopAssessedProperty[];
+}
+
 export interface DistrictData {
   permit_summary: PermitSummary;
   pipeline_summary: PipelineSummary;
   zoning_profile: ZoningProfile;
   date_range: DateRange;
   eviction_summary: EvictionSummary;
+  assessment_summary: AssessmentSummary;
 }
 
 function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {
@@ -257,6 +292,64 @@ function buildEvictionSummary(evictions: EvictionNotice[]): EvictionSummary {
   return { total: evictions.length, by_type, by_month, by_neighborhood };
 }
 
+function cleanPropertyAddress(raw: string): string {
+  return raw.replace(/\s+/g, ' ').trim();
+}
+
+function buildAssessmentSummary(
+  rows: AssessmentAggrRow[],
+  parcels: AssessmentParcel[],
+): AssessmentSummary {
+  // Group aggregation rows by roll year
+  const byYear: Record<string, AssessmentYearSummary> = {};
+  for (const row of rows) {
+    const y = row.closed_roll_year;
+    if (!byYear[y]) {
+      byYear[y] = { year: y, use_groups: [], total_land_usd: 0, total_improvement_usd: 0, total_assessed_usd: 0 };
+    }
+    const land = parseFloat(row.sum_land) || 0;
+    const imp  = parseFloat(row.sum_improvement) || 0;
+    byYear[y].total_land_usd        += land;
+    byYear[y].total_improvement_usd += imp;
+    byYear[y].total_assessed_usd    += land + imp;
+    byYear[y].use_groups.push({
+      use_code:            row.use_code,
+      avg_land_usd:        parseFloat(row.avg_land)        || 0,
+      avg_improvement_usd: parseFloat(row.avg_improvement) || 0,
+      total_assessed_usd:  land + imp,
+      count:               parseInt(row.count, 10)          || 0,
+    });
+  }
+
+  const years = Object.values(byYear).sort((a, b) => a.year.localeCompare(b.year));
+
+  // Year-over-year change on total assessed value
+  let yoy_change_pct: number | null = null;
+  if (years.length >= 2) {
+    const older = years[years.length - 2].total_assessed_usd;
+    const newer = years[years.length - 1].total_assessed_usd;
+    if (older > 0) {
+      yoy_change_pct = Math.round(((newer - older) / older) * 1000) / 10;
+    }
+  }
+
+  // Top properties sorted by combined assessed value
+  const top_properties: TopAssessedProperty[] = parcels
+    .map(p => ({
+      address:           cleanPropertyAddress(p.property_location ?? p.parcel_number),
+      parcel_number:     p.parcel_number,
+      use_code:          p.use_code ?? '',
+      total_assessed_usd:
+        (parseFloat(p.assessed_land_value) || 0) +
+        (parseFloat(p.assessed_improvement_value) || 0),
+      neighborhood:      p.analysis_neighborhood ?? p.assessor_neighborhood ?? '',
+    }))
+    .sort((a, b) => b.total_assessed_usd - a.total_assessed_usd)
+    .slice(0, 10);
+
+  return { years, yoy_change_pct, top_properties };
+}
+
 const EMPTY_PIPELINE_SUMMARY: PipelineSummary = {
   total: 0,
   net_pipeline_units: 0,
@@ -277,8 +370,14 @@ const EMPTY_EVICTION_SUMMARY: EvictionSummary = {
   by_neighborhood: {},
 };
 
+const EMPTY_ASSESSMENT_SUMMARY: AssessmentSummary = {
+  years: [],
+  yoy_change_pct: null,
+  top_properties: [],
+};
+
 export async function aggregateDistrictData(district: DistrictConfig): Promise<DistrictData> {
-  const [permits, allProjects, allZones, evictions] = await Promise.all([
+  const [permits, allProjects, allZones, evictions, assessmentStats, assessmentParcels] = await Promise.all([
     fetchBuildingPermits(district.number),
     fetchDevelopmentPipeline(),
     fetchZoningDistricts(),
@@ -286,8 +385,16 @@ export async function aggregateDistrictData(district: DistrictConfig): Promise<D
       console.warn('[aggregator] Eviction fetch failed (non-fatal):', err);
       return [] as EvictionNotice[];
     }),
+    fetchAssessmentStats(district.number).catch(err => {
+      console.warn('[aggregator] Assessment stats fetch failed (non-fatal):', err);
+      return [] as AssessmentAggrRow[];
+    }),
+    fetchTopAssessedProperties(district.number).catch(err => {
+      console.warn('[aggregator] Assessment parcels fetch failed (non-fatal):', err);
+      return [] as AssessmentParcel[];
+    }),
   ]);
-  console.log(`[aggregator] DataSF results — permits: ${permits.length}, pipeline: ${allProjects.length}, zoning: ${allZones.length}, evictions: ${evictions.length}`);
+  console.log(`[aggregator] DataSF results — permits: ${permits.length}, pipeline: ${allProjects.length}, zoning: ${allZones.length}, evictions: ${evictions.length}, assessment rows: ${assessmentStats.length}, parcels: ${assessmentParcels.length}`);
 
   const projects = allProjects.filter((p) => {
     const hood = (p.nhood41 ?? '').toLowerCase();
@@ -313,11 +420,16 @@ export async function aggregateDistrictData(district: DistrictConfig): Promise<D
     ? buildEvictionSummary(evictions)
     : EMPTY_EVICTION_SUMMARY;
 
+  const assessment_summary = (assessmentStats.length > 0 || assessmentParcels.length > 0)
+    ? buildAssessmentSummary(assessmentStats, assessmentParcels)
+    : EMPTY_ASSESSMENT_SUMMARY;
+
   return {
     permit_summary: buildPermitSummary(permits),
     pipeline_summary,
     zoning_profile,
     date_range: buildDateRange(permits, projects, []),
     eviction_summary,
+    assessment_summary,
   };
 }

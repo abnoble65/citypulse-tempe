@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
-import type { DistrictData, ZipPermitSummary, EvictionSummary } from "../services/aggregator";
+import type { DistrictData, ZipPermitSummary, EvictionSummary, AssessmentSummary } from "../services/aggregator";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import type { DistrictConfig } from "../districts";
 
@@ -251,6 +251,169 @@ function EvictionChart({ summary }: { summary: EvictionSummary }) {
   );
 }
 
+/* ─── ASSESSMENT CHART ───────────────────────── */
+
+const ASSESS_COLORS = ["#D4643B", "#E8845E", "#D4963B", "#5B9A5F", "#8E6B5E"];
+
+const USE_CODE_LABELS: Record<string, string> = {
+  RES:   "Residential",
+  COMM:  "Commercial",
+  MISC:  "Miscellaneous",
+  INDUS: "Industrial",
+  CIE:   "Civic / Institutional",
+  PDR:   "Production / Distribution",
+  MIPS:  "Office / Services",
+};
+
+function AssessmentChart({ summary }: { summary: AssessmentSummary }) {
+  if (summary.years.length === 0) {
+    return (
+      <p style={{ fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray, fontStyle: "italic" }}>
+        No property assessment data available for this district.
+      </p>
+    );
+  }
+
+  const latestYear = summary.years[summary.years.length - 1];
+  const totalBillions = latestYear.total_assessed_usd / 1_000_000_000;
+
+  const useGroups = [...latestYear.use_groups]
+    .sort((a, b) => b.total_assessed_usd - a.total_assessed_usd)
+    .slice(0, 5);
+  const maxGroup = useGroups[0]?.total_assessed_usd ?? 1;
+
+  const yoyText =
+    summary.yoy_change_pct !== null
+      ? `${summary.yoy_change_pct >= 0 ? "+" : ""}${summary.yoy_change_pct}% YoY`
+      : null;
+  const yoyPositive = (summary.yoy_change_pct ?? 0) >= 0;
+
+  return (
+    <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+
+      {/* Left: headline + use breakdown */}
+      <div style={{ flex: "1 1 200px", minWidth: 160 }}>
+        <div style={{ marginBottom: 20, display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+          <span style={{
+            fontFamily: "'Urbanist', sans-serif", fontSize: 36, fontWeight: 800,
+            color: COLORS.charcoal, letterSpacing: "-0.02em",
+          }}>
+            ${totalBillions.toFixed(2)}B
+          </span>
+          <div>
+            <span style={{ fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray }}>
+              total assessed value {latestYear.year}
+            </span>
+            {yoyText && (
+              <span style={{
+                display: "block",
+                fontFamily: "'Urbanist', sans-serif", fontSize: 13, fontWeight: 700,
+                color: yoyPositive ? "#5B9A5F" : "#B44040",
+                marginTop: 2,
+              }}>{yoyText}</span>
+            )}
+          </div>
+        </div>
+
+        <div style={{
+          fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
+          color: COLORS.warmGray, textTransform: "uppercase",
+          letterSpacing: "0.06em", marginBottom: 14,
+        }}>By Use Type</div>
+
+        {useGroups.map((g, i) => (
+          <div key={g.use_code} style={{ marginBottom: 12 }}>
+            <div style={{
+              display: "flex", justifyContent: "space-between",
+              alignItems: "baseline", marginBottom: 5,
+            }}>
+              <span style={{
+                fontFamily: FONTS.body, fontSize: 13, fontWeight: 500,
+                color: COLORS.charcoal,
+              }}>{USE_CODE_LABELS[g.use_code] ?? g.use_code}</span>
+              <span style={{
+                fontFamily: "'Urbanist', sans-serif", fontSize: 15,
+                fontWeight: 800, color: COLORS.charcoal,
+              }}>
+                {g.total_assessed_usd >= 1_000_000_000
+                  ? `$${(g.total_assessed_usd / 1_000_000_000).toFixed(2)}B`
+                  : `$${(g.total_assessed_usd / 1_000_000).toFixed(0)}M`}
+              </span>
+            </div>
+            <div style={{ height: 8, background: COLORS.cream, borderRadius: 4, overflow: "hidden" }}>
+              <div style={{
+                width: `${(g.total_assessed_usd / maxGroup) * 100}%`,
+                height: "100%",
+                background: ASSESS_COLORS[i % ASSESS_COLORS.length],
+                borderRadius: 4,
+                transition: "width 0.6s ease",
+              }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Right: top properties */}
+      <div style={{ flex: "2 1 280px", minWidth: 220 }}>
+        <div style={{
+          fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
+          color: COLORS.warmGray, textTransform: "uppercase",
+          letterSpacing: "0.06em", marginBottom: 14,
+        }}>Top Properties by Assessed Value</div>
+
+        {summary.top_properties.length === 0 ? (
+          <p style={{ fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray, fontStyle: "italic" }}>
+            No parcel data available.
+          </p>
+        ) : summary.top_properties.slice(0, 8).map((p, i) => (
+          <div key={p.parcel_number} style={{
+            display: "flex", alignItems: "center", gap: 12,
+            padding: "10px 0",
+            borderBottom: `1px solid ${COLORS.cream}`,
+          }}>
+            <div style={{
+              width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+              background: i < 3 ? COLORS.orangePale : COLORS.cream,
+              color: i < 3 ? COLORS.orange : COLORS.warmGray,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 11, fontWeight: 700,
+              fontFamily: "'Urbanist', sans-serif",
+              border: i < 3 ? `1.5px solid ${COLORS.orange}` : "none",
+            }}>{i + 1}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                display: "flex", justifyContent: "space-between",
+                alignItems: "baseline", marginBottom: 3,
+              }}>
+                <span style={{
+                  fontSize: 13, fontWeight: 600, color: COLORS.charcoal,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  maxWidth: "60%",
+                }}>{p.address || p.parcel_number}</span>
+                <span style={{
+                  fontSize: 14, fontWeight: 800, color: COLORS.charcoal,
+                  flexShrink: 0, marginLeft: 8,
+                  fontFamily: "'Urbanist', sans-serif",
+                }}>
+                  {p.total_assessed_usd >= 1_000_000_000
+                    ? `$${(p.total_assessed_usd / 1_000_000_000).toFixed(2)}B`
+                    : `$${(p.total_assessed_usd / 1_000_000).toFixed(1)}M`}
+                </span>
+              </div>
+              {p.neighborhood && (
+                <span style={{
+                  fontSize: 11, color: COLORS.warmGray,
+                  fontFamily: FONTS.body,
+                }}>{p.neighborhood}</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Charts Skeletons ────────────────────────── */
 
 function ChartsSkeletons() {
@@ -365,6 +528,45 @@ function ChartsSkeletons() {
                   <div key={i} className="sk" style={{ flex: 1, height: `${30 + Math.sin(i) * 25 + 20}%` }} />
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 4: Assessment skeleton */}
+        <div style={{
+          background: COLORS.white, borderRadius: 20, marginTop: 24,
+          padding: "clamp(16px, 3vw, 32px)",
+          border: `1px solid ${COLORS.lightBorder}`,
+        }}>
+          <div className="sk" style={{ height: 13, width: "52%", marginBottom: 24 }} />
+          <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 200px" }}>
+              <div className="sk" style={{ height: 36, width: "60%", marginBottom: 8 }} />
+              <div className="sk" style={{ height: 11, width: "40%", marginBottom: 24 }} />
+              {[80, 62, 48, 35, 22].map((w, i) => (
+                <div key={i} style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                    <div className="sk" style={{ height: 13, width: `${w}%` }} />
+                    <div className="sk" style={{ height: 15, width: 48 }} />
+                  </div>
+                  <div className="sk" style={{ height: 8, width: "100%" }} />
+                </div>
+              ))}
+            </div>
+            <div style={{ flex: "2 1 280px" }}>
+              <div className="sk" style={{ height: 11, width: "55%", marginBottom: 14 }} />
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${COLORS.cream}` }}>
+                  <div className="sk" style={{ width: 26, height: 26, borderRadius: "50%", flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <div className="sk" style={{ height: 13, width: "50%" }} />
+                      <div className="sk" style={{ height: 14, width: 52 }} />
+                    </div>
+                    <div className="sk" style={{ height: 10, width: "30%" }} />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -576,7 +778,7 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
 
         {/* Row 3: Eviction trend — always district-wide */}
         {aggregatedData.eviction_summary && (
-          <ChartCard title={`Eviction Notices — ${districtConfig.label}`}>
+          <ChartCard title={`Eviction Notices — ${districtConfig.label}`} style={{ marginBottom: 24 }}>
             <div style={{ marginBottom: 20 }}>
               <span style={{
                 fontFamily: "'Urbanist', sans-serif", fontSize: 36, fontWeight: 800,
@@ -602,6 +804,13 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
             ) : (
               <EvictionChart summary={aggregatedData.eviction_summary} />
             )}
+          </ChartCard>
+        )}
+
+        {/* Row 4: Property Assessment — always district-wide */}
+        {aggregatedData.assessment_summary && (
+          <ChartCard title={`Property Assessment — ${districtConfig.label}`}>
+            <AssessmentChart summary={aggregatedData.assessment_summary} />
           </ChartCard>
         )}
       </div>

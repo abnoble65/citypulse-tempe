@@ -140,6 +140,79 @@ export interface EvictionNotice {
   good_samaritan_ends?: boolean;
 }
 
+// ── Property Assessment (Assessor Historical Secured Property Tax Rolls) ──────
+// Dataset ID: wv5m-vpq2
+// Aggregation query: avg/sum of assessed values grouped by year + use_code
+// Top-properties query: highest land-value parcels for the latest roll year
+
+export interface AssessmentAggrRow {
+  closed_roll_year: string;
+  use_code: string;                 // e.g. "RES", "COMM", "MISC"
+  avg_land: string;                 // Socrata returns aggregations as strings
+  avg_improvement: string;
+  sum_land: string;
+  sum_improvement: string;
+  count: string;
+}
+
+export interface AssessmentParcel {
+  property_location?: string;
+  parcel_number: string;
+  use_code?: string;
+  use_definition?: string;
+  assessed_land_value: string;
+  assessed_improvement_value: string;
+  analysis_neighborhood?: string;
+  assessor_neighborhood?: string;
+}
+
+/** Returns [olderYear, newerYear] as strings, capped at the dataset's latest roll (2024). */
+function assessmentYears(): [string, string] {
+  const latest = Math.min(new Date().getFullYear() - 1, 2024);
+  return [String(latest - 1), String(latest)];
+}
+
+/**
+ * Fetch aggregated assessment stats for two roll years, grouped by use_code.
+ * Returns ~10–20 rows — very lightweight.
+ */
+export async function fetchAssessmentStats(district: string): Promise<AssessmentAggrRow[]> {
+  const [y1, y2] = assessmentYears();
+  const params = new URLSearchParams({
+    $select: [
+      'closed_roll_year', 'use_code',
+      'avg(assessed_land_value) as avg_land',
+      'avg(assessed_improvement_value) as avg_improvement',
+      'sum(assessed_land_value) as sum_land',
+      'sum(assessed_improvement_value) as sum_improvement',
+      'count(*) as count',
+    ].join(','),
+    $where: `closed_roll_year in('${y1}','${y2}') AND supervisor_district='${district}' AND assessed_land_value > 0`,
+    $group: 'closed_roll_year,use_code',
+    $limit: '100',
+  });
+  return socrataFetch<AssessmentAggrRow>('wv5m-vpq2', params);
+}
+
+/**
+ * Fetch the top 20 parcels by assessed land value for the most recent roll year.
+ * Sorted server-side; client will re-sort by land+improvement total.
+ */
+export async function fetchTopAssessedProperties(district: string): Promise<AssessmentParcel[]> {
+  const [, y2] = assessmentYears();
+  const params = new URLSearchParams({
+    $select: [
+      'property_location', 'parcel_number', 'use_code', 'use_definition',
+      'assessed_land_value', 'assessed_improvement_value',
+      'analysis_neighborhood', 'assessor_neighborhood',
+    ].join(','),
+    $where: `closed_roll_year='${y2}' AND supervisor_district='${district}' AND assessed_land_value > 500000`,
+    $order: 'assessed_land_value DESC',
+    $limit: '20',
+  });
+  return socrataFetch<AssessmentParcel>('wv5m-vpq2', params);
+}
+
 export async function fetchEvictions(district: string, limit = 1000): Promise<EvictionNotice[]> {
   const cutoff = new Date();
   cutoff.setFullYear(cutoff.getFullYear() - 2);
