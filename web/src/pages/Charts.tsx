@@ -2,7 +2,7 @@ import { useState, useEffect, lazy, Suspense } from "react";
 import { COLORS, FONTS } from "../theme";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
-import type { DistrictData, ZipPermitSummary, EvictionSummary, AssessmentSummary, AffordableHousingSummary } from "../services/aggregator";
+import type { DistrictData, PermitSummary, ZipPermitSummary, EvictionSummary, AssessmentSummary, AffordableHousingSummary } from "../services/aggregator";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { fetchDistrictBoundaries } from "../services/neighborhoodBoundaries";
 import type { GeoFeature } from "../services/neighborhoodBoundaries";
