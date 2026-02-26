@@ -1,39 +1,20 @@
 import { FONTS } from "../theme";
-import { NEIGHBORHOODS } from "../data";
+import type { DistrictConfig } from "../districts";
 import type { DistrictData } from "../services/aggregator";
 
 interface NeighborhoodHeroProps {
+  districtConfig: DistrictConfig;
   selected: string;
   aggregatedData?: DistrictData | null;
 }
 
-const NEIGHBORHOOD_THEMES: Record<string, { gradient: string; subtitle: string }> = {
-  "North Beach": {
-    gradient: "linear-gradient(135deg, #2C4A3E 0%, #4A6A58 55%, #8A6A2A 100%)",
-    subtitle: "Telegraph Hill · 94133",
-  },
-  "Financial District": {
-    gradient: "linear-gradient(135deg, #141E38 0%, #243860 55%, #8A5E20 100%)",
-    subtitle: "Jackson Square · 94111",
-  },
-  "Chinatown": {
-    gradient: "linear-gradient(135deg, #5A1410 0%, #943820 55%, #B87820 100%)",
-    subtitle: "Nob Hill · 94108",
-  },
-  "Russian Hill": {
-    gradient: "linear-gradient(135deg, #263848 0%, #4A6A88 55%, #9A7040 100%)",
-    subtitle: "Hyde Street · 94109",
-  },
-};
-
-export function NeighborhoodHero({ selected, aggregatedData }: NeighborhoodHeroProps) {
-  const theme = NEIGHBORHOOD_THEMES[selected];
-  const isActive = selected !== "All District 3" && !!theme;
-  const neighborhood = NEIGHBORHOODS.find(n => n.name === selected);
+export function NeighborhoodHero({ districtConfig, selected, aggregatedData }: NeighborhoodHeroProps) {
+  const neighborhood = districtConfig.neighborhoods.find(n => n.name === selected);
+  const isActive = !!neighborhood;
 
   let permitTotal = 0;
   let totalCostM = 0;
-  if (aggregatedData && neighborhood?.zip) {
+  if (aggregatedData && neighborhood) {
     const zipSummary = aggregatedData.permit_summary.by_zip?.[neighborhood.zip];
     if (zipSummary) {
       permitTotal = zipSummary.total;
@@ -48,10 +29,10 @@ export function NeighborhoodHero({ selected, aggregatedData }: NeighborhoodHeroP
       overflow: "hidden",
       transition: "max-height 0.4s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease",
     }}>
-      {theme && neighborhood && (
+      {neighborhood && (
         <div className="cp-hero-content" style={{
           minHeight: 60,
-          background: theme.gradient,
+          background: neighborhood.gradient,
           display: "flex",
           alignItems: "center",
           padding: "12px clamp(16px, 3vw, 32px)",
@@ -71,7 +52,7 @@ export function NeighborhoodHero({ selected, aggregatedData }: NeighborhoodHeroP
                 fontFamily: FONTS.body, fontSize: 11,
                 color: "rgba(255,255,255,0.6)", marginTop: 1,
               }}>
-                {theme.subtitle}
+                {neighborhood.subtitle}
               </div>
             </div>
           </div>

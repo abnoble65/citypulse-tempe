@@ -1,12 +1,19 @@
 import { COLORS, FONTS } from "../theme";
-import { NEIGHBORHOODS } from "../data";
+import { DistrictIcon } from "./Icons";
+import type { DistrictConfig } from "../districts";
 
 interface FilterBarProps {
+  districtConfig: DistrictConfig;
   selected: string;
   onSelect: (name: string) => void;
 }
 
-export function FilterBar({ selected, onSelect }: FilterBarProps) {
+export function FilterBar({ districtConfig, selected, onSelect }: FilterBarProps) {
+  const pills = [
+    { name: districtConfig.allLabel, Icon: DistrictIcon },
+    ...districtConfig.neighborhoods.map(n => ({ name: n.name, Icon: n.Icon })),
+  ];
+
   return (
     <div className="cp-filter" style={{
       display: "flex", gap: 8, padding: "14px 16px",
@@ -15,10 +22,10 @@ export function FilterBar({ selected, onSelect }: FilterBarProps) {
       overflowX: "auto",
       flexWrap: "nowrap",
     }}>
-      {NEIGHBORHOODS.map(n => {
-        const active = selected === n.name;
+      {pills.map(({ name, Icon }) => {
+        const active = selected === name;
         return (
-          <button key={n.name} onClick={() => onSelect(n.name)}
+          <button key={name} onClick={() => onSelect(name)}
             style={{
               background: active ? COLORS.orangePale : COLORS.cream,
               color: active ? COLORS.orange : COLORS.midGray,
@@ -31,8 +38,8 @@ export function FilterBar({ selected, onSelect }: FilterBarProps) {
               display: "flex", alignItems: "center", gap: 7,
             }}
           >
-            <n.Icon size={18} color={active ? COLORS.orange : COLORS.warmGray} />
-            {n.name}
+            <Icon size={18} color={active ? COLORS.orange : COLORS.warmGray} />
+            {name}
           </button>
         );
       })}

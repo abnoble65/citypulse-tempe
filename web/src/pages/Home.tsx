@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
-import { NEIGHBORHOODS } from "../data";
 import { CityPulseLogo } from "../components/Icons";
+import { DISTRICTS, DEFAULT_DISTRICT } from "../districts";
+import type { DistrictConfig } from "../districts";
 
 interface HomeProps {
   onNavigate: (page: string) => void;
-  onGenerate: () => void;
+  onGenerate: (district: DistrictConfig) => void;
   loading: boolean;
   error: string | null;
 }
@@ -19,8 +20,10 @@ const LOADING_MESSAGES = [
   "Almost ready…",
 ];
 
+const DISTRICT_LIST = Object.values(DISTRICTS);
+
 export function Home({ onGenerate, loading, error }: HomeProps) {
-  const [hovered, setHovered] = useState<number | null>(null);
+  const [selectedDistrict, setSelectedDistrict] = useState<DistrictConfig>(DEFAULT_DISTRICT);
   const [msgIndex, setMsgIndex] = useState(0);
 
   useEffect(() => {
@@ -49,7 +52,6 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
           display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",
         }}>
-          {/* Pulsing logo */}
           <div style={{
             animation: "pulse-glow 2s ease-in-out infinite",
             marginBottom: 36,
@@ -57,7 +59,6 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
             <CityPulseLogo size={80} />
           </div>
 
-          {/* Animated dots */}
           <div style={{ display: "flex", gap: 8, marginBottom: 28 }}>
             {[0, 1, 2].map(i => (
               <div key={i} style={{
@@ -68,7 +69,6 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
             ))}
           </div>
 
-          {/* Status message */}
           <p style={{
             fontFamily: FONTS.body, fontSize: 16, fontWeight: 600,
             color: COLORS.charcoal, textAlign: "center", minHeight: 24,
@@ -82,7 +82,6 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
             This may take a few seconds
           </p>
 
-          {/* Progress bar */}
           <div style={{
             width: "min(240px, 80vw)", height: 4, background: COLORS.lightBorder,
             borderRadius: 2, marginTop: 24, overflow: "hidden",
@@ -131,49 +130,80 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
       }}>
         Urban Intelligence
         <br />
-        <span style={{ color: COLORS.orange }}>District 3</span>
+        <span style={{ color: COLORS.orange }}>San Francisco</span>
       </h1>
 
       <p style={{
         color: COLORS.midGray, fontSize: 17,
         textAlign: "center", maxWidth: 440,
-        lineHeight: 1.6, marginBottom: 52, fontFamily: FONTS.body,
+        lineHeight: 1.6, marginBottom: 44, fontFamily: FONTS.body,
       }}>
-        AI-powered civic briefings from live San Francisco permit, pipeline, and planning data.
+        AI-powered civic briefings from live permit, pipeline, and planning data.
       </p>
 
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))",
-        gap: 14, width: "100%", maxWidth: 720, marginBottom: 52,
-      }}>
-        {NEIGHBORHOODS.slice(1).map((n, i) => (
-          <div key={n.name}
-            onMouseEnter={() => setHovered(i)}
-            onMouseLeave={() => setHovered(null)}
-            style={{
-              background: COLORS.white, borderRadius: 18, padding: "28px 20px",
-              border: `1.5px solid ${hovered === i ? COLORS.orange : COLORS.lightBorder}`,
-              transition: "all 0.25s ease", cursor: "default", textAlign: "center",
-              boxShadow: hovered === i ? "0 8px 24px rgba(212,100,59,0.1)" : "0 2px 8px rgba(0,0,0,0.03)",
-            }}>
-            <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}>
-              <n.Icon size={42} color={hovered === i ? COLORS.orange : COLORS.warmGray} />
-            </div>
-            <div style={{
-              fontSize: 14, fontWeight: 700, lineHeight: 1.3,
-              fontFamily: FONTS.heading, color: COLORS.charcoal,
-            }}>{n.name}</div>
-            <div style={{
-              fontSize: 12, marginTop: 6, fontFamily: FONTS.body,
-              color: COLORS.warmGray, fontWeight: 500,
-            }}>{n.zip}</div>
-          </div>
-        ))}
+      {/* District selector */}
+      <div style={{ width: "100%", maxWidth: 680, marginBottom: 36 }}>
+        <p style={{
+          fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
+          color: COLORS.warmGray, textTransform: "uppercase",
+          letterSpacing: "0.06em", marginBottom: 14, textAlign: "center",
+        }}>
+          Select a Supervisor District
+        </p>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: 10,
+        }}>
+          {DISTRICT_LIST.map(d => {
+            const isSelected = selectedDistrict.number === d.number;
+            return (
+              <button
+                key={d.number}
+                onClick={() => setSelectedDistrict(d)}
+                disabled={loading}
+                style={{
+                  background: isSelected ? COLORS.orangePale : COLORS.white,
+                  border: `1.5px solid ${isSelected ? COLORS.orange : COLORS.lightBorder}`,
+                  borderRadius: 16,
+                  padding: "16px 14px",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  textAlign: "left",
+                  transition: "all 0.2s ease",
+                  boxShadow: isSelected
+                    ? "0 4px 16px rgba(212,100,59,0.12)"
+                    : "0 1px 4px rgba(0,0,0,0.04)",
+                  opacity: loading ? 0.6 : 1,
+                }}
+              >
+                <div style={{
+                  fontFamily: "'Urbanist', sans-serif",
+                  fontSize: 26, fontWeight: 800,
+                  color: isSelected ? COLORS.orange : COLORS.charcoal,
+                  lineHeight: 1, marginBottom: 2,
+                  letterSpacing: "-0.02em",
+                }}>{d.number}</div>
+                <div style={{
+                  fontFamily: FONTS.body, fontSize: 10,
+                  fontWeight: 700, color: isSelected ? COLORS.orange : COLORS.warmGray,
+                  textTransform: "uppercase", letterSpacing: "0.05em",
+                  marginBottom: 5,
+                }}>District</div>
+                <div style={{
+                  fontFamily: FONTS.body, fontSize: 11,
+                  color: isSelected ? COLORS.charcoal : COLORS.warmGray,
+                  lineHeight: 1.45, fontWeight: 500,
+                }}>
+                  {d.neighborhoods.map(n => n.name).join(" · ")}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <button
-        onClick={onGenerate}
+        onClick={() => onGenerate(selectedDistrict)}
         disabled={loading}
         style={{
           background: loading ? COLORS.warmGray : COLORS.orange,
@@ -185,7 +215,7 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
           transition: "transform 0.2s, box-shadow 0.2s, background 0.3s",
           letterSpacing: "0.01em", opacity: loading ? 0.6 : 1,
         }}>
-        {loading ? "Generating…" : "Generate District 3 Briefing →"}
+        {loading ? "Generating…" : `Generate ${selectedDistrict.label} Briefing →`}
       </button>
 
       {error && (

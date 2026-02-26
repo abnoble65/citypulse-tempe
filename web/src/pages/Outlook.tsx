@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
-import { NEIGHBORHOODS } from "../data";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { generateOutlook } from "../services/briefing";
 import type { OutlookData, OutlookEvent, OutlookRisk, OutlookEngagement } from "../services/briefing";
 import type { DistrictData } from "../services/aggregator";
+import type { DistrictConfig } from "../districts";
 
 interface OutlookProps {
   aggregatedData: DistrictData | null;
+  districtConfig: DistrictConfig;
   onNavigate: (page: string) => void;
 }
 
@@ -135,24 +136,30 @@ function EngagementCard({ item }: { item: OutlookEngagement }) {
 
 /* ─── Page ───────────────────────────────────── */
 
-export function Outlook({ aggregatedData, onNavigate }: OutlookProps) {
-  const [filter, setFilter]             = useState("All District 3");
+export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookProps) {
+  const [filter, setFilter]             = useState(districtConfig.allLabel);
   const [outlook, setOutlook]           = useState<OutlookData | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [genError, setGenError]         = useState<string | null>(null);
+
+  // Reset filter when district changes
+  useEffect(() => {
+    setFilter(districtConfig.allLabel);
+  }, [districtConfig.allLabel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Generate when filter changes (also fires on mount).
   useEffect(() => {
     if (!aggregatedData) return;
 
-    const neighborhood = NEIGHBORHOODS.find(n => n.name === filter && n.zip !== null);
+    const neighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
 
     setIsGenerating(true);
     setGenError(null);
 
     generateOutlook(
       aggregatedData,
-      neighborhood ? { zip: neighborhood.zip!, name: neighborhood.name } : undefined,
+      districtConfig,
+      neighborhood ? { zip: neighborhood.zip, name: neighborhood.name } : undefined,
     )
       .then(d => setOutlook(d))
       .catch(err => {
@@ -186,13 +193,13 @@ export function Outlook({ aggregatedData, onNavigate }: OutlookProps) {
     );
   }
 
-  const activeNeighborhood = NEIGHBORHOODS.find(n => n.name === filter && n.zip);
-  const locationLabel = activeNeighborhood ? activeNeighborhood.name : "District 3";
+  const activeNeighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
+  const locationLabel = activeNeighborhood ? activeNeighborhood.name : districtConfig.label;
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
-      <FilterBar selected={filter} onSelect={setFilter} />
-      <NeighborhoodHero selected={filter} aggregatedData={aggregatedData} />
+      <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
+      <NeighborhoodHero districtConfig={districtConfig} selected={filter} aggregatedData={aggregatedData} />
       <div style={{ maxWidth: 820, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
 
         <SectionLabel text="The Outlook" />
@@ -333,7 +340,7 @@ export function Outlook({ aggregatedData, onNavigate }: OutlookProps) {
                   Planning Commission hearings are open to the public. Written comments submitted
                   48+ hours before a hearing are included in the Commission's packet. Active permits
                   can be tracked and commented on through the SF Planning Department portal.
-                  Contact the District 3 Supervisor's office for neighborhood liaison support.
+                  Contact your Supervisor's office for neighborhood liaison support.
                 </div>
               </>
             )}

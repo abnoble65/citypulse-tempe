@@ -6,8 +6,6 @@
  */
 
 const BASE_URL = 'https://data.sfgov.org/resource';
-const SUPERVISOR_DISTRICT = '3';
-
 
 function buildHeaders(): Record<string, string> {
   return { Accept: 'application/json' };
@@ -61,9 +59,9 @@ export interface BuildingPermit {
   data_as_of?: string;
 }
 
-export async function fetchBuildingPermits(limit = 1000): Promise<BuildingPermit[]> {
+export async function fetchBuildingPermits(district: string, limit = 1000): Promise<BuildingPermit[]> {
   const params = new URLSearchParams({
-    $where: `supervisor_district='${SUPERVISOR_DISTRICT}'`,
+    $where: `supervisor_district='${district}'`,
     $limit: String(limit),
     $order: 'filed_date DESC',
   });

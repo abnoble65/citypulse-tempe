@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
-import { NEIGHBORHOODS } from "../data";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import type { DistrictData, ZipPermitSummary } from "../services/aggregator";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
+import type { DistrictConfig } from "../districts";
 
 interface ChartsProps {
   aggregatedData: DistrictData | null;
+  districtConfig: DistrictConfig;
   onNavigate: (page: string) => void;
 }
 
@@ -235,8 +236,13 @@ function ChartsSkeletons() {
 
 /* ─── CHARTS PAGE ─────────────────────────────── */
 
-export function Charts({ aggregatedData, onNavigate }: ChartsProps) {
-  const [filter, setFilter] = useState("All District 3");
+export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsProps) {
+  const [filter, setFilter] = useState(districtConfig.allLabel);
+
+  // Reset filter when district changes (new generation)
+  useEffect(() => {
+    setFilter(districtConfig.allLabel);
+  }, [districtConfig.allLabel]);
 
   if (!aggregatedData) {
     return <ChartsSkeletons />;
@@ -272,7 +278,7 @@ export function Charts({ aggregatedData, onNavigate }: ChartsProps) {
   }
 
   // Resolve active permit summary
-  const selectedZip = NEIGHBORHOODS.find(n => n.name === filter)?.zip ?? null;
+  const selectedZip = districtConfig.neighborhoods.find(n => n.name === filter)?.zip ?? null;
   const ps = aggregatedData.permit_summary;
   const activePs: ZipPermitSummary = selectedZip && ps.by_zip?.[selectedZip]
     ? ps.by_zip[selectedZip]
@@ -306,8 +312,8 @@ export function Charts({ aggregatedData, onNavigate }: ChartsProps) {
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
-      <FilterBar selected={filter} onSelect={setFilter} />
-      <NeighborhoodHero selected={filter} />
+      <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
+      <NeighborhoodHero districtConfig={districtConfig} selected={filter} />
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
         <SectionLabel text="Charts" />
         <h2 style={{

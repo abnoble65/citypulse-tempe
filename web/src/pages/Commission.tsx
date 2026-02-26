@@ -4,7 +4,7 @@ import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { supabase } from "../services/supabase";
-import { NEIGHBORHOODS } from "../data";
+import type { DistrictConfig } from "../districts";
 
 /** Format an ISO date string as "Feb 25, 2026" */
 function fmtDate(iso: string | null | undefined): string {
@@ -330,8 +330,12 @@ function SkeletonCard() {
 
 /* ─── COMMISSION PAGE ────────────────────────── */
 
-export function Commission() {
-  const [filter, setFilter]               = useState("All District 3");
+interface CommissionProps {
+  districtConfig: DistrictConfig;
+}
+
+export function Commission({ districtConfig }: CommissionProps) {
+  const [filter, setFilter]               = useState(districtConfig.allLabel);
   const [search, setSearch]               = useState("");
   const [expandedId, setExpandedId]       = useState<string | null>(null);
   const [projects, setProjects]           = useState<LiveProject[]>([]);
@@ -373,7 +377,12 @@ export function Commission() {
 
   useEffect(() => { load(); }, [load]);
 
-  const selectedNeighborhood = NEIGHBORHOODS.find(n => n.name === filter) ?? null;
+  // Reset filter when district changes
+  useEffect(() => {
+    setFilter(districtConfig.allLabel);
+  }, [districtConfig.allLabel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectedNeighborhood = districtConfig.neighborhoods.find(n => n.name === filter) ?? null;
 
   // Most recent hearing date from already-loaded data — no extra query needed.
   const latestHearingDate = projects
@@ -382,13 +391,27 @@ export function Commission() {
     .sort()
     .at(-1) ?? null;
 
+  // Terms used for district-level matching (label + pipeline neighborhood names)
+  const districtTerms = [
+    districtConfig.label.toLowerCase(),
+    ...districtConfig.pipelineNeighborhoods,
+  ];
+
   const visible = projects.filter(p => {
     if (!p.address) return false;
     if (search && !p.address.toLowerCase().includes(search.toLowerCase())) return false;
-    if (selectedNeighborhood && selectedNeighborhood.zip !== null) {
-      const addr = (p.address ?? "").toLowerCase();
-      const dist = (p.district ?? "").toLowerCase();
-      const desc = (p.project_description ?? "").toLowerCase();
+
+    // District-level filter: project must mention the district or one of its neighbourhoods
+    const addr = (p.address ?? "").toLowerCase();
+    const dist = (p.district ?? "").toLowerCase();
+    const desc = (p.project_description ?? "").toLowerCase();
+    const matchesDistrict = districtTerms.some(term =>
+      addr.includes(term) || dist.includes(term) || desc.includes(term),
+    );
+    if (!matchesDistrict) return false;
+
+    // Neighbourhood sub-filter
+    if (selectedNeighborhood) {
       const name = selectedNeighborhood.name.toLowerCase();
       const zip  = selectedNeighborhood.zip;
       const matches =
@@ -403,8 +426,8 @@ export function Commission() {
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
-      <FilterBar selected={filter} onSelect={setFilter} />
-      <NeighborhoodHero selected={filter} />
+      <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
+      <NeighborhoodHero districtConfig={districtConfig} selected={filter} />
       <div style={{ maxWidth: 820, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
         <SectionLabel text="Commission Hearings" />
         <h2 style={{

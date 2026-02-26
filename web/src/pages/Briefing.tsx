@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
-import { NEIGHBORHOODS } from "../data";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { parseBriefingSections, generateBriefingFromData } from "../services/briefing";
 import type { DistrictData } from "../services/briefing";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { supabase } from "../services/supabase";
+import type { DistrictConfig } from "../districts";
 
 /** Format an ISO date string (YYYY-MM-DD or ISO timestamp) as "Feb 25, 2026" */
 function fmtDate(iso: string | null | undefined): string {
@@ -23,11 +23,12 @@ function fmtDate(iso: string | null | undefined): string {
 interface BriefingProps {
   briefingText: string;
   aggregatedData: DistrictData | null;
+  districtConfig: DistrictConfig;
   onNavigate: (page: string) => void;
 }
 
-export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingProps) {
-  const [filter, setFilter]           = useState("All District 3");
+export function Briefing({ briefingText, aggregatedData, districtConfig, onNavigate }: BriefingProps) {
+  const [filter, setFilter]           = useState(districtConfig.allLabel);
   const [localText, setLocalText]     = useState(briefingText);
   const [isGenerating, setIsGenerating] = useState(false);
   const [latestHearing, setLatestHearing] = useState<string | null>(null);
@@ -44,27 +45,27 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
       });
   }, []);
 
-  // When a new district-wide briefing arrives (user re-generated from Home),
+  // When a new district-wide briefing arrives (new generation or district change),
   // reset to it and clear any neighborhood filter.
   useEffect(() => {
     setLocalText(briefingText);
-    setFilter("All District 3");
-  }, [briefingText]);
+    setFilter(districtConfig.allLabel);
+  }, [briefingText]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-generate when the neighborhood filter changes.
   useEffect(() => {
     if (!aggregatedData) return;
 
-    const neighborhood = NEIGHBORHOODS.find(n => n.name === filter && n.zip !== null);
+    const neighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
 
     if (!neighborhood) {
-      // "All District 3" — restore the full district briefing.
+      // "All District N" — restore the full district briefing.
       setLocalText(briefingText);
       return;
     }
 
     setIsGenerating(true);
-    generateBriefingFromData(aggregatedData, { zip: neighborhood.zip!, name: neighborhood.name })
+    generateBriefingFromData(aggregatedData, districtConfig, { zip: neighborhood.zip, name: neighborhood.name })
       .then(text => setLocalText(text))
       .catch(err => console.error("[Briefing] neighborhood generation failed:", err))
       .finally(() => setIsGenerating(false));
@@ -130,12 +131,12 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
     );
   }
 
-  const activeNeighborhood = NEIGHBORHOODS.find(n => n.name === filter && n.zip);
-  const locationLabel = activeNeighborhood ? activeNeighborhood.name : "District 3";
+  const activeNeighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
+  const locationLabel = activeNeighborhood ? activeNeighborhood.name : districtConfig.label;
 
   // Use zip-scoped permit stats when a neighborhood is selected.
   const ps = activeNeighborhood
-    ? (aggregatedData.permit_summary.by_zip?.[activeNeighborhood.zip!] ?? aggregatedData.permit_summary)
+    ? (aggregatedData.permit_summary.by_zip?.[activeNeighborhood.zip] ?? aggregatedData.permit_summary)
     : aggregatedData.permit_summary;
   const pip = aggregatedData.pipeline_summary;
 
@@ -147,8 +148,8 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
-      <FilterBar selected={filter} onSelect={setFilter} />
-      <NeighborhoodHero selected={filter} aggregatedData={aggregatedData} />
+      <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
+      <NeighborhoodHero districtConfig={districtConfig} selected={filter} aggregatedData={aggregatedData} />
       <div style={{ maxWidth: 820, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
         <SectionLabel text="The Briefing" />
         <h2 style={{
@@ -159,6 +160,7 @@ export function Briefing({ briefingText, aggregatedData, onNavigate }: BriefingP
           marginBottom: 8,
         }}>
           {locationLabel} urban intelligence, powered by live DataSF data.
+
         </h2>
         <p style={{
           fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,

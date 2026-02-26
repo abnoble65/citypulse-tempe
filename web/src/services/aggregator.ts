@@ -2,7 +2,7 @@
  * services/aggregator.ts — CityPulse web
  *
  * Fetches all three DataSF datasets in parallel and returns a single
- * structured summary object for Supervisor District 3.
+ * structured summary object for the requested supervisor district.
  */
 
 import {
@@ -13,6 +13,7 @@ import {
   type DevelopmentProject,
   type ZoningDistrict,
 } from './DataSF';
+import type { DistrictConfig } from '../districts';
 
 export interface NotablePermit {
   permit_number: string;
@@ -190,14 +191,9 @@ const EMPTY_ZONING_PROFILE: ZoningProfile = {
   height_range: null,
 };
 
-const DISTRICT_3_NEIGHBORHOODS = [
-  'north beach', 'chinatown', 'financial district',
-  'nob hill', 'telegraph hill', 'russian hill',
-];
-
-export async function aggregateDistrictData(): Promise<DistrictData> {
+export async function aggregateDistrictData(district: DistrictConfig): Promise<DistrictData> {
   const [permits, allProjects, allZones] = await Promise.all([
-    fetchBuildingPermits(),
+    fetchBuildingPermits(district.number),
     fetchDevelopmentPipeline(),
     fetchZoningDistricts(),
   ]);
@@ -205,7 +201,7 @@ export async function aggregateDistrictData(): Promise<DistrictData> {
 
   const projects = allProjects.filter((p) => {
     const hood = (p.nhood41 ?? '').toLowerCase();
-    return DISTRICT_3_NEIGHBORHOODS.some((n) => hood.includes(n));
+    return district.pipelineNeighborhoods.some((n) => hood.includes(n));
   });
 
   const zones = allZones.filter((z) => z.districtna?.trim() && z.zoning_sim?.trim());

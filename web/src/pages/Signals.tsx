@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
-import { NEIGHBORHOODS } from "../data";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { generateSignals } from "../services/briefing";
 import type { Signal } from "../services/briefing";
 import type { DistrictData } from "../services/aggregator";
+import type { DistrictConfig } from "../districts";
 
 interface SignalsProps {
   aggregatedData: DistrictData | null;
+  districtConfig: DistrictConfig;
   onNavigate: (page: string) => void;
 }
 
@@ -116,24 +117,30 @@ function ConcernItem({ level, title, detail }: {
 
 /* ─── Page ───────────────────────────────────── */
 
-export function Signals({ aggregatedData, onNavigate }: SignalsProps) {
-  const [filter, setFilter]       = useState("All District 3");
+export function Signals({ aggregatedData, districtConfig, onNavigate }: SignalsProps) {
+  const [filter, setFilter]       = useState(districtConfig.allLabel);
   const [signals, setSignals]     = useState<Signal[] | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [genError, setGenError]   = useState<string | null>(null);
+
+  // Reset filter when district changes
+  useEffect(() => {
+    setFilter(districtConfig.allLabel);
+  }, [districtConfig.allLabel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Generate when filter changes (also fires on mount).
   useEffect(() => {
     if (!aggregatedData) return;
 
-    const neighborhood = NEIGHBORHOODS.find(n => n.name === filter && n.zip !== null);
+    const neighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
 
     setIsGenerating(true);
     setGenError(null);
 
     generateSignals(
       aggregatedData,
-      neighborhood ? { zip: neighborhood.zip!, name: neighborhood.name } : undefined,
+      districtConfig,
+      neighborhood ? { zip: neighborhood.zip, name: neighborhood.name } : undefined,
     )
       .then(s => setSignals(s))
       .catch(err => {
@@ -167,8 +174,8 @@ export function Signals({ aggregatedData, onNavigate }: SignalsProps) {
     );
   }
 
-  const activeNeighborhood = NEIGHBORHOODS.find(n => n.name === filter && n.zip);
-  const locationLabel = activeNeighborhood ? activeNeighborhood.name : "District 3";
+  const activeNeighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
+  const locationLabel = activeNeighborhood ? activeNeighborhood.name : districtConfig.label;
 
   // Map signals → concern items (severity low → "watch")
   const concerns = signals?.map(s => ({
@@ -179,8 +186,8 @@ export function Signals({ aggregatedData, onNavigate }: SignalsProps) {
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
-      <FilterBar selected={filter} onSelect={setFilter} />
-      <NeighborhoodHero selected={filter} aggregatedData={aggregatedData} />
+      <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
+      <NeighborhoodHero districtConfig={districtConfig} selected={filter} aggregatedData={aggregatedData} />
       <div style={{ maxWidth: 820, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
         <SectionLabel text="Signals" />
         <h2 style={{

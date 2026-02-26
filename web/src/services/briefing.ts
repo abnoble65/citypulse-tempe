@@ -8,6 +8,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { aggregateDistrictData, type DistrictData } from './aggregator';
 import { supabase } from './supabase';
+import type { DistrictConfig } from '../districts';
 
 interface ShadowProject {
   address: string | null;
@@ -57,6 +58,14 @@ const client = new Anthropic({
 
 const SYSTEM_PROMPT = `You are CityPulse, an urban intelligence analyst specializing in San Francisco's built environment. Your role is to synthesize permit activity, development pipeline data, and zoning context into clear, narrative-driven briefings for urban planners, developers, and municipal clients. Always produce exactly four sections with these exact headings: THE BRIEFING, THE SIGNAL, THE ZONING CONTEXT, THE OUTLOOK. Total length 450-600 words. Write in confident prose, no bullet points. Use specific numbers from the data.`;
 
+function signalsSystemPrompt(districtLabel: string): string {
+  return `You are an urban planning analyst for San Francisco ${districtLabel}. Analyze permit and development data and identify key signals and trends. Always return valid JSON only — no markdown, no prose, no code fences.`;
+}
+
+function outlookSystemPrompt(districtLabel: string): string {
+  return `You are an urban planning analyst for San Francisco ${districtLabel}. Analyze permit and development data and produce a forward-looking outlook. Always return valid JSON only — no markdown, no prose, no code fences.`;
+}
+
 export interface BriefingSections {
   briefing: string;
   signal: string;
@@ -92,9 +101,9 @@ export function parseBriefingSections(text: string): BriefingSections {
   return result;
 }
 
-export async function generateBriefing(): Promise<{ text: string; data: DistrictData }> {
-  const data = await aggregateDistrictData();
-  const text = await generateBriefingFromData(data);
+export async function generateBriefing(district: DistrictConfig): Promise<{ text: string; data: DistrictData }> {
+  const data = await aggregateDistrictData(district);
+  const text = await generateBriefingFromData(data, district);
   return { text, data };
 }
 
@@ -105,6 +114,7 @@ export async function generateBriefing(): Promise<{ text: string; data: District
  */
 export async function generateBriefingFromData(
   data: DistrictData,
+  district: DistrictConfig,
   focus?: { zip: string; name: string },
 ): Promise<string> {
   let briefingData: DistrictData = data;
@@ -126,7 +136,7 @@ export async function generateBriefingFromData(
   }
 
   const userContent = focus
-    ? `${JSON.stringify(briefingData, null, 2)}\n\nFOCUS: Write this briefing specifically for the ${focus.name} neighborhood (zip ${focus.zip}). Reference ${focus.name} by name throughout. Pipeline and zoning data above reflect all of District 3 — note this where relevant.`
+    ? `${JSON.stringify(briefingData, null, 2)}\n\nFOCUS: Write this briefing specifically for the ${focus.name} neighborhood (zip ${focus.zip}). Reference ${focus.name} by name throughout. Pipeline and zoning data above reflect all of ${district.label} — note this where relevant.`
     : JSON.stringify(briefingData, null, 2);
 
   const message = await client.messages.create({
@@ -141,14 +151,13 @@ export async function generateBriefingFromData(
   return block.text;
 }
 
-const SIGNALS_SYSTEM_PROMPT = `You are an urban planning analyst for San Francisco District 3. Analyze permit and development data and identify key signals and trends. Always return valid JSON only — no markdown, no prose, no code fences.`;
-
 /**
  * Generate structured signals from already-fetched DistrictData.
  * If `focus` is provided, scopes the analysis to that zip's permit data.
  */
 export async function generateSignals(
   data: DistrictData,
+  district: DistrictConfig,
   focus?: { zip: string; name: string },
 ): Promise<Signal[]> {
   let analysisData = data;
@@ -169,7 +178,7 @@ export async function generateSignals(
     };
   }
 
-  const locationLabel = focus ? focus.name : 'District 3';
+  const locationLabel = focus ? focus.name : district.label;
 
   const userContent = `${JSON.stringify(analysisData, null, 2)}
 
@@ -189,7 +198,7 @@ Return ONLY a JSON object in this exact shape (no other text):
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,
-    system: SIGNALS_SYSTEM_PROMPT,
+    system: signalsSystemPrompt(district.label),
     messages: [{ role: 'user', content: userContent }],
   });
 
@@ -202,14 +211,13 @@ Return ONLY a JSON object in this exact shape (no other text):
   return parsed.signals;
 }
 
-const OUTLOOK_SYSTEM_PROMPT = `You are an urban planning analyst for San Francisco District 3. Analyze permit and development data and produce a forward-looking outlook. Always return valid JSON only — no markdown, no prose, no code fences.`;
-
 /**
  * Generate a structured forward-looking outlook from already-fetched DistrictData.
  * If `focus` is provided, scopes the analysis to that zip's permit data.
  */
 export async function generateOutlook(
   data: DistrictData,
+  district: DistrictConfig,
   focus?: { zip: string; name: string },
 ): Promise<OutlookData> {
   // Fetch shadow-flagged projects from Supabase in parallel with data prep.
@@ -251,7 +259,7 @@ export async function generateOutlook(
   }
 
   const { projects: shadowProjects, total: shadowTotal } = await shadowPromise;
-  const locationLabel = focus ? focus.name : 'District 3';
+  const locationLabel = focus ? focus.name : district.label;
 
   const shadowBlock = shadowTotal > 0
     ? `\nSHADOW-FLAGGED PROJECTS — DISTRICT 3 (${shadowTotal} projects flagged for Section 295 shadow-impact review; ${shadowProjects.length} shown below):
@@ -295,7 +303,7 @@ Be specific. Reference actual project types, pipeline counts, permit patterns, a
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1536,
-    system: OUTLOOK_SYSTEM_PROMPT,
+    system: outlookSystemPrompt(district.label),
     messages: [{ role: 'user', content: userContent }],
   });
 

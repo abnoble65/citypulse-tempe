@@ -10,6 +10,8 @@ import { Outlook } from "./pages/Outlook";
 import { Commission } from "./pages/Commission";
 import { generateBriefing } from "./services/briefing";
 import type { DistrictData } from "./services/briefing";
+import { DEFAULT_DISTRICT } from "./districts";
+import type { DistrictConfig } from "./districts";
 
 const SPLASH_KEY = "citypulse_splash_seen";
 
@@ -20,19 +22,22 @@ export default function App() {
     sessionStorage.setItem(SPLASH_KEY, "1");
     setSplashDone(true);
   }
-  const [page, setPage] = useState("Home");
-  const [briefingText, setBriefingText] = useState("");
-  const [aggregatedData, setAggregatedData] = useState<DistrictData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  async function handleGenerate() {
+  const [page, setPage]                       = useState("Home");
+  const [briefingText, setBriefingText]       = useState("");
+  const [aggregatedData, setAggregatedData]   = useState<DistrictData | null>(null);
+  const [districtConfig, setDistrictConfig]   = useState<DistrictConfig>(DEFAULT_DISTRICT);
+  const [loading, setLoading]                 = useState(false);
+  const [error, setError]                     = useState<string | null>(null);
+
+  async function handleGenerate(district: DistrictConfig) {
     setLoading(true);
     setError(null);
     try {
-      const { text, data } = await generateBriefing();
+      const { text, data } = await generateBriefing(district);
       setBriefingText(text);
       setAggregatedData(data);
+      setDistrictConfig(district);
       setPage("Briefing");
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred.");
@@ -46,15 +51,15 @@ export default function App() {
       case "Home":
         return <Home onNavigate={setPage} onGenerate={handleGenerate} loading={loading} error={error} />;
       case "Briefing":
-        return <Briefing briefingText={briefingText} aggregatedData={aggregatedData} onNavigate={setPage} />;
+        return <Briefing briefingText={briefingText} aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={setPage} />;
       case "Charts":
-        return <Charts aggregatedData={aggregatedData} onNavigate={setPage} />;
+        return <Charts aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={setPage} />;
       case "Signals":
-        return <Signals aggregatedData={aggregatedData} onNavigate={setPage} />;
+        return <Signals aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={setPage} />;
       case "Outlook":
-        return <Outlook aggregatedData={aggregatedData} onNavigate={setPage} />;
+        return <Outlook aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={setPage} />;
       case "Commission":
-        return <Commission />;
+        return <Commission districtConfig={districtConfig} />;
       default:
         return <Home onNavigate={setPage} onGenerate={handleGenerate} loading={loading} error={error} />;
     }
