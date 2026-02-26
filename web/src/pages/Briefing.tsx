@@ -28,9 +28,10 @@ interface BriefingProps {
 }
 
 export function Briefing({ briefingText, aggregatedData, districtConfig, onNavigate }: BriefingProps) {
-  const [filter, setFilter]           = useState(districtConfig.allLabel);
-  const [localText, setLocalText]     = useState(briefingText);
+  const [filter, setFilter]             = useState(districtConfig.allLabel);
+  const [localText, setLocalText]       = useState(briefingText);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [genError, setGenError]         = useState<string | null>(null);
   const [latestHearing, setLatestHearing] = useState<string | null>(null);
 
   // Fetch the most recent Planning Commission hearing date once on mount.
@@ -50,6 +51,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
   useEffect(() => {
     setLocalText(briefingText);
     setFilter(districtConfig.allLabel);
+    setGenError(null);
   }, [briefingText]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-generate when the neighborhood filter changes.
@@ -65,9 +67,13 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
     }
 
     setIsGenerating(true);
+    setGenError(null);
     generateBriefingFromData(aggregatedData, districtConfig, { zip: neighborhood.zip, name: neighborhood.name })
       .then(text => setLocalText(text))
-      .catch(err => console.error("[Briefing] neighborhood generation failed:", err))
+      .catch(err => {
+        console.error("[Briefing] neighborhood generation failed:", err);
+        setGenError(err instanceof Error ? err.message : "Failed to generate neighborhood briefing.");
+      })
       .finally(() => setIsGenerating(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]); // intentionally only re-run when filter changes, not on every prop update
@@ -174,6 +180,26 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
             <>Commission hearings through {fmtDate(latestHearing)}</>
           )}
         </p>
+
+        {/* Neighborhood generation error */}
+        {!isGenerating && genError && (
+          <div style={{
+            background: "#FDEEEE", border: "1px solid #F0C8C8",
+            borderRadius: 16, padding: "20px 24px", marginBottom: 24,
+            display: "flex", alignItems: "flex-start", gap: 12,
+          }}>
+            <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+            <div>
+              <div style={{
+                fontFamily: "'Urbanist', sans-serif", fontSize: 15, fontWeight: 700,
+                color: "#B44040", marginBottom: 4,
+              }}>Failed to generate neighborhood briefing</div>
+              <p style={{ fontFamily: FONTS.body, fontSize: 13, color: "#B44040", margin: 0, lineHeight: 1.55 }}>
+                {genError}
+              </p>
+            </div>
+          </div>
+        )}
 
         {isGenerating ? (
           <BriefingSkeletons bgColors={stats.map(s => s.bg)} />

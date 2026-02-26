@@ -559,6 +559,9 @@ export function Commission({ districtConfig }: CommissionProps) {
         return true;
       });
 
+  // Computed once — used for both the card list and the empty-state check below.
+  const grouped = groupAndDedup(visible);
+
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
       <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
@@ -644,7 +647,7 @@ export function Commission({ districtConfig }: CommissionProps) {
         )}
 
         {/* Project cards */}
-        {!loading && !searchLoading && !error && groupAndDedup(visible).map((p) => {
+        {!loading && !searchLoading && !error && grouped.map((p) => {
           const norm = normalizeAction(p.action);
           const ac   = actionStyle(norm);
           const tally = tallyVotes(p.votes);
@@ -835,7 +838,7 @@ export function Commission({ districtConfig }: CommissionProps) {
           );
         })}
 
-        {!loading && !searchLoading && !error && groupAndDedup(visible).length === 0 && (
+        {!loading && !searchLoading && !error && grouped.length === 0 && (
           <div style={{ textAlign: "center", padding: "48px 0", color: COLORS.warmGray, fontFamily: FONTS.body }}>
             No hearings found{search ? ` matching "${search}"` : ""}
             {!search && selectedNeighborhood?.name ? ` in ${selectedNeighborhood.name}` : ""}.

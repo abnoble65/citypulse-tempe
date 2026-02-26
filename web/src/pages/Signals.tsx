@@ -55,7 +55,7 @@ function SignalCard({ signal }: { signal: Signal }) {
         color: COLORS.midGray, margin: 0,
       }}>{signal.body}</p>
 
-      {signal.concern && (
+      {!!signal.concern && (
         <div style={{
           display: "flex", alignItems: "flex-start", gap: 12,
           background: COLORS.cream, borderRadius: 12,
@@ -189,8 +189,8 @@ export function Signals({ aggregatedData, districtConfig, onNavigate }: SignalsP
   const concerns = signals?.map(s => ({
     level: (s.severity === "low" ? "watch" : s.severity) as ConcernLevel,
     title: s.title,
-    detail: s.concern,
-  }));
+    detail: s.concern ?? "",
+  })).filter(c => c.detail);
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>

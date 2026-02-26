@@ -148,9 +148,9 @@ export function MapView({ permits, districtConfig, activeZip }: MapViewProps) {
         ))}
       </MapContainer>
 
-      {/* Legend */}
+      {/* Legend — bottom-left so OSM attribution (bottom-right) is never obscured */}
       <div style={{
-        position: "absolute", bottom: 16, right: 16, zIndex: 1000,
+        position: "absolute", bottom: 16, left: 16, zIndex: 1000,
         background: "rgba(255,255,255,0.93)", borderRadius: 10,
         padding: "10px 14px", backdropFilter: "blur(4px)",
         boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
