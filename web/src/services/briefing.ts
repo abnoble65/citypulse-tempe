@@ -190,7 +190,7 @@ For each signal return an object with these exact keys:
 - "severity": exactly one of "low", "medium", or "high"
 - "concern": 1–2 sentences on why residents should care
 
-Focus on: unusual permit volume, clustering of similar project types, potential displacement risk, affordability impact, and infrastructure strain.
+Focus on: unusual permit volume, clustering of similar project types, potential displacement risk (pay close attention to eviction data — Ellis Act and owner move-in notices are strong indicators of involuntary tenant displacement), affordability impact, and infrastructure strain. If eviction_summary shows elevated totals or a rising monthly trend, flag this as a signal.
 
 Return ONLY a JSON object in this exact shape (no other text):
 {"signals": [{"title":"...","body":"...","severity":"...","concern":"..."}]}`;
@@ -295,6 +295,8 @@ For each engagement item use these exact keys:
 - "detail": 1–2 sentences on how residents can participate, referencing specific project stages or hearings visible in the data
 
 IMPORTANT: Include at least one risk item about shadow impact, citing the total count of flagged projects and referencing specific addresses from the shadow data above. Use the ☀️ icon for that item.
+
+If eviction_summary.total > 0, include a displacement risk item in the risks section. Reference the total eviction count, the most common eviction types from by_type, and any Ellis Act or owner move-in activity as indicators of housing instability. Use the 🏘️ icon for this item.
 
 Be specific. Reference actual project types, pipeline counts, permit patterns, and shadow-flagged addresses from the data.`;
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
-import type { DistrictData, ZipPermitSummary } from "../services/aggregator";
+import type { DistrictData, ZipPermitSummary, EvictionSummary } from "../services/aggregator";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import type { DistrictConfig } from "../districts";
 
@@ -143,6 +143,114 @@ function ChartCard({ title, children, style }: {
   );
 }
 
+/* ─── EVICTION CHART ─────────────────────────── */
+
+const EVICTION_BAR_COLOR = "#B44040";
+const EVICTION_TYPE_COLORS = ["#B44040", "#C85C3A", "#D4783B", "#B06A2E", "#9A5828"];
+
+function EvictionChart({ summary }: { summary: EvictionSummary }) {
+  const last12 = summary.by_month.slice(-12);
+  const maxCount = Math.max(...last12.map(m => m.count), 1);
+  const CHART_H = 100; // px
+
+  const topTypes = Object.entries(summary.by_type)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+  const maxTypeCount = topTypes[0]?.[1] ?? 1;
+
+  return (
+    <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+
+      {/* Left: type breakdown */}
+      <div style={{ flex: "1 1 180px", minWidth: 160 }}>
+        <div style={{
+          fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
+          color: COLORS.warmGray, textTransform: "uppercase",
+          letterSpacing: "0.06em", marginBottom: 14,
+        }}>By Type</div>
+        {topTypes.length === 0 ? (
+          <p style={{ fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray, fontStyle: "italic" }}>
+            No type data available.
+          </p>
+        ) : topTypes.map(([type, count], i) => (
+          <div key={type} style={{ marginBottom: 12 }}>
+            <div style={{
+              display: "flex", justifyContent: "space-between",
+              alignItems: "baseline", marginBottom: 5,
+            }}>
+              <span style={{
+                fontFamily: FONTS.body, fontSize: 13, fontWeight: 500,
+                color: COLORS.charcoal,
+              }}>{type}</span>
+              <span style={{
+                fontFamily: "'Urbanist', sans-serif", fontSize: 15,
+                fontWeight: 800, color: COLORS.charcoal,
+              }}>{count}</span>
+            </div>
+            <div style={{ height: 8, background: COLORS.cream, borderRadius: 4, overflow: "hidden" }}>
+              <div style={{
+                width: `${(count / maxTypeCount) * 100}%`,
+                height: "100%",
+                background: EVICTION_TYPE_COLORS[i % EVICTION_TYPE_COLORS.length],
+                borderRadius: 4,
+                transition: "width 0.6s ease",
+              }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Right: monthly trend */}
+      <div style={{ flex: "2 1 280px", minWidth: 240 }}>
+        <div style={{
+          fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
+          color: COLORS.warmGray, textTransform: "uppercase",
+          letterSpacing: "0.06em", marginBottom: 14,
+        }}>Monthly Trend — Last 12 Months</div>
+
+        {/* Bars */}
+        <div style={{
+          display: "flex", alignItems: "flex-end",
+          height: CHART_H, gap: 3,
+        }}>
+          {last12.map(m => {
+            const h = maxCount > 0
+              ? Math.max((m.count / maxCount) * CHART_H, m.count > 0 ? 3 : 0)
+              : 0;
+            return (
+              <div
+                key={m.month}
+                title={`${m.month}: ${m.count} notice${m.count !== 1 ? "s" : ""}`}
+                style={{
+                  flex: 1, height: h,
+                  background: m.count > 0 ? EVICTION_BAR_COLOR : COLORS.lightBorder,
+                  borderRadius: "2px 2px 0 0",
+                  opacity: m.count === 0 ? 0.35 : 1,
+                  transition: "height 0.5s ease",
+                  cursor: "default",
+                }}
+              />
+            );
+          })}
+        </div>
+
+        {/* Month labels */}
+        <div style={{ display: "flex", gap: 3, marginTop: 6 }}>
+          {last12.map(m => (
+            <div key={m.month} style={{
+              flex: 1, textAlign: "center",
+              fontFamily: FONTS.body, fontSize: 9,
+              color: COLORS.warmGray,
+            }}>
+              {new Date(m.month + "-02").toLocaleDateString("en-US", { month: "short" })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Charts Skeletons ────────────────────────── */
 
 function ChartsSkeletons() {
@@ -227,6 +335,37 @@ function ChartsSkeletons() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Row 3: Eviction skeleton */}
+        <div style={{
+          background: COLORS.white, borderRadius: 20, marginTop: 24,
+          padding: "clamp(16px, 3vw, 32px)",
+          border: `1px solid ${COLORS.lightBorder}`,
+        }}>
+          <div className="sk" style={{ height: 13, width: "44%", marginBottom: 6 }} />
+          <div className="sk" style={{ height: 11, width: "28%", marginBottom: 24 }} />
+          <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 180px" }}>
+              {[70, 55, 45, 35, 25].map((w, i) => (
+                <div key={i} style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+                    <div className="sk" style={{ height: 13, width: `${w}%` }} />
+                    <div className="sk" style={{ height: 15, width: 28 }} />
+                  </div>
+                  <div className="sk" style={{ height: 8, width: "100%" }} />
+                </div>
+              ))}
+            </div>
+            <div style={{ flex: "2 1 280px" }}>
+              <div className="sk" style={{ height: 11, width: "52%", marginBottom: 14 }} />
+              <div style={{ display: "flex", alignItems: "flex-end", height: 100, gap: 3 }}>
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <div key={i} className="sk" style={{ flex: 1, height: `${30 + Math.sin(i) * 25 + 20}%` }} />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -379,7 +518,7 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
 
         {/* Row 2: Top addresses — district-wide */}
         {notable.length > 0 && (
-          <ChartCard title="Top 10 Addresses by Permit Value (District-wide)">
+          <ChartCard title={`Top 10 Addresses by Permit Value (${districtConfig.label})`} style={{ marginBottom: 24 }}>
             <div style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fit, minmax(min(340px, 100%), 1fr))",
@@ -432,6 +571,37 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
                 </div>
               ))}
             </div>
+          </ChartCard>
+        )}
+
+        {/* Row 3: Eviction trend — always district-wide */}
+        {aggregatedData.eviction_summary && (
+          <ChartCard title={`Eviction Notices — ${districtConfig.label}`}>
+            <div style={{ marginBottom: 20 }}>
+              <span style={{
+                fontFamily: "'Urbanist', sans-serif", fontSize: 36, fontWeight: 800,
+                color: COLORS.charcoal, letterSpacing: "-0.02em",
+              }}>
+                {aggregatedData.eviction_summary.total.toLocaleString()}
+              </span>
+              <span style={{
+                fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,
+                marginLeft: 10, fontWeight: 500,
+              }}>
+                notices filed in the last 2 years
+                {selectedZip && <span style={{ color: COLORS.lightBorder }}> · chart shows district-wide</span>}
+              </span>
+            </div>
+            {aggregatedData.eviction_summary.total === 0 ? (
+              <p style={{
+                fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,
+                fontStyle: "italic",
+              }}>
+                No eviction notices found for this district in the last 2 years.
+              </p>
+            ) : (
+              <EvictionChart summary={aggregatedData.eviction_summary} />
+            )}
           </ChartCard>
         )}
       </div>

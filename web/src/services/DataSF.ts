@@ -109,3 +109,46 @@ export async function fetchZoningDistricts(limit = 200): Promise<ZoningDistrict[
   const params = new URLSearchParams({ $limit: String(limit) });
   return socrataFetch<ZoningDistrict>('3i4a-hu95', params);
 }
+
+export interface EvictionNotice {
+  eviction_id: string;
+  address: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  file_date: string;
+  supervisor_district?: string;
+  neighborhood?: string;
+  non_payment?: boolean;
+  breach?: boolean;
+  nuisance?: boolean;
+  illegal_use?: boolean;
+  failure_to_sign_renewal?: boolean;
+  access_denial?: boolean;
+  unapproved_subtenant?: boolean;
+  owner_move_in?: boolean;
+  demolition?: boolean;
+  capital_improvement?: boolean;
+  substantial_rehab?: boolean;
+  ellis_act_withdrawal?: boolean;
+  condo_conversion?: boolean;
+  roommate_same_unit?: boolean;
+  other_cause?: boolean;
+  late_payments?: boolean;
+  lead_remediation?: boolean;
+  development?: boolean;
+  good_samaritan_ends?: boolean;
+}
+
+export async function fetchEvictions(district: string, limit = 1000): Promise<EvictionNotice[]> {
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - 2);
+  const dateStr = cutoff.toISOString().split('T')[0]; // "YYYY-MM-DD"
+
+  const params = new URLSearchParams({
+    $where: `supervisor_district=${district} AND file_date > '${dateStr}'`,
+    $limit: String(limit),
+    $order: 'file_date DESC',
+  });
+  return socrataFetch<EvictionNotice>('5cei-gny5', params);
+}

@@ -9,9 +9,11 @@ import {
   fetchBuildingPermits,
   fetchDevelopmentPipeline,
   fetchZoningDistricts,
+  fetchEvictions,
   type BuildingPermit,
   type DevelopmentProject,
   type ZoningDistrict,
+  type EvictionNotice,
 } from './DataSF';
 import type { DistrictConfig } from '../districts';
 
@@ -54,11 +56,24 @@ export interface DateRange {
   end: string;
 }
 
+export interface EvictionMonthly {
+  month: string;  // "YYYY-MM"
+  count: number;
+}
+
+export interface EvictionSummary {
+  total: number;
+  by_type: Record<string, number>;         // e.g. { "Nuisance": 45, "Non-Payment": 38 }
+  by_month: EvictionMonthly[];             // last 24 months, zero-filled
+  by_neighborhood: Record<string, number>; // neighborhood name → count
+}
+
 export interface DistrictData {
   permit_summary: PermitSummary;
   pipeline_summary: PipelineSummary;
   zoning_profile: ZoningProfile;
   date_range: DateRange;
+  eviction_summary: EvictionSummary;
 }
 
 function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {
@@ -178,6 +193,70 @@ function buildDateRange(
   };
 }
 
+// ── Eviction type flag → human-readable label ─────────────────────────────────
+const EVICTION_TYPE_KEYS: Array<{ key: keyof EvictionNotice; label: string }> = [
+  { key: 'non_payment',             label: 'Non-Payment' },
+  { key: 'nuisance',                label: 'Nuisance' },
+  { key: 'breach',                  label: 'Breach' },
+  { key: 'owner_move_in',           label: 'Owner Move-In' },
+  { key: 'ellis_act_withdrawal',    label: 'Ellis Act' },
+  { key: 'late_payments',           label: 'Late Payments' },
+  { key: 'illegal_use',             label: 'Illegal Use' },
+  { key: 'unapproved_subtenant',    label: 'Unapproved Subtenant' },
+  { key: 'failure_to_sign_renewal', label: 'Failure to Sign Renewal' },
+  { key: 'roommate_same_unit',      label: 'Roommate Same Unit' },
+  { key: 'capital_improvement',     label: 'Capital Improvement' },
+  { key: 'substantial_rehab',       label: 'Substantial Rehab' },
+  { key: 'demolition',              label: 'Demolition' },
+  { key: 'condo_conversion',        label: 'Condo Conversion' },
+  { key: 'access_denial',           label: 'Access Denial' },
+  { key: 'lead_remediation',        label: 'Lead Remediation' },
+  { key: 'development',             label: 'Development' },
+  { key: 'good_samaritan_ends',     label: 'Good Samaritan Ends' },
+  { key: 'other_cause',             label: 'Other' },
+];
+
+function isTrue(val: unknown): boolean {
+  return val === true || val === 'true';
+}
+
+function buildEvictionSummary(evictions: EvictionNotice[]): EvictionSummary {
+  // by_type: count each flag independently
+  const by_type: Record<string, number> = {};
+  for (const e of evictions) {
+    for (const { key, label } of EVICTION_TYPE_KEYS) {
+      if (isTrue(e[key])) {
+        by_type[label] = (by_type[label] ?? 0) + 1;
+      }
+    }
+  }
+
+  // by_month: bucket by YYYY-MM, then zero-fill the last 24 months
+  const monthMap: Record<string, number> = {};
+  for (const e of evictions) {
+    const month = e.file_date?.slice(0, 7);
+    if (!month) continue;
+    monthMap[month] = (monthMap[month] ?? 0) + 1;
+  }
+  const now = new Date();
+  const by_month: EvictionMonthly[] = [];
+  for (let i = 23; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    by_month.push({ month: key, count: monthMap[key] ?? 0 });
+  }
+
+  // by_neighborhood
+  const by_neighborhood: Record<string, number> = {};
+  for (const e of evictions) {
+    const n = e.neighborhood?.trim();
+    if (!n) continue;
+    by_neighborhood[n] = (by_neighborhood[n] ?? 0) + 1;
+  }
+
+  return { total: evictions.length, by_type, by_month, by_neighborhood };
+}
+
 const EMPTY_PIPELINE_SUMMARY: PipelineSummary = {
   total: 0,
   net_pipeline_units: 0,
@@ -191,13 +270,24 @@ const EMPTY_ZONING_PROFILE: ZoningProfile = {
   height_range: null,
 };
 
+const EMPTY_EVICTION_SUMMARY: EvictionSummary = {
+  total: 0,
+  by_type: {},
+  by_month: [],
+  by_neighborhood: {},
+};
+
 export async function aggregateDistrictData(district: DistrictConfig): Promise<DistrictData> {
-  const [permits, allProjects, allZones] = await Promise.all([
+  const [permits, allProjects, allZones, evictions] = await Promise.all([
     fetchBuildingPermits(district.number),
     fetchDevelopmentPipeline(),
     fetchZoningDistricts(),
+    fetchEvictions(district.number).catch(err => {
+      console.warn('[aggregator] Eviction fetch failed (non-fatal):', err);
+      return [] as EvictionNotice[];
+    }),
   ]);
-  console.log(`[aggregator] DataSF results — permits: ${permits.length}, pipeline: ${allProjects.length}, zoning: ${allZones.length}`);
+  console.log(`[aggregator] DataSF results — permits: ${permits.length}, pipeline: ${allProjects.length}, zoning: ${allZones.length}, evictions: ${evictions.length}`);
 
   const projects = allProjects.filter((p) => {
     const hood = (p.nhood41 ?? '').toLowerCase();
@@ -219,10 +309,15 @@ export async function aggregateDistrictData(district: DistrictConfig): Promise<D
   const zoning_profile =
     zoningProfile.unique_zoning_codes.length > 0 ? zoningProfile : EMPTY_ZONING_PROFILE;
 
+  const eviction_summary = evictions.length > 0
+    ? buildEvictionSummary(evictions)
+    : EMPTY_EVICTION_SUMMARY;
+
   return {
     permit_summary: buildPermitSummary(permits),
     pipeline_summary,
     zoning_profile,
     date_range: buildDateRange(permits, projects, []),
+    eviction_summary,
   };
 }

@@ -142,7 +142,7 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
       </p>
 
       {/* District selector */}
-      <div style={{ width: "100%", maxWidth: 680, marginBottom: 36 }}>
+      <div style={{ width: "100%", maxWidth: 860, marginBottom: 36 }}>
         <p style={{
           fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
           color: COLORS.warmGray, textTransform: "uppercase",
@@ -152,7 +152,7 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
         </p>
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: "repeat(auto-fill, minmax(min(155px, 100%), 1fr))",
           gap: 10,
         }}>
           {DISTRICT_LIST.map(d => {
