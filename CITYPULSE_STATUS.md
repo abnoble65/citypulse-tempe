@@ -1,12 +1,14 @@
 # CityPulse — Project Status
 
-_Last updated: 2026-02-22_
+_Last updated: 2026-02-25_
 
 ---
 
 ## Overview
 
-CityPulse is a React/TypeScript web app that delivers AI-generated urban intelligence briefings for San Francisco District 3. It pulls live permit and development pipeline data from DataSF, generates narrative analysis via Claude, and presents structured intelligence across six pages. A separate ingestion script populates a Supabase database with 115+ SF Planning Commission hearing records for historical project lookup.
+CityPulse is a React/TypeScript web app that delivers AI-generated urban intelligence briefings for all 11 San Francisco supervisor districts. It pulls live permit, development pipeline, zoning, and eviction notice data from DataSF, generates narrative analysis via Claude, and presents structured intelligence across six pages. A separate ingestion script populates a Supabase database with 115+ SF Planning Commission hearing records for historical project lookup.
+
+Deployed to Vercel: **https://web-five-omega-87.vercel.app**
 
 ---
 
@@ -17,11 +19,10 @@ CityPulse is a React/TypeScript web app that delivers AI-generated urban intelli
 | UI framework | React + TypeScript | 19.2 / 5.9 |
 | Build tool | Vite | 7.3 |
 | Routing | React Router | 7.13 |
-| Charts | Recharts | 3.7 |
-| AI | Anthropic SDK (claude-sonnet-4-6) | 0.78 |
+| AI | Anthropic SDK (claude-sonnet-4-6 / claude-haiku-4-5) | 0.78 |
 | Database | Supabase (PostgreSQL) | 2.97 |
 | Data source | DataSF Socrata API | — |
-| Dev tunnel | ngrok (free static domain) | 3.36 |
+| Hosting | Vercel | — |
 
 ---
 
@@ -34,26 +35,30 @@ citypulse/
 │   │   └── CityPulse_Logo1_Fun.png
 │   ├── src/
 │   │   ├── main.tsx              # Router root
-│   │   ├── index.css             # Global styles + spinner
+│   │   ├── theme.ts              # COLORS + FONTS constants
+│   │   ├── districts.ts          # Single source of truth: all 11 district configs
 │   │   ├── components/
-│   │   │   ├── NavBar.tsx        # Sticky top nav, threads briefing state
-│   │   │   └── NeighborhoodFilterBar.tsx  # Zip filter pills (Briefing/Charts/Commission)
+│   │   │   ├── NavBar.tsx        # Sticky top nav, threads district + briefing state
+│   │   │   ├── FilterBar.tsx     # Neighborhood pills (driven by DistrictConfig)
+│   │   │   ├── NeighborhoodHero.tsx  # Full-width hero banner per neighborhood
+│   │   │   ├── SectionLabel.tsx  # Uppercase section eyebrow label
+│   │   │   └── Icons.tsx         # SVG icons (CoitTower, Transamerica, etc.)
 │   │   ├── pages/
-│   │   │   ├── Home.tsx          # Launch screen + neighborhood preview
+│   │   │   ├── Home.tsx          # District selector grid + generate button
 │   │   │   ├── Briefing.tsx      # AI briefing narrative
-│   │   │   ├── Charts.tsx        # Permit data visualisations
-│   │   │   ├── Signals.tsx       # Signal + Zoning Context sections
-│   │   │   ├── Outlook.tsx       # Outlook section + new-briefing CTA
+│   │   │   ├── Charts.tsx        # Permit + eviction data visualisations
+│   │   │   ├── Signals.tsx       # AI-generated signals + public concerns
+│   │   │   ├── Outlook.tsx       # AI-generated forward-looking outlook
 │   │   │   └── Commission.tsx    # Supabase hearing search + recent hearings
 │   │   └── services/
-│   │       ├── DataSF.ts         # Raw Socrata API fetches (permits, pipeline, zoning)
+│   │       ├── dataSF.ts         # Raw Socrata API fetches (permits, pipeline, zoning, evictions)
 │   │       ├── aggregator.ts     # Aggregates DataSF data → DistrictData struct
-│   │       ├── briefing.ts       # Calls Claude to generate narrative
+│   │       ├── briefing.ts       # Calls Claude to generate narrative + signals + outlook
 │   │       └── supabase.ts       # Supabase client (anon key, browser-safe)
 │   ├── scripts/
 │   │   ├── ingestMinutes.ts      # One-off ingestion: fetches + processes all hearing PDFs
 │   │   └── setupDatabase.sql     # Initial Supabase schema
-│   ├── vite.config.ts            # Dev server config + ngrok allowedHosts
+│   ├── vite.config.ts            # Dev server config
 │   └── .env                      # API keys (gitignored)
 └── CITYPULSE_STATUS.md           # This file
 ```
@@ -61,79 +66,163 @@ citypulse/
 ### Data Flow
 
 ```
-Home → generateBriefing()
-         ├── aggregateDistrictData()   [DataSF: permits, pipeline, zoning]
-         └── Claude API               [generates 4-section narrative]
-       → router state { briefingText, aggregatedData }
-         → Briefing / Charts / Signals / Outlook pages
-         → NeighborhoodFilterBar (local state per page) re-slices aggregatedData.permit_summary.by_zip
+Home (district selector)
+  → onGenerate(districtConfig)
+    → generateBriefing(districtConfig)
+        ├── aggregateDistrictData(districtConfig)
+        │     ├── fetchBuildingPermits(district.number)   [DataSF i98e-djp9]
+        │     ├── fetchDevelopmentPipeline()              [DataSF 6jgi-cpb4]
+        │     ├── fetchZoningDistricts()                  [DataSF 3i4a-hu95]
+        │     └── fetchEvictions(district.number)         [DataSF 5cei-gny5]
+        │         → DistrictData { permit_summary, pipeline_summary,
+        │                          zoning_profile, date_range, eviction_summary }
+        └── Claude API (claude-sonnet-4-6)
+            → briefingText (4-section narrative)
+      → App state { briefingText, aggregatedData, districtConfig }
+        → Briefing / Charts / Signals / Outlook pages
+          → FilterBar (local state per page, defaults to districtConfig.allLabel)
+            → re-runs generateSignals() / generateOutlook() per neighborhood
+            → re-slices aggregatedData.permit_summary.by_zip for Charts
 
-Commission → Supabase                 [hearings, projects, votes, comments]
+Commission → Supabase  [hearings, projects, votes, comments]
+  (currently only District 3 hearing data is ingested)
 ```
+
+---
+
+## District Configuration (`districts.ts`)
+
+Single source of truth for all 11 supervisor districts. Each district defines:
+
+```typescript
+interface DistrictConfig {
+  number: string;               // "3"
+  label: string;                // "District 3"
+  fullName: string;             // "District 3 — North Beach, Chinatown, Financial"
+  allLabel: string;             // "All District 3"
+  neighborhoods: DistrictNeighborhood[];
+  pipelineNeighborhoods: string[]; // lowercase substrings matched against nhood41
+}
+
+interface DistrictNeighborhood {
+  name: string;
+  zip: string;
+  Icon: FC<IconProps>;
+  gradient: string;    // NeighborhoodHero background
+  subtitle: string;    // e.g. "Telegraph Hill · 94133"
+}
+```
+
+District 3 has custom hand-crafted icons and gradients per neighborhood. All other districts use `DistrictIcon` and a shared default gradient.
+
+### Neighborhood Coverage
+
+| District | Neighborhoods |
+|---|---|
+| D1 — Richmond | Inner Richmond · Outer Richmond · Seacliff |
+| D2 — Marina, Pacific Heights | Marina · Cow Hollow · Pacific Heights · Presidio Heights |
+| D3 — North Beach, Chinatown, Financial | North Beach · Financial District · Chinatown · Russian Hill |
+| D4 — Sunset, Parkside | Inner Sunset · Central Sunset · Outer Sunset · Parkside |
+| D5 — Haight, Western Addition, NoPa | Haight-Ashbury · NoPa · Lower Haight · Western Addition · Alamo Square |
+| D6 — SoMa, Tenderloin | SoMa · Tenderloin · Hayes Valley · Rincon Hill · Mission Bay |
+| D7 — West Portal, Glen Park | West Portal · Forest Hill · Diamond Heights · Glen Park |
+| D8 — Castro, Noe Valley | Castro · Noe Valley · Eureka Valley · Duboce Triangle |
+| D9 — Mission, Bernal Heights | Mission District · Bernal Heights · Portola |
+| D10 — Potrero Hill, Bayview | Potrero Hill · Dogpatch · Bayview · Hunters Point · Visitacion Valley |
+| D11 — Excelsior, Ingleside | Excelsior · Ingleside · Outer Mission · Ocean View · Crocker Amazon |
 
 ---
 
 ## Pages
 
 ### `/` — Home
-Visual launch screen. Displays four neighborhood preview cards (non-interactive). "Generate District 3 Briefing" button is always enabled — fetches data for all of District 3 and navigates to `/briefing` with results in router state.
+District selector grid (11 buttons, `repeat(auto-fill, minmax(155px, 1fr))`, max-width 860px). Each button shows the district number, "District" label, and neighborhood names. Selecting a district sets local state; "Generate [District N] Briefing" button calls `onGenerate(selectedDistrict)`. Default selection is District 3.
 
 ### `/briefing` — The Briefing
-Displays the `THE BRIEFING` section of the Claude-generated narrative. Shows the CityPulse logo and a `NeighborhoodFilterBar`. Selecting a neighborhood updates the badge label (the text itself covers all of District 3 and is not re-generated). Nav button proceeds to Charts.
+`FilterBar` below NavBar defaults to "All District N". Selecting a neighborhood re-generates the briefing scoped to that neighborhood's zip code via `generateBriefingFromData()`. Shows three stat cards (active permits, est. value, pipeline units) plus the AI narrative. Permit stats use `permit_summary.by_zip` when a neighborhood filter is active.
 
 ### `/charts` — Charts
-Three side-by-side Recharts visualisations of building permit data:
-- **Permit Status Breakdown** — donut chart by status (filed/issued/complete/expired…)
-- **Permit Count by Type** — horizontal bar chart, top 8 types
-- **Est. Value by Type ($M)** — horizontal bar chart, top 8 types by $ value
+`FilterBar` below NavBar. Permit stats re-slice to `permit_summary.by_zip[selectedZip]` when a neighborhood is active (sparse-data note shown if <20 permits). Three chart sections:
+1. **Permit Status Breakdown** — SVG donut + legend
+2. **Estimated Value by Permit Type** — horizontal bar chart (top 5 types by $M)
+3. **Top 10 Addresses by Permit Value** — ranked list with mini bars (district-wide)
+4. **Eviction Notices** — total count stat + type breakdown bars (left) + 12-month column trend (right). Always district-wide regardless of neighborhood filter.
 
-`NeighborhoodFilterBar` re-renders all three charts using the zip-bucketed data in `permit_summary.by_zip`. When a filtered zip has fewer than 20 permits, a muted note appears below the grid.
+### `/signals` — Signals
+`FilterBar` below NavBar. Selecting a neighborhood re-generates signals via `generateSignals()` scoped to that zip. Each signal card shows title, body, severity badge, and resident concern callout. Below signals, a "Public Concerns" section derives concern-level items from the same signal data. Eviction patterns (Ellis Act, owner move-in, rising monthly trends) are explicitly included in the analysis prompt.
 
-### `/signals` — Signals & Zoning
-Displays the `THE SIGNAL` and `THE ZONING CONTEXT` sections of the Claude narrative in two stacked cards. No filter bar (text is district-wide). Nav buttons to Charts and Outlook.
-
-### `/outlook` — The Outlook
-Displays the `THE OUTLOOK` section. Includes a "Want fresh intelligence?" card with a link back to Home to regenerate.
+### `/outlook` — Outlook
+`FilterBar` below NavBar. Selecting a neighborhood re-generates the outlook via `generateOutlook()`. Sections: Key Events, Risks & Downside Scenarios, Civic Engagement. Outlook prompt requires a 🏘️ displacement risk item when eviction data is non-zero, and a ☀️ shadow-impact item citing shadow-flagged Supabase projects (D3 only).
 
 ### `/commission` — Commission Hearings
 Two sections:
 1. **Address Search** — Supabase full-text substring search on `projects.address`. Returns grouped `HistoryCard` components showing full hearing timeline, votes (colour-coded pills), commissioner comments, shadow impact badge, and PDF links.
 2. **Recent Hearings** — Last 10 hearings with project counts, action summaries, and top 3 significant projects highlighted.
 
-`NeighborhoodFilterBar` is active; selecting a zip appends a `.ilike('address', '%ZIP%')` clause to the search query and updates the input placeholder.
+`FilterBar` is active; selecting a neighborhood appends `.ilike('address', '%ZIP%')` to the Supabase query. **Note:** Only District 3 hearing data has been ingested — other districts return 0 results (this is expected, not a bug).
 
 ---
 
 ## Components
 
 ### `NavBar`
-Sticky `#154360` bar at top of all post-Home pages. Logo left, nav pills right. Uses React Router `navigate()` to pass `{ briefingText, aggregatedData }` state when switching pages, preserving data across the session.
+Sticky `#154360` bar at top of all post-Home pages. Logo left, nav pills right. Passes `districtConfig` and briefing state through navigation calls so data is preserved when switching pages.
 
-### `NeighborhoodFilterBar`
-Rendered immediately below `NavBar` on Briefing, Charts, and Commission. Exports `DISTRICT_3_NEIGHBORHOODS` constant (used by Home and Briefing).
+### `FilterBar`
+Driven by `districtConfig.neighborhoods`. Renders "All District N" pill plus one pill per neighborhood. Active pill is orange-highlighted. Used on Briefing, Charts, Signals, Outlook, and Commission.
 
----
-
-## Neighborhood → Zip Code Mapping
-
-| Neighborhood | Zip Code | Icon |
-|---|---|---|
-| North Beach / Telegraph Hill | 94133 | ⛵ |
-| Financial District / Jackson Square | 94111 | 🏦 |
-| Chinatown / Nob Hill | 94108 | 🏮 |
-| Russian Hill | 94109 | 🌉 |
-
-Filter bar also includes **All District 3** (no zip filter, full aggregate).
+### `NeighborhoodHero`
+Full-width gradient banner rendered below `FilterBar` on all inner pages. When a neighborhood is selected, shows neighborhood name, subtitle, and key permit stats in a themed gradient. When "All District N" is active, shows a district-level summary.
 
 ---
 
 ## DataSF Datasets
 
-| Dataset | Socrata ID | Filter |
-|---------|-----------|--------|
-| Building Permits | `i98e-djp9` | `supervisor_district = '3'`, limit 1000, ordered by `filed_date DESC` |
-| Development Pipeline | `k55i-dnjd` | No server-side filter; client filters by `nhood41` matching District 3 neighborhood names, limit 500 |
-| Zoning Districts | `ibu8-4ccn` | No filter; client removes rows with blank `districtname`/`zoning_sim`, limit 200 |
+| Dataset | Socrata ID | Filter | Notes |
+|---------|-----------|--------|-------|
+| Building Permits | `i98e-djp9` | `supervisor_district='${n}'` (text), limit 1000, `filed_date DESC` | Bucketed by zip in aggregator for client-side filtering |
+| Development Pipeline | `6jgi-cpb4` | None server-side; client filters by `nhood41` substring match | Uses `district.pipelineNeighborhoods` for filter terms |
+| Zoning Districts | `3i4a-hu95` | None; client drops blank rows | Used for zoning context in briefing only |
+| Eviction Notices | `5cei-gny5` | `supervisor_district=${n}` (numeric) AND `file_date > 2 years ago`, limit 1000 | 19 boolean type flags per record; non-fatal on fetch failure |
+
+### `DistrictData` structure
+
+```typescript
+{
+  permit_summary: {
+    total, by_type, by_status, cost_by_type,
+    total_estimated_cost_usd, notable_permits,
+    by_zip: Record<zip, ZipPermitSummary>   // for client-side neighborhood filtering
+  },
+  pipeline_summary: { total, net_pipeline_units, by_status, total_affordable_units },
+  zoning_profile:   { unique_zoning_codes, special_use_districts, height_range },
+  date_range:       { start, end },
+  eviction_summary: {
+    total,
+    by_type: Record<label, count>,         // e.g. { "Nuisance": 45, "Non-Payment": 38 }
+    by_month: { month: "YYYY-MM", count }[], // last 24 months, zero-filled
+    by_neighborhood: Record<name, count>
+  }
+}
+```
+
+---
+
+## AI Generation
+
+All generation is browser-side using `dangerouslyAllowBrowser: true`. API key is in `.env` (not committed).
+
+| Function | Model | Purpose |
+|---|---|---|
+| `generateBriefingFromData()` | claude-sonnet-4-6 | Full 4-section narrative (450–600 words) |
+| `generateSignals()` | claude-haiku-4-5 | 3–5 structured signals as JSON |
+| `generateOutlook()` | claude-haiku-4-5 | Events/risks/engagement outlook as JSON |
+
+### Signal prompt context
+Signals are prompted to flag: unusual permit volume, project-type clustering, displacement risk from eviction data (Ellis Act and owner move-in as key indicators), affordability impact, and infrastructure strain.
+
+### Outlook prompt context
+Outlook is prompted to include: a ☀️ shadow-impact risk item (citing Supabase shadow-flagged projects, D3 only), and a 🏘️ displacement risk item when `eviction_summary.total > 0` (citing eviction count, top types, Ellis Act and owner move-in activity).
 
 ---
 
@@ -193,7 +282,7 @@ commissioner_comments (
 6. Rate-limits at 120s between requests (org limit: 30k tokens/min)
 7. Exponential backoff on 429 rate-limit errors (60s → 120s → 240s)
 
-**Status:** ~115 of 116 hearings successfully ingested. One hearing (2025-06-26) has a known malformed-JSON issue due to PDF complexity; it is in the `FORCE_REPROCESS` set and will be retried on the next run.
+**Status:** ~115 of 116 hearings successfully ingested (District 3 only). One hearing (2025-06-26) has a known malformed-JSON issue due to PDF complexity; it is in the `FORCE_REPROCESS` set and will be retried on the next run.
 
 ---
 
@@ -208,35 +297,41 @@ VITE_SUPABASE_ANON_KEY=     # Supabase anon key (browser-safe, row-level securit
 VITE_SUPABASE_SERVICE_KEY=  # Supabase service role key (ingestion script only, never browser)
 ```
 
+Vercel production environment variables are set in the Vercel project dashboard (same keys, without `VITE_SUPABASE_SERVICE_KEY`).
+
 ---
 
 ## What's Working
 
-- Live DataSF permit/pipeline/zoning fetch on demand
-- Claude AI briefing generation (4 sections: Briefing, Signal, Zoning Context, Outlook)
-- Per-zip permit data bucketing (`by_zip`) for real client-side chart filtering
-- `NeighborhoodFilterBar` on Briefing, Charts, and Commission
-- Commission Supabase address search with full history cards (votes, comments, shadow badge)
-- 115 Planning Commission hearings (2014–2025) indexed in Supabase
-- ngrok public tunnel: `https://tomeka-unleached-fluctuatingly.ngrok-free.dev`
-- Full TypeScript build with no errors
+- **11-district support** — full permit, pipeline, zoning, and eviction data for any SF supervisor district
+- **District selector** — responsive grid on Home; re-generates all data and resets all filters on district change
+- **Neighborhood filtering** — per-page `FilterBar` driven by `districts.ts`; re-generates AI content when neighborhood changes (Signals, Outlook, Briefing); re-slices permit data client-side (Charts)
+- **Eviction data** — 2-year eviction notice history per district; type breakdown and 12-month trend chart on Charts page; Ellis Act / owner move-in context injected into Signals and Outlook prompts
+- **AI generation** — Briefing (Sonnet), Signals (Haiku), Outlook (Haiku) all district-aware
+- **Shadow-impact outlooks** — Supabase shadow-flagged projects fed into Outlook prompt (D3 only)
+- **Commission hearings** — 115 D3 hearings indexed; address search, vote history, shadow badges, PDF links
+- **Loading skeletons** — all pages show pulsing placeholder UI during data fetch / AI generation
+- **Vercel deployment** — production build passes `tsc -b && vite build` clean; deployed at https://web-five-omega-87.vercel.app
 
 ---
 
-## Known Issues / In Progress
+## Known Issues
 
-- **2025-06-26 hearing** — largest PDF in the archive; Claude returns malformed JSON mid-generation. Needs investigation (possibly chunk the PDF or increase max_tokens further).
-- **Commission zip filter** — relies on zip codes appearing in the address field of planning commission records, which is not guaranteed. Filter works as best-effort; may return no results for some zips.
-- **Development pipeline filter** — uses neighbourhood name matching (not zip codes), so pipeline data in Charts is not zip-filterable; it always reflects all of District 3.
-- **Briefing text is district-wide** — filter bar on Briefing page is contextual label only; text does not change when a neighbourhood is selected.
+- **Commission non-D3 districts** — only District 3 hearing data is in Supabase. Selecting any other district on the Commission page returns 0 results. Requires re-running the ingestion script scoped to other districts (the script currently only ingests D3 Planning Commission minutes).
+- **2025-06-26 hearing** — largest PDF in the archive; Claude returns malformed JSON mid-generation. In `FORCE_REPROCESS` set; needs chunked PDF approach or `max_tokens: 16384`.
+- **Development pipeline not district-filtered server-side** — pipeline dataset `6jgi-cpb4` is fetched in full (limit 500) and filtered client-side by `pipelineNeighborhoods` name strings. This is best-effort; pipeline data for districts with unusual neighborhood naming may be incomplete.
+- **Pipeline data not zip-filterable** — `pipelineNeighborhoods` uses name matching, not zip codes. Pipeline charts always reflect the full district even when a neighborhood filter is active.
+- **Eviction chart always district-wide** — eviction trend and type breakdown don't respond to the neighborhood filter. A note appears when a neighborhood is selected. Could be improved by filtering `by_neighborhood` data.
+- **Briefing text not re-generated on neighborhood filter** (by design on Outlook/Signals, but the Briefing page DOES re-generate; this is consistent). Shadow-impact prompt always uses D3 Supabase data regardless of selected district.
+- **Browser-side API key** — Anthropic key exposed in browser bundle via `dangerouslyAllowBrowser`. Acceptable for demo; production hardening would route through a serverless function.
 
 ---
 
 ## Next Tasks (Suggested)
 
-1. **Multi-zip briefing prompt** — Update `generateBriefing()` / `SYSTEM_PROMPT` to accept the selected zip code and instruct Claude to weight its analysis toward that neighbourhood when one is chosen.
-2. **Pipeline data by zip** — Add zip code to the DataSF Development Pipeline fetch (dataset `k55i-dnjd` has a `zipcode` field) so pipeline charts can also filter by neighbourhood.
-3. **Commission zip lookup** — Store zip codes alongside addresses in Supabase during ingestion (geocode or parse from address text) to make the Commission zip filter reliable.
-4. **Retry 2025-06-26** — Investigate chunked PDF approach or raise `max_tokens` to 16384 for that single hearing.
-5. **Deploy to production** — Replace ngrok with a permanent hosting solution (Vercel/Netlify for the front end, Supabase already hosted).
-6. **Expand beyond District 3** — The neighbourhood selector UI and zip mapping pattern is ready to scale to other SF supervisor districts.
+1. **Ingest Commission hearings for other districts** — run `ingestMinutes.ts` with district-scoped PDF sources for D1–D2, D4–D11 to make Commission page useful across all districts.
+2. **Eviction neighborhood filter** — slice `eviction_summary.by_month` and `by_type` by `by_neighborhood` when a neighborhood filter is active, matching against `districtConfig.neighborhoods[n].name`.
+3. **Pipeline zip coverage** — the Development Pipeline dataset (`6jgi-cpb4`) has a `zipcode` field; use it for server-side filtering instead of client-side name matching.
+4. **Server-side API proxy** — move Anthropic key to a Vercel Edge Function to avoid browser exposure.
+5. **Retry 2025-06-26 hearing** — investigate chunked PDF approach or raise `max_tokens` to 16384.
+6. **Commission zip filter reliability** — planning commission addresses don't consistently include zip codes. Geocoding or address normalization during ingestion would make the filter reliable.
