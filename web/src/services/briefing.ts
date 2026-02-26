@@ -182,7 +182,7 @@ export async function generateBriefingFromData(
   }
 
   const userContent = district.number === '0'
-    ? `${JSON.stringify(forPrompt(briefingData), null, 2)}\n\nFOCUS: Identify the 5 most significant developments across all SF districts. For each finding, tag the district and neighborhood. Focus on what has city-wide implications — displacement pressure, housing supply, major construction, and policy risk.`
+    ? `${JSON.stringify(data.citywide_prompt_summary ?? [], null, 2)}\n\nFOCUS: Identify the 5 most significant developments across all SF districts. For each finding, tag the district and neighborhood. Focus on what has city-wide implications — displacement pressure, housing supply, major construction, and policy risk.`
     : focus
       ? `${JSON.stringify(forPrompt(briefingData), null, 2)}\n\nFOCUS: Write this briefing specifically for the ${focus.name} neighborhood (zip ${focus.zip}). Reference ${focus.name} by name throughout. Pipeline and zoning data above reflect all of ${district.label} — note this where relevant.`
       : JSON.stringify(forPrompt(briefingData), null, 2);
@@ -235,11 +235,16 @@ export async function generateSignals(
 
   const locationLabel = focus ? focus.name : district.label;
 
-  const citywideTask = district.number === '0' && !focus
+  const isCitywide = district.number === '0' && !focus;
+  const citywideTask = isCitywide
     ? `TASK: Identify the top 5 city-wide trends across all SF districts. Flag which districts are most affected by each trend. Compare patterns between districts — e.g., which areas have rising evictions vs rising permit values. Each signal must include a "districts_affected" note in its body.`
     : null;
 
-  const userContent = `${JSON.stringify(forPrompt(analysisData), null, 2)}
+  const promptData = isCitywide
+    ? data.citywide_prompt_summary ?? []
+    : forPrompt(analysisData);
+
+  const userContent = `${JSON.stringify(promptData, null, 2)}
 
 TASK: ${citywideTask ?? `Identify exactly 4 key signals or trends for ${locationLabel} based on the data above.`}
 
@@ -375,11 +380,16 @@ export async function generateOutlook(
 ${shadowProjects.map(p => `- ${p.address}: ${p.shadow_details ?? p.project_description ?? '(no detail)'}`).join('\n')}\n`
     : '';
 
-  const citywideOutlookTask = district.number === '0' && !focus
+  const isCitywide = district.number === '0' && !focus;
+  const citywideOutlookTask = isCitywide
     ? `TASK: Generate a forward-looking outlook for all of San Francisco based on the data above. Identify the biggest risks and opportunities across all districts. Highlight where multiple districts face similar challenges. Flag the displacement trifecta (rising assessed values + elevated evictions + low affordable ratio) wherever it appears across districts.`
     : null;
 
-  const userContent = `${JSON.stringify(forPrompt(analysisData), null, 2)}
+  const promptData = isCitywide
+    ? data.citywide_prompt_summary ?? []
+    : forPrompt(analysisData);
+
+  const userContent = `${JSON.stringify(promptData, null, 2)}
 ${shadowBlock}
 ${citywideOutlookTask ?? `TASK: Generate a forward-looking outlook for ${locationLabel} based on the data above.`}
 

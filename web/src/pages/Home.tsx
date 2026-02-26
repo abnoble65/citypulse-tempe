@@ -20,7 +20,7 @@ const LOADING_MESSAGES = [
   "Almost ready…",
 ];
 
-const DISTRICT_LIST = [CITYWIDE_DISTRICT, ...Object.values(DISTRICTS)];
+const DISTRICT_LIST = Object.values(DISTRICTS);
 
 export function Home({ onGenerate, loading, error }: HomeProps) {
   const [selectedDistrict, setSelectedDistrict] = useState<DistrictConfig>(DEFAULT_DISTRICT);
@@ -150,6 +150,71 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
         }}>
           Select a Supervisor District
         </p>
+
+        {/* SF Citywide — full-width card above the grid */}
+        {(() => {
+          const isSelected = selectedDistrict.number === "0";
+          return (
+            <button
+              onClick={() => setSelectedDistrict(CITYWIDE_DISTRICT)}
+              disabled={loading}
+              style={{
+                width: "100%",
+                background: isSelected
+                  ? "linear-gradient(135deg, rgba(212,100,59,0.12) 0%, rgba(232,132,75,0.08) 100%)"
+                  : COLORS.white,
+                border: `1.5px solid ${isSelected ? COLORS.orange : COLORS.lightBorder}`,
+                borderRadius: 16,
+                padding: "18px 22px",
+                cursor: loading ? "not-allowed" : "pointer",
+                textAlign: "left",
+                display: "flex",
+                alignItems: "center",
+                gap: 18,
+                transition: "all 0.2s ease",
+                boxShadow: isSelected
+                  ? "0 4px 20px rgba(212,100,59,0.14)"
+                  : "0 1px 6px rgba(0,0,0,0.04)",
+                opacity: loading ? 0.6 : 1,
+                marginBottom: 12,
+              }}
+            >
+              <div style={{
+                fontSize: 32, lineHeight: 1, flexShrink: 0,
+              }}>🌁</div>
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontFamily: "'Urbanist', sans-serif",
+                  fontSize: 20, fontWeight: 800,
+                  color: isSelected ? COLORS.orange : COLORS.charcoal,
+                  letterSpacing: "-0.01em", lineHeight: 1,
+                  marginBottom: 3,
+                }}>SF Citywide</div>
+                <div style={{
+                  fontFamily: FONTS.body, fontSize: 10, fontWeight: 700,
+                  color: isSelected ? COLORS.orange : COLORS.warmGray,
+                  textTransform: "uppercase", letterSpacing: "0.06em",
+                  marginBottom: 4,
+                }}>All 11 Districts</div>
+                <div style={{
+                  fontFamily: FONTS.body, fontSize: 11, fontWeight: 500,
+                  color: isSelected ? COLORS.charcoal : COLORS.warmGray,
+                  lineHeight: 1.45,
+                }}>
+                  Full city analysis · Supervisor Districts 1–11
+                </div>
+              </div>
+              {isSelected && (
+                <div style={{
+                  fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
+                  color: COLORS.orange, textTransform: "uppercase",
+                  letterSpacing: "0.06em", flexShrink: 0,
+                }}>Selected ✓</div>
+              )}
+            </button>
+          );
+        })()}
+
         <div style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fill, minmax(min(155px, 100%), 1fr))",
@@ -176,53 +241,26 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
                   opacity: loading ? 0.6 : 1,
                 }}
               >
-                {d.number === "0" ? (
-                  <>
-                    <div style={{
-                      fontFamily: "'Urbanist', sans-serif",
-                      fontSize: 22, fontWeight: 800,
-                      color: isSelected ? COLORS.orange : COLORS.charcoal,
-                      lineHeight: 1, marginBottom: 2,
-                      letterSpacing: "-0.02em",
-                    }}>🌁 SF</div>
-                    <div style={{
-                      fontFamily: FONTS.body, fontSize: 10,
-                      fontWeight: 700, color: isSelected ? COLORS.orange : COLORS.warmGray,
-                      textTransform: "uppercase", letterSpacing: "0.05em",
-                      marginBottom: 5,
-                    }}>All Districts</div>
-                    <div style={{
-                      fontFamily: FONTS.body, fontSize: 11,
-                      color: isSelected ? COLORS.charcoal : COLORS.warmGray,
-                      lineHeight: 1.45, fontWeight: 500,
-                    }}>
-                      11 Supervisor Districts
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div style={{
-                      fontFamily: "'Urbanist', sans-serif",
-                      fontSize: 26, fontWeight: 800,
-                      color: isSelected ? COLORS.orange : COLORS.charcoal,
-                      lineHeight: 1, marginBottom: 2,
-                      letterSpacing: "-0.02em",
-                    }}>{d.number}</div>
-                    <div style={{
-                      fontFamily: FONTS.body, fontSize: 10,
-                      fontWeight: 700, color: isSelected ? COLORS.orange : COLORS.warmGray,
-                      textTransform: "uppercase", letterSpacing: "0.05em",
-                      marginBottom: 5,
-                    }}>District</div>
-                    <div style={{
-                      fontFamily: FONTS.body, fontSize: 11,
-                      color: isSelected ? COLORS.charcoal : COLORS.warmGray,
-                      lineHeight: 1.45, fontWeight: 500,
-                    }}>
-                      {d.neighborhoods.map(n => n.name).join(" · ")}
-                    </div>
-                  </>
-                )}
+                <div style={{
+                  fontFamily: "'Urbanist', sans-serif",
+                  fontSize: 26, fontWeight: 800,
+                  color: isSelected ? COLORS.orange : COLORS.charcoal,
+                  lineHeight: 1, marginBottom: 2,
+                  letterSpacing: "-0.02em",
+                }}>{d.number}</div>
+                <div style={{
+                  fontFamily: FONTS.body, fontSize: 10,
+                  fontWeight: 700, color: isSelected ? COLORS.orange : COLORS.warmGray,
+                  textTransform: "uppercase", letterSpacing: "0.05em",
+                  marginBottom: 5,
+                }}>District</div>
+                <div style={{
+                  fontFamily: FONTS.body, fontSize: 11,
+                  color: isSelected ? COLORS.charcoal : COLORS.warmGray,
+                  lineHeight: 1.45, fontWeight: 500,
+                }}>
+                  {d.neighborhoods.map(n => n.name).join(" · ")}
+                </div>
               </button>
             );
           })}

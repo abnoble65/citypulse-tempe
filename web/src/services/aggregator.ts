@@ -166,6 +166,19 @@ export interface AffordableHousingSummary {
   projects: AffordableHousingPipelineProject[];
 }
 
+/** Per-district high-level summary for citywide AI prompts (~200 bytes/district, ~2KB total). */
+export interface CitywideDistrictSummary {
+  district_number: string;
+  district_name: string;
+  total_permits: number;
+  top_permit_types: Array<{ type: string; count: number }>;
+  total_evictions: number;
+  top_eviction_type: string | null;
+  assessed_value_yoy_pct: number | null;
+  total_affordable_units: number;
+  affordable_ratio: number;
+}
+
 export interface DistrictData {
   permit_summary: PermitSummary;
   pipeline_summary: PipelineSummary;
@@ -178,6 +191,8 @@ export interface DistrictData {
   map_permits: MapPermit[];
   /** Only populated in citywide (number="0") mode. Keys are district numbers "1"–"11". */
   by_district?: Record<string, DistrictData>;
+  /** Compact per-district summary for citywide AI prompts. Avoids sending 300KB+ to Claude. */
+  citywide_prompt_summary?: CitywideDistrictSummary[];
 }
 
 function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {
@@ -723,6 +738,35 @@ function mergeAffordableHousingSummaries(summaries: AffordableHousingSummary[]):
   };
 }
 
+// ── Citywide prompt summary builder ──────────────────────────────────────────
+
+function buildCitywidePromptSummary(
+  districtNums: string[],
+  allData: DistrictData[],
+): CitywideDistrictSummary[] {
+  return districtNums.map((num, i) => {
+    const d = allData[i];
+    const cfg = DISTRICTS[num];
+    const top_permit_types = Object.entries(d.permit_summary.by_type)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3)
+      .map(([type, count]) => ({ type, count }));
+    const topEviction = Object.entries(d.eviction_summary.by_type)
+      .sort(([, a], [, b]) => b - a)[0];
+    return {
+      district_number: num,
+      district_name: cfg.label,
+      total_permits: d.permit_summary.total,
+      top_permit_types,
+      total_evictions: d.eviction_summary.total,
+      top_eviction_type: topEviction ? topEviction[0] : null,
+      assessed_value_yoy_pct: d.assessment_summary.yoy_change_pct,
+      total_affordable_units: d.affordable_housing_summary.total_affordable_units,
+      affordable_ratio: d.affordable_housing_summary.affordable_ratio,
+    };
+  });
+}
+
 // ── Citywide aggregation ──────────────────────────────────────────────────────
 
 export async function aggregateCitywideData(): Promise<DistrictData> {
@@ -775,6 +819,7 @@ export async function aggregateCitywideData(): Promise<DistrictData> {
     affordable_housing_summary: mergeAffordableHousingSummaries(allData.map(d => d.affordable_housing_summary)),
     map_permits:                allData.flatMap(d => d.map_permits).slice(0, 400),
     by_district,
+    citywide_prompt_summary:    buildCitywidePromptSummary(districtNums, allData),
   };
 
   districtCache.set('0', { data: result, ts: Date.now() });
