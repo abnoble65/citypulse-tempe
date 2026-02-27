@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback } from "react";
 import { COLORS, FONTS } from "../theme";
 import { SectionLabel } from "../components/SectionLabel";
 import { supabase } from "../services/supabase";
+import { generateGovHeadlines } from "../services/briefing";
 import type { DistrictConfig } from "../districts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -196,9 +197,10 @@ function NewsCard({ item }: { item: MayorNewsItem }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function Mayor({ districtConfig }: MayorProps) {
-  const [items,       setItems]       = useState<MayorNewsItem[] | null>(null);
-  const [loadError,   setLoadError]   = useState<string | null>(null);
-  const [isLoading,   setIsLoading]   = useState(true);
+  const [items,        setItems]        = useState<MayorNewsItem[] | null>(null);
+  const [loadError,    setLoadError]    = useState<string | null>(null);
+  const [isLoading,    setIsLoading]    = useState(true);
+  const [govHeadlines, setGovHeadlines] = useState<string[]>([]);
 
   // Topic filter: null = all topics
   const [topicFilter, setTopicFilter] = useState<string | null>(null);
@@ -219,7 +221,15 @@ export function Mayor({ districtConfig }: MayorProps) {
     if (error) {
       setLoadError(error.message);
     } else {
-      setItems((data ?? []) as MayorNewsItem[]);
+      const fetched = (data ?? []) as MayorNewsItem[];
+      setItems(fetched);
+      // Generate headlines: priority topics first, else top 2
+      const priority = fetched.filter(i =>
+        ["housing", "safety", "budget"].some(t => (i.topics ?? []).includes(t))
+      );
+      const topItems = (priority.length >= 2 ? priority : fetched).slice(0, 2);
+      generateGovHeadlines(topItems, "citypulse_mayor_headlines")
+        .then(setGovHeadlines).catch(() => {});
     }
     setIsLoading(false);
   }, []);
@@ -253,15 +263,15 @@ export function Mayor({ districtConfig }: MayorProps) {
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
-      {/* Duotone SVG filter — charcoal shadows (#3D3832) → orange highlights (#D4643B) */}
+      {/* Duotone SVG filter — charcoal shadows (#3D3832) → warm cream highlights (#F5F0EB) */}
       <svg width="0" height="0" style={{ position: "absolute", overflow: "hidden" }} aria-hidden="true">
         <defs>
           <filter id="mayor-duotone" colorInterpolationFilters="sRGB">
             <feColorMatrix type="saturate" values="0" />
             <feComponentTransfer>
-              <feFuncR type="linear" slope="0.592" intercept="0.239" />
-              <feFuncG type="linear" slope="0.173" intercept="0.220" />
-              <feFuncB type="linear" slope="0.035" intercept="0.196" />
+              <feFuncR type="linear" slope="0.722" intercept="0.239" />
+              <feFuncG type="linear" slope="0.721" intercept="0.220" />
+              <feFuncB type="linear" slope="0.726" intercept="0.196" />
             </feComponentTransfer>
           </filter>
         </defs>
@@ -276,9 +286,8 @@ export function Mayor({ districtConfig }: MayorProps) {
         <div style={{ maxWidth: 860, margin: "0 auto" }}>
           {/* Topic pills */}
           <div style={{
-            display: "flex", gap: 6, overflowX: "auto",
-            paddingBottom: 8, marginBottom: 8,
-            scrollbarWidth: "none",
+            display: "flex", gap: 6, flexWrap: "wrap",
+            marginBottom: 8,
           }}>
             {[null, ...ALL_TOPICS].map(t => {
               const isActive = topicFilter === t;
@@ -317,7 +326,7 @@ export function Mayor({ districtConfig }: MayorProps) {
             </span>
             <div style={{
               display: "flex", gap: 5, overflowX: "auto",
-              scrollbarWidth: "none",
+              scrollbarWidth: "none", paddingRight: 20,
             }}>
               {[
                 { value: "all", label: "All" },
@@ -411,6 +420,24 @@ export function Mayor({ districtConfig }: MayorProps) {
           borderTop: `1px solid ${COLORS.lightBorder}`,
           margin: "0 0 32px",
         }} />
+
+        {govHeadlines.length > 0 && (
+          <>
+            <SectionLabel text="Headlines" />
+            <div style={{ marginBottom: 40 }}>
+              {govHeadlines.map((h, i) => (
+                <div key={i} style={{
+                  fontFamily: "'Urbanist', sans-serif",
+                  fontSize: "clamp(18px, 3vw, 26px)", fontWeight: 800,
+                  color: COLORS.charcoal, lineHeight: 1.25,
+                  paddingBottom: 16, marginBottom: 16,
+                  borderBottom: i < govHeadlines.length - 1
+                    ? `1px solid ${COLORS.lightBorder}` : undefined,
+                }}>{h}</div>
+              ))}
+            </div>
+          </>
+        )}
 
         <SectionLabel text="Mayor's Office" />
         <h2 style={{

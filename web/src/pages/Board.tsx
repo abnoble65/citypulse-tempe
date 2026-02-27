@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { COLORS, FONTS } from "../theme";
 import { SectionLabel } from "../components/SectionLabel";
 import { supabase } from "../services/supabase";
+import { generateGovHeadlines } from "../services/briefing";
 import type { DistrictConfig } from "../districts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -321,10 +322,11 @@ function MeetingCard({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function Board({ districtConfig }: BoardProps) {
-  const [meetings,  setMeetings]  = useState<BosMeetingRow[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [expanded,  setExpanded]  = useState<Set<number>>(new Set());
+  const [meetings,     setMeetings]     = useState<BosMeetingRow[] | null>(null);
+  const [loadError,    setLoadError]    = useState<string | null>(null);
+  const [isLoading,    setIsLoading]    = useState(true);
+  const [expanded,     setExpanded]     = useState<Set<number>>(new Set());
+  const [govHeadlines, setGovHeadlines] = useState<string[]>([]);
 
   const [topicFilter, setTopicFilter] = useState<string | null>(null);
   const initDist = districtConfig.number === "0" ? "all" : districtConfig.number;
@@ -346,6 +348,13 @@ export function Board({ districtConfig }: BoardProps) {
       setMeetings(rows);
       // Auto-expand the most recent meeting
       if (rows.length > 0) setExpanded(new Set([rows[0].id]));
+      // Generate headlines from 2 most recent adopted/passed items
+      const topItems = rows
+        .flatMap(m => m.bos_items ?? [])
+        .filter(i => /adopted|passed/i.test(i.action ?? ""))
+        .slice(0, 2);
+      generateGovHeadlines(topItems, "citypulse_board_headlines")
+        .then(setGovHeadlines).catch(() => {});
     }
     setIsLoading(false);
   }, []);
@@ -397,8 +406,8 @@ export function Board({ districtConfig }: BoardProps) {
 
           {/* Topic pills */}
           <div style={{
-            display: "flex", gap: 6, overflowX: "auto",
-            paddingBottom: 8, marginBottom: 8, scrollbarWidth: "none",
+            display: "flex", gap: 6, flexWrap: "wrap",
+            marginBottom: 8,
           }}>
             {[null, ...ALL_TOPICS].map(t => {
               const isActive = topicFilter === t;
@@ -432,7 +441,7 @@ export function Board({ districtConfig }: BoardProps) {
             }}>
               District
             </span>
-            <div style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none" }}>
+            <div style={{ display: "flex", gap: 5, overflowX: "auto", scrollbarWidth: "none", paddingRight: 20 }}>
               {[
                 { value: "all", label: "All" },
                 ...["1","2","3","4","5","6","7","8","9","10","11"].map(n => ({ value: n, label: `D${n}` })),
@@ -462,6 +471,24 @@ export function Board({ districtConfig }: BoardProps) {
 
       {/* Page content */}
       <div style={{ maxWidth: 860, margin: "0 auto", padding: "clamp(32px, 5vw, 52px) 24px" }}>
+        {govHeadlines.length > 0 && (
+          <>
+            <SectionLabel text="Headlines" />
+            <div style={{ marginBottom: 40 }}>
+              {govHeadlines.map((h, i) => (
+                <div key={i} style={{
+                  fontFamily: "'Urbanist', sans-serif",
+                  fontSize: "clamp(18px, 3vw, 26px)", fontWeight: 800,
+                  color: COLORS.charcoal, lineHeight: 1.25,
+                  paddingBottom: 16, marginBottom: 16,
+                  borderBottom: i < govHeadlines.length - 1
+                    ? `1px solid ${COLORS.lightBorder}` : undefined,
+                }}>{h}</div>
+              ))}
+            </div>
+          </>
+        )}
+
         <SectionLabel text="Board of Supervisors" />
         <h2 style={{
           fontFamily: "'Urbanist', sans-serif",

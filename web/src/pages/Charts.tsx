@@ -626,10 +626,11 @@ const DISTRICT_COLORS = [
   "#8E6B5E","#B44040","#7AB87E","#C85C3A","#B0A89E","#9A5828",
 ];
 
-function DistrictComparisonChart({ ps }: { ps: PermitSummary }) {
+function DistrictComparisonChart({ ps, byDistrict }: { ps: PermitSummary; byDistrict?: Record<string, DistrictData> }) {
   const entries = Object.values(DISTRICTS)
     .map((d, i) => {
-      const bucket = ps.by_zip[d.number];
+      // Prefer by_district (direct per-district data) over by_zip lookup
+      const bucket = byDistrict?.[d.number]?.permit_summary ?? ps.by_zip[d.number];
       return {
         label: `D${d.number}`,
         fullName: d.label,
@@ -639,6 +640,8 @@ function DistrictComparisonChart({ ps }: { ps: PermitSummary }) {
       };
     })
     .sort((a, b) => b.count - a.count);
+
+  console.log('[DistrictChart]', entries.map(e => `${e.label}:${e.count}`).join(' '));
 
   const maxCount = Math.max(...entries.map(e => e.count), 1);
 
@@ -1139,7 +1142,7 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
         {/* Row 2b: District comparison (citywide mode only) */}
         {isCitywide && !selectedZip && (
           <ChartCard title="Permits by District — All San Francisco" style={{ marginBottom: 24 }}>
-            <DistrictComparisonChart ps={aggregatedData.permit_summary} />
+            <DistrictComparisonChart ps={aggregatedData.permit_summary} byDistrict={aggregatedData.by_district} />
           </ChartCard>
         )}
 

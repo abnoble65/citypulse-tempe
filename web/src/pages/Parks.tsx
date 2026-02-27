@@ -12,6 +12,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { COLORS, FONTS } from "../theme";
 import { SectionLabel } from "../components/SectionLabel";
 import { supabase } from "../services/supabase";
+import { generateGovHeadlines } from "../services/briefing";
 import type { DistrictConfig } from "../districts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -315,10 +316,11 @@ function MeetingCard({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function Parks({ districtConfig: _districtConfig }: ParksProps) {
-  const [meetings,  setMeetings]  = useState<RecParkMeetingRow[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [expanded,  setExpanded]  = useState<Set<number>>(new Set());
+  const [meetings,     setMeetings]     = useState<RecParkMeetingRow[] | null>(null);
+  const [loadError,    setLoadError]    = useState<string | null>(null);
+  const [isLoading,    setIsLoading]    = useState(true);
+  const [expanded,     setExpanded]     = useState<Set<number>>(new Set());
+  const [govHeadlines, setGovHeadlines] = useState<string[]>([]);
 
   const [topicFilter,    setTopicFilter]    = useState<string | null>(null);
   const [locationQuery,  setLocationQuery]  = useState<string>("");
@@ -338,6 +340,13 @@ export function Parks({ districtConfig: _districtConfig }: ParksProps) {
       const rows = (data ?? []) as RecParkMeetingRow[];
       setMeetings(rows);
       if (rows.length > 0) setExpanded(new Set([rows[0].id]));
+      // Generate headline from 1 capital improvements or policy item
+      const topItems = rows
+        .flatMap(m => m.recpark_items ?? [])
+        .filter(i => (i.topics ?? []).includes("capital improvements") || (i.topics ?? []).includes("policy"))
+        .slice(0, 1);
+      generateGovHeadlines(topItems, "citypulse_parks_headlines")
+        .then(setGovHeadlines).catch(() => {});
     }
     setIsLoading(false);
   }, []);
@@ -389,8 +398,8 @@ export function Parks({ districtConfig: _districtConfig }: ParksProps) {
 
           {/* Topic pills */}
           <div style={{
-            display: "flex", gap: 6, overflowX: "auto",
-            paddingBottom: 8, marginBottom: 8, scrollbarWidth: "none",
+            display: "flex", gap: 6, flexWrap: "wrap",
+            marginBottom: 8,
           }}>
             {[null, ...ALL_TOPICS].map(t => {
               const isActive = topicFilter === t;
@@ -458,6 +467,24 @@ export function Parks({ districtConfig: _districtConfig }: ParksProps) {
 
       {/* Page content */}
       <div style={{ maxWidth: 860, margin: "0 auto", padding: "clamp(32px, 5vw, 52px) 24px" }}>
+        {govHeadlines.length > 0 && (
+          <>
+            <SectionLabel text="Headlines" />
+            <div style={{ marginBottom: 40 }}>
+              {govHeadlines.map((h, i) => (
+                <div key={i} style={{
+                  fontFamily: "'Urbanist', sans-serif",
+                  fontSize: "clamp(18px, 3vw, 26px)", fontWeight: 800,
+                  color: COLORS.charcoal, lineHeight: 1.25,
+                  paddingBottom: 16, marginBottom: 16,
+                  borderBottom: i < govHeadlines.length - 1
+                    ? `1px solid ${COLORS.lightBorder}` : undefined,
+                }}>{h}</div>
+              ))}
+            </div>
+          </>
+        )}
+
         <SectionLabel text="Recreation & Parks" />
         <h2 style={{
           fontFamily: "'Urbanist', sans-serif",

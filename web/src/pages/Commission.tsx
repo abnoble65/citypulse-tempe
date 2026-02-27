@@ -7,7 +7,7 @@ import { supabase } from "../services/supabase";
 import { geocodeAddresses } from "../services/geocoder";
 import type { LatLng } from "../services/geocoder";
 import type { CommissionMarker } from "../components/CommissionMap";
-import { fetchDistrictBoundaries } from "../services/neighborhoodBoundaries";
+import { fetchDistrictBoundaries, fetchSFSupervisorBoundary } from "../services/neighborhoodBoundaries";
 import type { GeoFeature } from "../services/neighborhoodBoundaries";
 import type { DistrictConfig } from "../districts";
 
@@ -499,6 +499,7 @@ export function Commission({ districtConfig }: CommissionProps) {
   const [error, setError]                 = useState<string | null>(null);
   const [coords, setCoords]               = useState<Map<string, LatLng>>(new Map());
   const [boundaries, setBoundaries]       = useState<Map<string, GeoFeature>>(new Map());
+  const [districtBoundary, setDistrictBoundary] = useState<GeoFeature | null>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const load = useCallback(async () => {
@@ -573,6 +574,12 @@ export function Commission({ districtConfig }: CommissionProps) {
   useEffect(() => {
     setBoundaries(new Map());
     fetchDistrictBoundaries(districtConfig).then(setBoundaries);
+  }, [districtConfig.number]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch supervisor district boundary for the dashed outline on the map.
+  useEffect(() => {
+    setDistrictBoundary(null);
+    fetchSFSupervisorBoundary(districtConfig.number).then(setDistrictBoundary);
   }, [districtConfig.number]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMarkerClick = useCallback((key: string) => {
@@ -724,6 +731,7 @@ export function Commission({ districtConfig }: CommissionProps) {
               activeNeighborhoodName={
                 districtConfig.neighborhoods.find(n => n.name === filter)?.name ?? null
               }
+              districtBoundary={districtBoundary}
             />
           </Suspense>
         )}

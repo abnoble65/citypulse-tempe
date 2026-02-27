@@ -11,6 +11,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Feature, GeoJsonObject } from "geojson";
 import type { DistrictConfig } from "../districts";
+import type { GeoFeature } from "../services/neighborhoodBoundaries";
 
 // ── District center coordinates ─────────────────────────────────────────────
 const DISTRICT_CENTERS: Record<string, [number, number]> = {
@@ -70,12 +71,15 @@ const BOUNDARY_PANE = "cpBoundaryPane";
 function BoundaryLayer({
   boundaries,
   activeNeighborhoodName,
+  districtBoundary,
 }: {
   boundaries: Map<string, Feature>;
   activeNeighborhoodName: string | null;
+  districtBoundary?: GeoFeature | null;
 }) {
   const map = useMap();
   const layersRef = useRef<Map<string, L.GeoJSON>>(new Map());
+  const districtLayerRef = useRef<L.GeoJSON | null>(null);
 
   // Dedicated pane below overlayPane so boundaries never obscure markers.
   useEffect(() => {
@@ -114,6 +118,27 @@ function BoundaryLayer({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeNeighborhoodName]);
 
+  // District outline — dashed orange, no fill
+  useEffect(() => {
+    if (districtLayerRef.current) {
+      map.removeLayer(districtLayerRef.current);
+      districtLayerRef.current = null;
+    }
+    if (districtBoundary) {
+      districtLayerRef.current = L.geoJSON(districtBoundary as GeoJsonObject, {
+        pane: BOUNDARY_PANE,
+        style: () => ({ color: "#D4643B", weight: 2.5, dashArray: "6 4", fillOpacity: 0, opacity: 0.75 }),
+      }).addTo(map);
+    }
+    return () => {
+      if (districtLayerRef.current) {
+        map.removeLayer(districtLayerRef.current);
+        districtLayerRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [districtBoundary]);
+
   return null;
 }
 
@@ -124,12 +149,14 @@ function MapController({
   districtConfig,
   boundaries,
   activeNeighborhoodName,
+  districtBoundary,
 }: {
   markers: CommissionMarker[];
   selectedKey: string | null;
   districtConfig: DistrictConfig;
   boundaries?: Map<string, Feature>;
   activeNeighborhoodName?: string | null;
+  districtBoundary?: GeoFeature | null;
 }) {
   const map = useMap();
 
@@ -153,12 +180,20 @@ function MapController({
         }
       }
     }
+    // Priority 2.5: district boundary fit
+    if (!activeNeighborhoodName && districtBoundary) {
+      const bounds = L.geoJSON(districtBoundary as GeoJsonObject).getBounds();
+      if (bounds.isValid()) {
+        map.flyToBounds(bounds, { padding: [32, 32], maxZoom: 14, duration: 0.6 });
+        return;
+      }
+    }
     // Priority 3: district center
     const center = DISTRICT_CENTERS[districtConfig.number] ?? [37.773, -122.431];
     const zoom   = DISTRICT_ZOOM[districtConfig.number]   ?? 14;
     map.flyTo(center, zoom, { duration: 0.5 });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey, activeNeighborhoodName, districtConfig.number]);
+  }, [selectedKey, activeNeighborhoodName, districtConfig.number, districtBoundary]);
 
   return null;
 }
@@ -171,6 +206,7 @@ export interface CommissionMapProps {
   onSelectMarker: (key: string) => void;
   boundaries?: Map<string, Feature>;
   activeNeighborhoodName?: string | null;
+  districtBoundary?: GeoFeature | null;
 }
 
 export function CommissionMap({
@@ -180,6 +216,7 @@ export function CommissionMap({
   onSelectMarker,
   boundaries,
   activeNeighborhoodName = null,
+  districtBoundary,
 }: CommissionMapProps) {
   const center = DISTRICT_CENTERS[districtConfig.number] ?? [37.773, -122.431];
   const zoom   = DISTRICT_ZOOM[districtConfig.number]   ?? 14;
@@ -212,11 +249,13 @@ export function CommissionMap({
           districtConfig={districtConfig}
           boundaries={boundaries}
           activeNeighborhoodName={activeNeighborhoodName}
+          districtBoundary={districtBoundary}
         />
         {boundaries && boundaries.size > 0 && (
           <BoundaryLayer
             boundaries={boundaries}
             activeNeighborhoodName={activeNeighborhoodName}
+            districtBoundary={districtBoundary}
           />
         )}
         {markers.map(m => {

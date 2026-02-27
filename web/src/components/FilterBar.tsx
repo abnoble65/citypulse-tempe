@@ -16,7 +16,7 @@ export function FilterBar({ districtConfig, selected, onSelect }: FilterBarProps
 
   return (
     <div className="cp-filter" style={{
-      display: "flex", gap: 8, padding: "14px 16px",
+      display: "flex", gap: 8, padding: "14px 32px 14px 16px",
       background: COLORS.white,
       borderBottom: `1px solid ${COLORS.lightBorder}`,
       overflowX: "auto",

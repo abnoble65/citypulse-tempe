@@ -215,6 +215,47 @@ async function getParksContext(districtNumber: string): Promise<string> {
   }
 }
 
+// ── Gov-page AI headlines ─────────────────────────────────────────────────────
+// One Haiku call per page; cached in sessionStorage with 1-hour TTL.
+
+export async function generateGovHeadlines(
+  items: Array<{ title: string }>,
+  cacheKey: string,
+): Promise<string[]> {
+  if (items.length === 0) return [];
+
+  // Check sessionStorage (1-hour TTL)
+  try {
+    const raw = sessionStorage.getItem(cacheKey);
+    if (raw) {
+      const cached = JSON.parse(raw) as { ts: number; headlines: string[] };
+      if (Date.now() - cached.ts < 3_600_000) return cached.headlines;
+    }
+  } catch { /* sessionStorage unavailable */ }
+
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 256,
+    messages: [{
+      role: 'user',
+      content: `For each of the following San Francisco government actions, write one plain-language headline a resident would understand (max 80 chars each). Return as a JSON array of strings only.\n\n${JSON.stringify(items.map(i => i.title))}`,
+    }],
+  });
+
+  const text = message.content[0].type === 'text' ? message.content[0].text : '[]';
+  let headlines: string[] = [];
+  try {
+    const match = text.match(/\[[\s\S]*\]/);
+    headlines = JSON.parse(match?.[0] ?? '[]') as string[];
+  } catch { headlines = []; }
+
+  try {
+    sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), headlines }));
+  } catch { /* ignore */ }
+
+  return headlines;
+}
+
 // ── Session-level AI content caches ───────────────────────────────────────────
 // Keyed by "districtNumber:zip" (neighborhood-filtered) or "districtNumber:all".
 // Switching between previously-visited combos is instant — no Claude call needed.
