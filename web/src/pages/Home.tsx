@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { COLORS, FONTS } from "../theme";
 import { CityPulseLogo } from "../components/Icons";
+import { SupervisorAvatar } from "../components/SupervisorAvatar";
 import { DISTRICTS, DEFAULT_DISTRICT, CITYWIDE_DISTRICT } from "../districts";
 import type { DistrictConfig } from "../districts";
 
@@ -165,24 +166,29 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
                   opacity: loading ? 0.6 : 1,
                 }}
               >
-                <div style={{
-                  fontFamily: "'Urbanist',sans-serif",
-                  fontSize: 24, fontWeight: 800,
-                  color: isSelected ? COLORS.orange : COLORS.charcoal,
-                  lineHeight: 1, marginBottom: 4,
-                  letterSpacing: "-0.02em",
-                }}>{d.number}</div>
-                <div style={{
-                  fontFamily: FONTS.body, fontSize: 11,
-                  color: isSelected ? COLORS.charcoal : COLORS.warmGray,
-                  fontWeight: 500, lineHeight: 1.3,
-                }}>
-                  {d.label}
-                  {supervisor && (
-                    <span style={{ color: isSelected ? COLORS.orange : COLORS.warmGray }}>
-                      {" · "}Sup. {supervisor}
-                    </span>
-                  )}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div>
+                    <div style={{
+                      fontFamily: "'Urbanist',sans-serif",
+                      fontSize: 24, fontWeight: 800,
+                      color: isSelected ? COLORS.orange : COLORS.charcoal,
+                      lineHeight: 1, marginBottom: 4,
+                      letterSpacing: "-0.02em",
+                    }}>{d.number}</div>
+                    <div style={{
+                      fontFamily: FONTS.body, fontSize: 11,
+                      color: isSelected ? COLORS.charcoal : COLORS.warmGray,
+                      fontWeight: 500, lineHeight: 1.3,
+                    }}>
+                      {d.label}
+                      {supervisor && (
+                        <span style={{ color: isSelected ? COLORS.orange : COLORS.warmGray }}>
+                          {" · "}Sup. {supervisor}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <SupervisorAvatar districtNumber={d.number} size={38} />
                 </div>
               </button>
             );

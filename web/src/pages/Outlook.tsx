@@ -3,6 +3,7 @@ import { COLORS, FONTS } from "../theme";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
+import { SupervisorAvatar } from "../components/SupervisorAvatar";
 import { generateOutlook, getCachedOutlook } from "../services/briefing";
 import type { OutlookData, OutlookEvent, OutlookRisk, OutlookEngagement } from "../services/briefing";
 import type { DistrictData } from "../services/aggregator";
@@ -218,6 +219,11 @@ export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookP
       <NeighborhoodHero districtConfig={districtConfig} selected={filter} aggregatedData={aggregatedData} />
       <div style={{ maxWidth: 820, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
 
+        {districtConfig.number !== "0" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
+            <SupervisorAvatar districtNumber={districtConfig.number} size={30} showName={true} />
+          </div>
+        )}
         <SectionLabel text="The Outlook" />
         <h2 style={{
           fontFamily: "'Urbanist', sans-serif",
