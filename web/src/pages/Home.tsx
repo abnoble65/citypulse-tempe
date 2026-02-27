@@ -69,14 +69,9 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
         Live permit, planning, and development intelligence across all 11 SF Supervisor Districts.
       </p>
 
-      {/* SF District reference map */}
-      <div style={{
-        width: "100%", maxWidth: 860, marginBottom: 28,
-        borderRadius: 16, overflow: "hidden",
-        border: `1px solid ${COLORS.lightBorder}`,
-        boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
-      }}>
-        <Suspense fallback={<div style={{ height: 220, background: COLORS.cream }} />}>
+      {/* SF District reference map — circular */}
+      <div className="cp-district-map-circle">
+        <Suspense fallback={<div style={{ width: "100%", height: "100%", background: COLORS.cream, borderRadius: "50%" }} />}>
           <SFDistrictMapLazy
             selectedDistrict={selectedDistrict.number}
             onSelectDistrict={num => {

@@ -77,13 +77,7 @@ function DistrictLayer({
 
         layersRef.current.set(num, layer);
       }
-
-      // Fit to all SF districts
-      const allLayers = L.featureGroup(Array.from(layersRef.current.values()));
-      const bounds = allLayers.getBounds();
-      if (bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [8, 8] });
-      }
+      // Do NOT fitBounds — let the fixed center/zoom + maxBounds control the view
     });
 
     return () => {
@@ -103,12 +97,21 @@ function DistrictLayer({
   return null;
 }
 
+const SF_BOUNDS = L.latLngBounds(
+  [37.705, -122.515],  // SW — excludes most of South Bay
+  [37.810, -122.355],  // NE — excludes Treasure Island / East Bay
+);
+
 export function SFDistrictMap(props: SFDistrictMapProps) {
   return (
     <MapContainer
-      center={[37.76, -122.44]}
+      center={[37.758, -122.442]}
       zoom={12}
-      style={{ height: 220, width: "100%" }}
+      minZoom={12}
+      maxZoom={12}
+      maxBounds={SF_BOUNDS}
+      maxBoundsViscosity={1.0}
+      style={{ height: "100%", width: "100%" }}
       scrollWheelZoom={false}
       zoomControl={false}
       attributionControl={false}
