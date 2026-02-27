@@ -150,6 +150,8 @@ function MapController({
   boundaries,
   activeNeighborhoodName,
   districtBoundary,
+  fallbackNeighborhoodName,
+  markerLayerRefs,
 }: {
   markers: CommissionMarker[];
   selectedKey: string | null;
@@ -157,19 +159,38 @@ function MapController({
   boundaries?: Map<string, Feature>;
   activeNeighborhoodName?: string | null;
   districtBoundary?: GeoFeature | null;
+  fallbackNeighborhoodName?: string | null;
+  markerLayerRefs: { current: Map<string, L.CircleMarker> };
 }) {
   const map = useMap();
+  const popupTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    // Priority 1: selected marker
+    clearTimeout(popupTimerRef.current);
+
     if (selectedKey) {
+      // Priority 1: fly to geocoded marker + open its popup
       const m = markers.find(mk => mk.key === selectedKey);
       if (m) {
         map.flyTo([m.lat, m.lng], 16, { duration: 0.5 });
+        popupTimerRef.current = setTimeout(() => {
+          markerLayerRefs.current.get(selectedKey)?.openPopup();
+        }, 580);
         return;
       }
+      // Priority 1b: no geocoded marker — fly to fallback neighborhood boundary
+      if (fallbackNeighborhoodName && boundaries) {
+        const feature = boundaries.get(fallbackNeighborhoodName);
+        if (feature) {
+          const bounds = L.geoJSON(feature as GeoJsonObject).getBounds();
+          if (bounds.isValid()) {
+            map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 16, duration: 0.6 });
+            return;
+          }
+        }
+      }
     }
-    // Priority 2: neighborhood filter → zoom to boundary
+    // Priority 2: neighborhood filter pill → zoom to boundary
     if (activeNeighborhoodName && boundaries) {
       const feature = boundaries.get(activeNeighborhoodName);
       if (feature) {
@@ -193,7 +214,7 @@ function MapController({
     const zoom   = DISTRICT_ZOOM[districtConfig.number]   ?? 14;
     map.flyTo(center, zoom, { duration: 0.5 });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey, activeNeighborhoodName, districtConfig.number, districtBoundary]);
+  }, [selectedKey, activeNeighborhoodName, districtConfig.number, districtBoundary, fallbackNeighborhoodName]);
 
   return null;
 }
@@ -207,6 +228,8 @@ export interface CommissionMapProps {
   boundaries?: Map<string, Feature>;
   activeNeighborhoodName?: string | null;
   districtBoundary?: GeoFeature | null;
+  /** Neighborhood name to fly to when selected project has no geocoded coords. */
+  fallbackNeighborhoodName?: string | null;
 }
 
 export function CommissionMap({
@@ -217,9 +240,12 @@ export function CommissionMap({
   boundaries,
   activeNeighborhoodName = null,
   districtBoundary,
+  fallbackNeighborhoodName = null,
 }: CommissionMapProps) {
   const center = DISTRICT_CENTERS[districtConfig.number] ?? [37.773, -122.431];
   const zoom   = DISTRICT_ZOOM[districtConfig.number]   ?? 14;
+  // Refs to underlying Leaflet CircleMarker instances — used to programmatically openPopup()
+  const markerLayerRefs = useRef<Map<string, L.CircleMarker>>(new Map());
 
   return (
     <div style={{
@@ -250,6 +276,8 @@ export function CommissionMap({
           boundaries={boundaries}
           activeNeighborhoodName={activeNeighborhoodName}
           districtBoundary={districtBoundary}
+          fallbackNeighborhoodName={fallbackNeighborhoodName}
+          markerLayerRefs={markerLayerRefs}
         />
         {boundaries && boundaries.size > 0 && (
           <BoundaryLayer
@@ -264,6 +292,10 @@ export function CommissionMap({
           return (
             <CircleMarker
               key={m.key}
+              ref={(el) => {
+                if (el) markerLayerRefs.current.set(m.key, el);
+                else markerLayerRefs.current.delete(m.key);
+              }}
               center={[m.lat, m.lng]}
               radius={isSelected ? 10 : 7}
               pathOptions={{

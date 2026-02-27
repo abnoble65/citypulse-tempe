@@ -689,6 +689,19 @@ export function Commission({ districtConfig }: CommissionProps) {
       lng: coords.get(p.address!)!.lng,
     }));
 
+  // When the expanded card has no geocoded marker, derive a fallback neighborhood
+  // by scanning boundary names against the project's address + description text.
+  const expandedProject = expandedId ? visibleCards.find(p => p.groupKey === expandedId) : null;
+  const expandedHasMarker = expandedId ? commissionMarkers.some(m => m.key === expandedId) : false;
+  const fallbackNeighborhoodName = (expandedProject && !expandedHasMarker)
+    ? [...boundaries.keys()].find(name => {
+        const addrLower = (expandedProject.address ?? "").toLowerCase();
+        const descLower = (expandedProject.project_description ?? "").toLowerCase();
+        const n = name.toLowerCase();
+        return addrLower.includes(n) || descLower.includes(n);
+      }) ?? null
+    : null;
+
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
       <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
@@ -732,6 +745,7 @@ export function Commission({ districtConfig }: CommissionProps) {
                 districtConfig.neighborhoods.find(n => n.name === filter)?.name ?? null
               }
               districtBoundary={districtBoundary}
+              fallbackNeighborhoodName={fallbackNeighborhoodName}
             />
           </Suspense>
         )}
