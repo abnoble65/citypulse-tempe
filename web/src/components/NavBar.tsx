@@ -30,7 +30,7 @@ export function NavBar({ activePage, onNavigate }: NavBarProps) {
           fontFamily: FONTS.heading,
         }}>CityPulse</span>
       </div>
-      <div className="nav-pills" style={{ display: "flex", gap: 4, overflowX: "auto" }}>
+      <div className="nav-pills" style={{ display: "flex", gap: 4, overflowX: "auto", scrollbarWidth: "none" }}>
         {PAGES.map(p => (
           <button key={p} onClick={() => onNavigate(p)}
             style={{
