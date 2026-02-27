@@ -502,6 +502,9 @@ export function Commission({ districtConfig }: CommissionProps) {
   const [coords, setCoords]               = useState<Map<string, LatLng>>(new Map());
   const [districtBoundary, setDistrictBoundary] = useState<GeoFeature | null>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Refs so handleMarkerClick (useCallback with []) can read latest derived values
+  const sortedGroupedRef = useRef<GroupedProject[]>([]);
+  const visibleCountRef  = useRef(6);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -583,9 +586,14 @@ export function Commission({ districtConfig }: CommissionProps) {
     if (keys.length === 1) {
       setLocationFilter(null);
       setExpandedId(keys[0]);
+      // If the card is beyond the current pagination, expand to include it
+      const idx = sortedGroupedRef.current.findIndex(p => p.groupKey === keys[0]);
+      if (idx >= 0 && idx >= visibleCountRef.current) {
+        setVisibleCount(idx + 1);
+      }
       setTimeout(() => {
         cardRefs.current.get(keys[0])?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 50);
+      }, 120);
     } else {
       setLocationFilter(address);
       setExpandedId(null);
@@ -691,11 +699,15 @@ export function Commission({ districtConfig }: CommissionProps) {
   const visibleCards  = (isSearching || locationFilter) ? locationFiltered : locationFiltered.slice(0, visibleCount);
   const hasMore       = !isSearching && !locationFilter && locationFiltered.length > visibleCount;
 
-  // One dot per unique geocoded address in visibleCards.
-  // Multiple cards sharing an address collapse into a single marker with count > 1.
+  // Update refs so callbacks always see latest derived values
+  sortedGroupedRef.current = sortedGrouped;
+  visibleCountRef.current  = visibleCount;
+
+  // One dot per unique geocoded address across ALL sortedGrouped (not just paginated
+  // visibleCards) so Show All and fitBounds work on the complete project set.
   const commissionMarkers: CommissionMarker[] = (() => {
     const byAddress = new Map<string, CommissionMarker>();
-    for (const p of visibleCards) {
+    for (const p of sortedGrouped) {
       if (!p.address || !coords.has(p.address)) continue;
       const ll = coords.get(p.address)!;
       const existing = byAddress.get(p.address);
@@ -715,6 +727,14 @@ export function Commission({ districtConfig }: CommissionProps) {
     }
     return [...byAddress.values()];
   })();
+
+  // Resolve focus coordinates for the expanded card.
+  // Passed as primitives so the map controller effect re-fires when geocoding
+  // completes (coords updated), even if expandedId hasn't changed.
+  const focusedProject = expandedId ? sortedGrouped.find(p => p.groupKey === expandedId) : null;
+  const focusAddress   = focusedProject?.address ?? null;
+  const focusLat       = focusAddress ? (coords.get(focusAddress)?.lat ?? null) : null;
+  const focusLng       = focusAddress ? (coords.get(focusAddress)?.lng ?? null) : null;
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
@@ -750,6 +770,8 @@ export function Commission({ districtConfig }: CommissionProps) {
             <CommissionMapLazy
               markers={commissionMarkers}
               selectedKey={expandedId}
+              focusLat={focusLat}
+              focusLng={focusLng}
               showAllTrigger={showAllTrigger}
               districtConfig={districtConfig}
               districtBoundary={districtBoundary}

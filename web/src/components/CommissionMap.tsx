@@ -82,14 +82,16 @@ function DistrictOutline({ districtBoundary }: { districtBoundary?: GeoFeature |
 // ── Map controller ────────────────────────────────────────────────────────────
 function MapController({
   markers,
-  selectedKey,
   showAllTrigger,
   districtConfig,
+  focusLat,
+  focusLng,
 }: {
   markers:        CommissionMarker[];
-  selectedKey:    string | null;
   showAllTrigger: number;
   districtConfig: DistrictConfig;
+  focusLat:       number | null;
+  focusLng:       number | null;
 }) {
   const map = useMap();
   // Track which district we've auto-fitted so we don't jump when more cards load
@@ -117,13 +119,14 @@ function MapController({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAllTrigger]);
 
-  // Card expanded → fly to its marker
+  // Card expanded → fly to resolved coordinates.
+  // Using primitive lat/lng (not selectedKey + marker-lookup) so this effect
+  // also fires when geocoding completes after the card was already expanded.
   useEffect(() => {
-    if (!selectedKey) return;
-    const m = markers.find(mk => mk.keys.includes(selectedKey));
-    if (m) map.flyTo([m.lat, m.lng], 16, { duration: 0.45 });
+    if (focusLat == null || focusLng == null) return;
+    map.flyTo([focusLat, focusLng], 16, { duration: 0.45 });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey]);
+  }, [focusLat, focusLng]);
 
   return null;
 }
@@ -131,8 +134,12 @@ function MapController({
 // ── Public props ──────────────────────────────────────────────────────────────
 export interface CommissionMapProps {
   markers:         CommissionMarker[];
-  /** groupKey of the currently expanded card, or null */
+  /** groupKey of the currently expanded card — used for dot highlighting */
   selectedKey:     string | null;
+  /** Resolved lat/lng of the expanded card. Passed as primitives so the flyTo
+   *  effect re-fires when geocoding completes, even if selectedKey hasn't changed. */
+  focusLat?:       number | null;
+  focusLng?:       number | null;
   /** Increment to trigger fit-all-markers animation */
   showAllTrigger:  number;
   districtConfig:  DistrictConfig;
@@ -145,6 +152,8 @@ export interface CommissionMapProps {
 export function CommissionMap({
   markers,
   selectedKey,
+  focusLat   = null,
+  focusLng   = null,
   showAllTrigger,
   districtConfig,
   districtBoundary,
@@ -175,7 +184,8 @@ export function CommissionMap({
         />
         <MapController
           markers={markers}
-          selectedKey={selectedKey}
+          focusLat={focusLat}
+          focusLng={focusLng}
           showAllTrigger={showAllTrigger}
           districtConfig={districtConfig}
         />
