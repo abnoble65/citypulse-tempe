@@ -179,16 +179,16 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
                 </div>
               </div>
 
-              {/* Mayor portrait — right side */}
+              {/* Fastcast logo — right side */}
               <img
-                src="/images/mayor-lurie-stylized.png"
-                alt="Mayor Daniel Lurie"
+                src="/images/fastcast-logo.jpg"
+                alt="Fastcast"
                 style={{
-                  width: 64, height: 64, borderRadius: "50%",
-                  objectFit: "cover", objectPosition: "center top",
+                  width: 64, height: 64, borderRadius: 8,
+                  objectFit: "contain",
                   flexShrink: 0, display: "block",
-                  border: `1.5px solid ${COLORS.lightBorder}`,
-                  boxShadow: "0 2px 8px rgba(61,56,50,0.12)",
+                  border: `1px solid ${COLORS.lightBorder}`,
+                  background: COLORS.white,
                 }}
               />
             </button>
