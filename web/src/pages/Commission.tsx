@@ -7,7 +7,7 @@ import { supabase } from "../services/supabase";
 import { geocodeAddresses } from "../services/geocoder";
 import type { LatLng } from "../services/geocoder";
 import type { CommissionMarker } from "../components/CommissionMap";
-import { fetchDistrictBoundaries, fetchSFSupervisorBoundary } from "../services/neighborhoodBoundaries";
+import { fetchSFSupervisorBoundary } from "../services/neighborhoodBoundaries";
 import type { GeoFeature } from "../services/neighborhoodBoundaries";
 import type { DistrictConfig } from "../districts";
 
@@ -490,6 +490,8 @@ export function Commission({ districtConfig }: CommissionProps) {
   const [filter, setFilter]               = useState(districtConfig.allLabel);
   const [search, setSearch]               = useState("");
   const [expandedId, setExpandedId]       = useState<string | null>(null);
+  const [locationFilter, setLocationFilter] = useState<string | null>(null);
+  const [showAllTrigger, setShowAllTrigger] = useState(0);
   const [visibleCount, setVisibleCount]   = useState(6);
   const [sortMode, setSortMode]           = useState<SortMode>('recent');
   const [projects, setProjects]           = useState<LiveProject[]>([]);
@@ -498,7 +500,6 @@ export function Commission({ districtConfig }: CommissionProps) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError]                 = useState<string | null>(null);
   const [coords, setCoords]               = useState<Map<string, LatLng>>(new Map());
-  const [boundaries, setBoundaries]       = useState<Map<string, GeoFeature>>(new Map());
   const [districtBoundary, setDistrictBoundary] = useState<GeoFeature | null>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -539,10 +540,11 @@ export function Commission({ districtConfig }: CommissionProps) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Reset neighbourhood filter pill, expanded card, and pagination when district changes
+  // Reset all UI state when district changes
   useEffect(() => {
     setFilter(districtConfig.allLabel);
     setExpandedId(null);
+    setLocationFilter(null);
     setVisibleCount(6);
     setSortMode('recent');
   }, [districtConfig.allLabel]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -570,23 +572,30 @@ export function Commission({ districtConfig }: CommissionProps) {
     );
   }, [searchResults]);
 
-  // Fetch neighborhood boundaries whenever the district changes.
-  useEffect(() => {
-    setBoundaries(new Map());
-    fetchDistrictBoundaries(districtConfig).then(setBoundaries);
-  }, [districtConfig.number]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Fetch supervisor district boundary for the dashed outline on the map.
   useEffect(() => {
     setDistrictBoundary(null);
     fetchSFSupervisorBoundary(districtConfig.number).then(setDistrictBoundary);
   }, [districtConfig.number]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleMarkerClick = useCallback((key: string) => {
-    setExpandedId(key);
-    setTimeout(() => {
-      cardRefs.current.get(key)?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 50);
+  // Dot clicked → single project: expand its card; multiple projects: filter list
+  const handleMarkerClick = useCallback((address: string, keys: string[]) => {
+    if (keys.length === 1) {
+      setLocationFilter(null);
+      setExpandedId(keys[0]);
+      setTimeout(() => {
+        cardRefs.current.get(keys[0])?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 50);
+    } else {
+      setLocationFilter(address);
+      setExpandedId(null);
+    }
+  }, []);
+
+  const handleShowAll = useCallback(() => {
+    setLocationFilter(null);
+    setExpandedId(null);
+    setShowAllTrigger(t => t + 1);
   }, []);
 
   // Debounced full-text search — queries address, project_description, case_number
@@ -675,32 +684,37 @@ export function Commission({ districtConfig }: CommissionProps) {
   const grouped       = groupAndDedup(visible);
   const isSearching   = search.trim().length > 0;
   const sortedGrouped = sortGrouped(grouped, sortMode);
-  const visibleCards  = isSearching ? sortedGrouped : sortedGrouped.slice(0, visibleCount);
-  const hasMore       = !isSearching && sortedGrouped.length > visibleCount;
+  // Location filter: applied when user clicks a multi-project dot on the map
+  const locationFiltered = locationFilter
+    ? sortedGrouped.filter(p => p.address === locationFilter)
+    : sortedGrouped;
+  const visibleCards  = (isSearching || locationFilter) ? locationFiltered : locationFiltered.slice(0, visibleCount);
+  const hasMore       = !isSearching && !locationFilter && locationFiltered.length > visibleCount;
 
-  // Map markers scoped to visible cards only (reflects current sort + pagination).
-  const commissionMarkers: CommissionMarker[] = visibleCards
-    .filter(p => !!p.address && coords.has(p.address))
-    .map(p => ({
-      key: p.groupKey,
-      address: p.address!,
-      action: normalizeAction(p.action),
-      lat: coords.get(p.address!)!.lat,
-      lng: coords.get(p.address!)!.lng,
-    }));
-
-  // When the expanded card has no geocoded marker, derive a fallback neighborhood
-  // by scanning boundary names against the project's address + description text.
-  const expandedProject = expandedId ? visibleCards.find(p => p.groupKey === expandedId) : null;
-  const expandedHasMarker = expandedId ? commissionMarkers.some(m => m.key === expandedId) : false;
-  const fallbackNeighborhoodName = (expandedProject && !expandedHasMarker)
-    ? [...boundaries.keys()].find(name => {
-        const addrLower = (expandedProject.address ?? "").toLowerCase();
-        const descLower = (expandedProject.project_description ?? "").toLowerCase();
-        const n = name.toLowerCase();
-        return addrLower.includes(n) || descLower.includes(n);
-      }) ?? null
-    : null;
+  // One dot per unique geocoded address in visibleCards.
+  // Multiple cards sharing an address collapse into a single marker with count > 1.
+  const commissionMarkers: CommissionMarker[] = (() => {
+    const byAddress = new Map<string, CommissionMarker>();
+    for (const p of visibleCards) {
+      if (!p.address || !coords.has(p.address)) continue;
+      const ll = coords.get(p.address)!;
+      const existing = byAddress.get(p.address);
+      if (existing) {
+        existing.keys.push(p.groupKey);
+        existing.count++;
+      } else {
+        byAddress.set(p.address, {
+          key:     p.groupKey,
+          keys:    [p.groupKey],
+          address: p.address,
+          lat:     ll.lat,
+          lng:     ll.lng,
+          count:   1,
+        });
+      }
+    }
+    return [...byAddress.values()];
+  })();
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
@@ -725,27 +739,22 @@ export function Commission({ districtConfig }: CommissionProps) {
           </p>
         )}
 
-        {/* Context map — show as soon as any data is available (markers OR boundaries).
-            Passing an empty markers array is fine: CommissionMap shows the district
-            view with boundary outlines, which is useful orientation even without markers. */}
-        {!loading && !error && (projects.length > 0 || boundaries.size > 0) && (
+        {/* Context map — always show once data has loaded */}
+        {!loading && !error && (
           <Suspense fallback={
             <div style={{
-              height: 220, borderRadius: 20,
+              height: 240, borderRadius: 20,
               background: COLORS.cream, marginBottom: 28,
             }} />
           }>
             <CommissionMapLazy
               markers={commissionMarkers}
               selectedKey={expandedId}
+              showAllTrigger={showAllTrigger}
               districtConfig={districtConfig}
-              onSelectMarker={handleMarkerClick}
-              boundaries={boundaries}
-              activeNeighborhoodName={
-                districtConfig.neighborhoods.find(n => n.name === filter)?.name ?? null
-              }
               districtBoundary={districtBoundary}
-              fallbackNeighborhoodName={fallbackNeighborhoodName}
+              onSelectMarker={handleMarkerClick}
+              onShowAll={handleShowAll}
             />
           </Suspense>
         )}
@@ -787,9 +796,9 @@ export function Commission({ districtConfig }: CommissionProps) {
                 {mode === 'recent' ? 'Most Recent' : mode === 'significant' ? 'Most Significant' : 'A–Z'}
               </button>
             ))}
-            {!isSearching && sortedGrouped.length > 0 && (
+            {!isSearching && locationFiltered.length > 0 && (
               <span style={{ marginLeft: "auto", fontSize: 12, color: COLORS.warmGray, fontFamily: FONTS.body, alignSelf: "center", whiteSpace: "nowrap", flexShrink: 0 }}>
-                {visibleCards.length} of {sortedGrouped.length}
+                {visibleCards.length} of {locationFiltered.length}
               </span>
             )}
           </div>
@@ -800,6 +809,30 @@ export function Commission({ districtConfig }: CommissionProps) {
           letterSpacing: "0.08em", textTransform: "uppercase",
           marginBottom: 16, fontFamily: FONTS.body,
         }}>Recent Hearings</div>
+
+        {/* Location filter banner — shown when user clicks a multi-project map dot */}
+        {locationFilter && !loading && !error && (
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            gap: 12, marginBottom: 16,
+            background: "#FEF5EC", border: "1px solid #F0DFC4",
+            borderRadius: 12, padding: "10px 16px",
+          }}>
+            <span style={{ fontFamily: FONTS.body, fontSize: 13, color: COLORS.charcoal, lineHeight: 1.4 }}>
+              Showing projects at <strong>{locationFilter}</strong>
+            </span>
+            <button
+              onClick={() => { setLocationFilter(null); setExpandedId(null); setShowAllTrigger(t => t + 1); }}
+              style={{
+                background: "none", border: `1px solid #D4A870`, borderRadius: 8,
+                padding: "4px 12px", fontSize: 12, fontWeight: 600,
+                color: "#B47A2E", cursor: "pointer", fontFamily: FONTS.body, flexShrink: 0,
+              }}
+            >
+              Clear ✕
+            </button>
+          </div>
+        )}
 
         {/* Loading skeleton */}
         {(loading || searchLoading) && [0, 1, 2].map(i => <SkeletonCard key={i} />)}

@@ -1,91 +1,61 @@
 /**
- * CommissionMap.tsx — Compact context map for the Commission page.
+ * CommissionMap.tsx — Interactive project map for the Commission page.
  *
- * CartoDB Positron tiles, no zoom controls, 220px tall.
- * Markers are color-coded by action outcome (green / amber / red).
- * Clicking a marker fires onSelectMarker(key) for two-way card↔map sync.
+ * All markers are orange CircleMarkers. One dot per unique geocoded address
+ * (deduplication happens in Commission.tsx). Auto-fits to show all dots on
+ * initial load. "Show All" resets the view.
+ *
+ * Two-way sync:
+ *   Card expand  → MapController flies to that marker (selectedKey)
+ *   Dot click    → onSelectMarker(address, keys) — parent decides expand vs. filter
  */
 import { useEffect, useRef } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { Feature, GeoJsonObject } from "geojson";
+import type { GeoJsonObject } from "geojson";
 import type { DistrictConfig } from "../districts";
 import type { GeoFeature } from "../services/neighborhoodBoundaries";
 
-// ── District center coordinates ─────────────────────────────────────────────
+// ── District defaults ─────────────────────────────────────────────────────────
 const DISTRICT_CENTERS: Record<string, [number, number]> = {
-  "0":  [37.757, -122.440], // SF citywide
-  "1":  [37.778, -122.477],
-  "2":  [37.793, -122.434],
-  "3":  [37.797, -122.406],
-  "4":  [37.757, -122.493],
-  "5":  [37.772, -122.440],
-  "6":  [37.778, -122.413],
-  "7":  [37.743, -122.457],
-  "8":  [37.758, -122.440],
-  "9":  [37.749, -122.413],
-  "10": [37.748, -122.393],
-  "11": [37.721, -122.435],
+  "0":  [37.757, -122.440],
+  "1":  [37.778, -122.477], "2":  [37.793, -122.434], "3":  [37.797, -122.406],
+  "4":  [37.757, -122.493], "5":  [37.772, -122.440], "6":  [37.778, -122.413],
+  "7":  [37.743, -122.457], "8":  [37.758, -122.440], "9":  [37.749, -122.413],
+  "10": [37.748, -122.393], "11": [37.721, -122.435],
 };
-
 const DISTRICT_ZOOM: Record<string, number> = {
   "0": 12,
   "1": 14, "2": 14, "3": 15, "4": 13, "5": 14,
   "6": 14, "7": 14, "8": 14, "9": 14, "10": 13, "11": 14,
 };
 
-// ── Types ────────────────────────────────────────────────────────────────────
-export interface CommissionMarker {
-  key: string;
-  address: string;
-  action: "Approved" | "Continued" | "Disapproved";
-  lat: number;
-  lng: number;
-}
-
-// ── Marker color by outcome ──────────────────────────────────────────────────
-function markerColor(action: "Approved" | "Continued" | "Disapproved"): string {
-  if (action === "Approved")    return "#4D9A6A"; // green
-  if (action === "Disapproved") return "#E05050"; // red
-  return "#D4943B";                               // amber — Continued / unknown
-}
-
-// ── Boundary path style (shared logic with MapView) ─────────────────────────
-function boundaryStyle(name: string, activeNeighborhoodName: string | null): L.PathOptions {
-  const hasActive = !!activeNeighborhoodName;
-  const isActive  = name === activeNeighborhoodName;
-  return {
-    className:   "cp-boundary",
-    color:       "#D4643B",
-    fillColor:   "#D4643B",
-    weight:      hasActive && isActive ? 2 : 1,
-    opacity:     hasActive ? (isActive ? 0.85 : 0.12) : 0.30,
-    fillOpacity: hasActive ? (isActive ? 0.10 : 0.02) : 0.04,
-    fill:        true,
-  };
-}
-
+const ORANGE = "#D4643B";
 const BOUNDARY_PANE = "cpBoundaryPane";
 
-function BoundaryLayer({
-  boundaries,
-  activeNeighborhoodName,
-  districtBoundary,
-}: {
-  boundaries: Map<string, Feature>;
-  activeNeighborhoodName: string | null;
-  districtBoundary?: GeoFeature | null;
-}) {
-  const map = useMap();
-  const layersRef = useRef<Map<string, L.GeoJSON>>(new Map());
-  const districtLayerRef = useRef<L.GeoJSON | null>(null);
+// ── Types ─────────────────────────────────────────────────────────────────────
+/**
+ * One entry per unique geocoded address in the visible card list.
+ * `keys` lists the groupKeys of every card sharing that address.
+ */
+export interface CommissionMarker {
+  key:     string;    // groupKey of first card at this location
+  keys:    string[];  // all groupKeys at this location (length ≥ 1)
+  address: string;
+  lat:     number;
+  lng:     number;
+  count:   number;    // = keys.length
+}
 
-  // Dedicated pane below overlayPane so boundaries never obscure markers.
+// ── District boundary dashed outline ─────────────────────────────────────────
+function DistrictOutline({ districtBoundary }: { districtBoundary?: GeoFeature | null }) {
+  const map = useMap();
+  const layerRef = useRef<L.GeoJSON | null>(null);
+
   useEffect(() => {
     if (!map.getPane(BOUNDARY_PANE)) {
-      map.createPane(BOUNDARY_PANE);
-      const pane = map.getPane(BOUNDARY_PANE)!;
+      const pane = map.createPane(BOUNDARY_PANE);
       pane.style.zIndex = "390";
       pane.style.pointerEvents = "none";
     }
@@ -93,48 +63,15 @@ function BoundaryLayer({
   }, []);
 
   useEffect(() => {
-    for (const [, layer] of layersRef.current) map.removeLayer(layer);
-    layersRef.current.clear();
-
-    for (const [name, feature] of boundaries) {
-      const layer = L.geoJSON(feature as GeoJsonObject, {
-        pane: BOUNDARY_PANE,
-        style: () => boundaryStyle(name, activeNeighborhoodName),
-      }).addTo(map);
-      layersRef.current.set(name, layer);
-    }
-
-    return () => {
-      for (const [, layer] of layersRef.current) map.removeLayer(layer);
-      layersRef.current.clear();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boundaries]);
-
-  useEffect(() => {
-    for (const [name, layer] of layersRef.current) {
-      layer.setStyle(boundaryStyle(name, activeNeighborhoodName));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeNeighborhoodName]);
-
-  // District outline — dashed orange, no fill
-  useEffect(() => {
-    if (districtLayerRef.current) {
-      map.removeLayer(districtLayerRef.current);
-      districtLayerRef.current = null;
-    }
+    if (layerRef.current) { map.removeLayer(layerRef.current); layerRef.current = null; }
     if (districtBoundary) {
-      districtLayerRef.current = L.geoJSON(districtBoundary as GeoJsonObject, {
+      layerRef.current = L.geoJSON(districtBoundary as GeoJsonObject, {
         pane: BOUNDARY_PANE,
-        style: () => ({ color: "#D4643B", weight: 2.5, dashArray: "6 4", fillOpacity: 0, opacity: 0.75 }),
+        style: () => ({ color: ORANGE, weight: 1.5, dashArray: "5 4", fillOpacity: 0, opacity: 0.45 }),
       }).addTo(map);
     }
     return () => {
-      if (districtLayerRef.current) {
-        map.removeLayer(districtLayerRef.current);
-        districtLayerRef.current = null;
-      }
+      if (layerRef.current) { map.removeLayer(layerRef.current); layerRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [districtBoundary]);
@@ -142,179 +79,134 @@ function BoundaryLayer({
   return null;
 }
 
-// ── Inner controller (must live inside MapContainer) ────────────────────────
+// ── Map controller ────────────────────────────────────────────────────────────
 function MapController({
   markers,
   selectedKey,
+  showAllTrigger,
   districtConfig,
-  boundaries,
-  activeNeighborhoodName,
-  districtBoundary,
-  fallbackNeighborhoodName,
-  markerLayerRefs,
 }: {
-  markers: CommissionMarker[];
-  selectedKey: string | null;
+  markers:        CommissionMarker[];
+  selectedKey:    string | null;
+  showAllTrigger: number;
   districtConfig: DistrictConfig;
-  boundaries?: Map<string, Feature>;
-  activeNeighborhoodName?: string | null;
-  districtBoundary?: GeoFeature | null;
-  fallbackNeighborhoodName?: string | null;
-  markerLayerRefs: { current: Map<string, L.CircleMarker> };
 }) {
   const map = useMap();
-  const popupTimerRef = useRef<number>(0);
+  // Track which district we've auto-fitted so we don't jump when more cards load
+  const fittedForDistrict = useRef<string>("");
 
+  // Auto-fit to all markers the first time they arrive for the current district
   useEffect(() => {
-    window.clearTimeout(popupTimerRef.current);
-
-    if (selectedKey) {
-      // Priority 1: fly to geocoded marker + open its popup
-      const m = markers.find(mk => mk.key === selectedKey);
-      if (m) {
-        map.flyTo([m.lat, m.lng], 16, { duration: 0.5 });
-        popupTimerRef.current = window.setTimeout(() => {
-          markerLayerRefs.current.get(selectedKey)?.openPopup();
-        }, 580);
-        return;
-      }
-      // Priority 1b: no geocoded marker — fly to fallback neighborhood boundary
-      if (fallbackNeighborhoodName && boundaries) {
-        const feature = boundaries.get(fallbackNeighborhoodName);
-        if (feature) {
-          const bounds = L.geoJSON(feature as GeoJsonObject).getBounds();
-          if (bounds.isValid()) {
-            map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 16, duration: 0.6 });
-            return;
-          }
-        }
-      }
+    if (markers.length === 0) return;
+    if (fittedForDistrict.current === districtConfig.number) return;
+    const bounds = L.latLngBounds(markers.map(m => L.latLng(m.lat, m.lng)));
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: false });
+      fittedForDistrict.current = districtConfig.number;
     }
-    // Priority 2: neighborhood filter pill → zoom to boundary
-    if (activeNeighborhoodName && boundaries) {
-      const feature = boundaries.get(activeNeighborhoodName);
-      if (feature) {
-        const bounds = L.geoJSON(feature as GeoJsonObject).getBounds();
-        if (bounds.isValid()) {
-          map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 16, duration: 0.6 });
-          return;
-        }
-      }
-    }
-    // Priority 2.5: district boundary fit
-    if (!activeNeighborhoodName && districtBoundary) {
-      const bounds = L.geoJSON(districtBoundary as GeoJsonObject).getBounds();
-      if (bounds.isValid()) {
-        map.flyToBounds(bounds, { padding: [32, 32], maxZoom: 14, duration: 0.6 });
-        return;
-      }
-    }
-    // Priority 3: district center
-    const center = DISTRICT_CENTERS[districtConfig.number] ?? [37.773, -122.431];
-    const zoom   = DISTRICT_ZOOM[districtConfig.number]   ?? 14;
-    map.flyTo(center, zoom, { duration: 0.5 });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey, activeNeighborhoodName, districtConfig.number, districtBoundary, fallbackNeighborhoodName]);
+  }, [markers, districtConfig.number]);
+
+  // "Show All" — fit to all markers with a smooth animation
+  useEffect(() => {
+    if (showAllTrigger === 0 || markers.length === 0) return;
+    const bounds = L.latLngBounds(markers.map(m => L.latLng(m.lat, m.lng)));
+    if (bounds.isValid()) {
+      map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 15, duration: 0.45 });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAllTrigger]);
+
+  // Card expanded → fly to its marker
+  useEffect(() => {
+    if (!selectedKey) return;
+    const m = markers.find(mk => mk.keys.includes(selectedKey));
+    if (m) map.flyTo([m.lat, m.lng], 16, { duration: 0.45 });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey]);
 
   return null;
 }
 
-// ── Public component ─────────────────────────────────────────────────────────
+// ── Public props ──────────────────────────────────────────────────────────────
 export interface CommissionMapProps {
-  markers: CommissionMarker[];
-  selectedKey: string | null;
-  districtConfig: DistrictConfig;
-  onSelectMarker: (key: string) => void;
-  boundaries?: Map<string, Feature>;
-  activeNeighborhoodName?: string | null;
+  markers:         CommissionMarker[];
+  /** groupKey of the currently expanded card, or null */
+  selectedKey:     string | null;
+  /** Increment to trigger fit-all-markers animation */
+  showAllTrigger:  number;
+  districtConfig:  DistrictConfig;
   districtBoundary?: GeoFeature | null;
-  /** Neighborhood name to fly to when selected project has no geocoded coords. */
-  fallbackNeighborhoodName?: string | null;
+  onSelectMarker:  (address: string, keys: string[]) => void;
+  onShowAll:       () => void;
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
 export function CommissionMap({
   markers,
   selectedKey,
+  showAllTrigger,
   districtConfig,
-  onSelectMarker,
-  boundaries,
-  activeNeighborhoodName = null,
   districtBoundary,
-  fallbackNeighborhoodName = null,
+  onSelectMarker,
+  onShowAll,
 }: CommissionMapProps) {
   const center = DISTRICT_CENTERS[districtConfig.number] ?? [37.773, -122.431];
   const zoom   = DISTRICT_ZOOM[districtConfig.number]   ?? 14;
-  // Refs to underlying Leaflet CircleMarker instances — used to programmatically openPopup()
-  const markerLayerRefs = useRef<Map<string, L.CircleMarker>>(new Map());
 
   return (
     <div style={{
       position: "relative", marginBottom: 28,
-      borderRadius: 20,
-      border: "1px solid rgba(0,0,0,0.06)",
-      boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
-      overflow: "hidden",  // clips map corners without needing radius on inner div
+      borderRadius: 20, border: "1px solid rgba(0,0,0,0.06)",
+      boxShadow: "0 2px 12px rgba(0,0,0,0.04)", overflow: "hidden",
     }}>
       <MapContainer
         center={center}
         zoom={zoom}
-        style={{ height: 220, borderRadius: 20, width: "100%" }}
+        style={{ height: 240, width: "100%" }}
         scrollWheelZoom={false}
         zoomControl={false}
         attributionControl={false}
       >
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
           subdomains="abcd"
           maxZoom={19}
         />
         <MapController
           markers={markers}
           selectedKey={selectedKey}
+          showAllTrigger={showAllTrigger}
           districtConfig={districtConfig}
-          boundaries={boundaries}
-          activeNeighborhoodName={activeNeighborhoodName}
-          districtBoundary={districtBoundary}
-          fallbackNeighborhoodName={fallbackNeighborhoodName}
-          markerLayerRefs={markerLayerRefs}
         />
-        {boundaries && boundaries.size > 0 && (
-          <BoundaryLayer
-            boundaries={boundaries}
-            activeNeighborhoodName={activeNeighborhoodName}
-            districtBoundary={districtBoundary}
-          />
-        )}
+        <DistrictOutline districtBoundary={districtBoundary} />
+
         {markers.map(m => {
-          const isSelected = m.key === selectedKey;
-          const color = markerColor(m.action);
+          const isSelected = !!selectedKey && m.keys.includes(selectedKey);
           return (
             <CircleMarker
               key={m.key}
-              ref={(el) => {
-                if (el) markerLayerRefs.current.set(m.key, el);
-                else markerLayerRefs.current.delete(m.key);
-              }}
               center={[m.lat, m.lng]}
-              radius={isSelected ? 10 : 7}
+              radius={isSelected ? 9 : 6}
               pathOptions={{
-                color: isSelected ? "#1A1A2E" : color,
-                fillColor: color,
-                fillOpacity: isSelected ? 0.95 : 0.75,
-                weight: isSelected ? 2.5 : 1.5,
+                color:       isSelected ? "#8B3A1F" : ORANGE,
+                fillColor:   ORANGE,
+                fillOpacity: isSelected ? 1 : 0.82,
+                weight:      isSelected ? 2.5 : 1.5,
               }}
-              eventHandlers={{ click: () => onSelectMarker(m.key) }}
+              eventHandlers={{ click: () => onSelectMarker(m.address, m.keys) }}
             >
               <Popup>
                 <div style={{
                   fontFamily: "system-ui, sans-serif",
-                  fontSize: 13, lineHeight: 1.5, minWidth: 160,
+                  fontSize: 13, lineHeight: 1.5, minWidth: 150,
                 }}>
-                  <div style={{ fontWeight: 700, marginBottom: 3, color: "#1A1A2E" }}>
+                  <div style={{ fontWeight: 700, marginBottom: 4, color: "#1A1A2E" }}>
                     {m.address}
                   </div>
-                  <div style={{ color, fontWeight: 600 }}>{m.action}</div>
+                  <div style={{ color: ORANGE, fontWeight: 600, fontSize: 12 }}>
+                    {m.count === 1 ? "1 project" : `${m.count} projects here`}
+                  </div>
                 </div>
               </Popup>
             </CircleMarker>
@@ -322,53 +214,47 @@ export function CommissionMap({
         })}
       </MapContainer>
 
-      {/* Minimal attribution — bottom right */}
-      <div style={{
-        position: "absolute", bottom: 6, right: 10, zIndex: 1000,
-        fontSize: 10, color: "#999", fontFamily: "system-ui, sans-serif",
-        pointerEvents: "none",
-      }}>
-        © OSM © CARTO
-      </div>
+      {/* "Show All" reset button */}
+      {markers.length > 0 && (
+        <button
+          onClick={onShowAll}
+          style={{
+            position: "absolute", bottom: 10, left: 12, zIndex: 1000,
+            background: "rgba(255,255,255,0.95)",
+            border: "1px solid rgba(0,0,0,0.14)",
+            borderRadius: 8, padding: "5px 12px",
+            fontSize: 12, fontWeight: 600,
+            fontFamily: "system-ui, sans-serif", color: "#3D3832",
+            cursor: "pointer", backdropFilter: "blur(4px)",
+            boxShadow: "0 1px 6px rgba(0,0,0,0.09)",
+          }}
+        >
+          Show All
+        </button>
+      )}
 
-      {/* Project count badge — bottom left */}
+      {/* Project count badge */}
       {markers.length > 0 && (
         <div style={{
-          position: "absolute", bottom: 8, left: 12, zIndex: 1000,
+          position: "absolute", top: 10, right: 12, zIndex: 1000,
           background: "rgba(255,255,255,0.92)", borderRadius: 8,
-          padding: "4px 10px", fontSize: 11,
-          fontFamily: "system-ui, sans-serif", color: "#555",
-          backdropFilter: "blur(4px)",
-          boxShadow: "0 1px 6px rgba(0,0,0,0.1)",
+          padding: "5px 10px", backdropFilter: "blur(4px)",
+          boxShadow: "0 1px 6px rgba(0,0,0,0.08)",
+          fontFamily: "system-ui, sans-serif", fontSize: 11, color: "#555",
+          display: "flex", alignItems: "center", gap: 6,
         }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: ORANGE, flexShrink: 0 }} />
           {markers.length} project{markers.length !== 1 ? "s" : ""}
         </div>
       )}
 
-      {/* Legend — only shown once markers are present */}
-      {markers.length > 0 && <div style={{
-        position: "absolute", top: 12, right: 12, zIndex: 1000,
-        background: "rgba(255,255,255,0.92)", borderRadius: 10,
-        padding: "8px 12px", backdropFilter: "blur(4px)",
-        boxShadow: "0 1px 8px rgba(0,0,0,0.1)",
+      {/* Attribution */}
+      <div style={{
+        position: "absolute", bottom: 5, right: 10, zIndex: 1000,
+        fontSize: 10, color: "#bbb", fontFamily: "system-ui, sans-serif", pointerEvents: "none",
       }}>
-        {[
-          { color: "#4D9A6A", label: "Approved" },
-          { color: "#D4943B", label: "Continued" },
-          { color: "#E05050", label: "Disapproved" },
-        ].map(item => (
-          <div key={item.label} style={{
-            display: "flex", alignItems: "center", gap: 7,
-            marginBottom: 4, fontFamily: "system-ui, sans-serif", fontSize: 11,
-          }}>
-            <div style={{
-              width: 9, height: 9, borderRadius: "50%",
-              background: item.color, flexShrink: 0,
-            }} />
-            <span style={{ color: "#555" }}>{item.label}</span>
-          </div>
-        ))}
-      </div>}
+        © OSM © CARTO
+      </div>
     </div>
   );
 }
