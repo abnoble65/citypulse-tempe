@@ -8,6 +8,7 @@ import type { DistrictData } from "./services/briefing";
 import { DEFAULT_DISTRICT } from "./districts";
 import type { DistrictConfig } from "./districts";
 import { CityPulseLogo } from "./components/Icons";
+import { CityPulseChat } from "./components/CityPulseChat";
 
 const LOADING_MESSAGES = [
   "Connecting to DataSF…",
@@ -159,6 +160,8 @@ export default function App() {
           </div>
         </Suspense>
       </ErrorBoundary>
+      {/* Floating AI assistant — available on every page */}
+      <CityPulseChat currentDistrict={districtConfig.number} />
     </ErrorBoundary>
   );
 }
