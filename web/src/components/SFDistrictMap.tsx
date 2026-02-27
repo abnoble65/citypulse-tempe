@@ -145,10 +145,10 @@ const SF_BOUNDS = L.latLngBounds(
 export function SFDistrictMap(props: SFDistrictMapProps) {
   return (
     <MapContainer
-      center={[37.758, -122.442]}
-      zoom={12}
-      minZoom={12}
-      maxZoom={12}
+      center={[37.757, -122.442]}
+      zoom={11}
+      minZoom={11}
+      maxZoom={11}
       maxBounds={SF_BOUNDS}
       maxBoundsViscosity={1.0}
       style={{ height: "100%", width: "100%" }}

@@ -178,6 +178,19 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
                   ))}
                 </div>
               </div>
+
+              {/* Mayor portrait — right side */}
+              <img
+                src="/images/mayor-lurie-stylized.png"
+                alt="Mayor Daniel Lurie"
+                style={{
+                  width: 48, height: 48, borderRadius: "50%",
+                  objectFit: "cover", objectPosition: "center top",
+                  flexShrink: 0, display: "block",
+                  border: `1.5px solid ${COLORS.lightBorder}`,
+                  boxShadow: "0 2px 8px rgba(61,56,50,0.12)",
+                }}
+              />
             </button>
           );
         })()}
@@ -234,7 +247,7 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
                       )}
                     </div>
                   </div>
-                  <SupervisorAvatar districtNumber={d.number} size={38} />
+                  <SupervisorAvatar districtNumber={d.number} size={52} />
                 </div>
               </button>
             );
