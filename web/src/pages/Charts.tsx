@@ -627,21 +627,46 @@ const DISTRICT_COLORS = [
 ];
 
 function DistrictComparisonChart({ ps, byDistrict }: { ps: PermitSummary; byDistrict?: Record<string, DistrictData> }) {
+  // ── Diagnostics ──────────────────────────────────────────────────────────────
+  console.log('[DistrictChart] byDistrict keys:', byDistrict ? Object.keys(byDistrict) : 'UNDEFINED');
+  console.log('[DistrictChart] ps.total:', ps.total, '| ps.by_zip keys:', Object.keys(ps.by_zip ?? {}).filter(k => k.length <= 2));
+
   const entries = Object.values(DISTRICTS)
     .map((d, i) => {
-      // Prefer by_district (direct per-district data) over by_zip lookup
-      const bucket = byDistrict?.[d.number]?.permit_summary ?? ps.by_zip[d.number];
+      // Primary: use per-district DistrictData.permit_summary (direct count from that district's fetch)
+      const fromByDistrict = byDistrict?.[d.number]?.permit_summary;
+      // Fallback: by_zip keyed by district number (set by aggregateCitywideData at line 798)
+      const fromByZip = ps.by_zip?.[d.number];
+      const bucket = fromByDistrict ?? fromByZip;
+
+      const count = bucket?.total ?? 0;
+      const source = fromByDistrict ? 'by_district' : fromByZip ? 'by_zip' : 'MISSING';
+      if (count === 0) console.warn(`[DistrictChart] D${d.number}: count=0, source=${source}`);
+
       return {
-        label: `D${d.number}`,
+        label:    `D${d.number}`,
         fullName: d.label,
-        count: bucket?.total ?? 0,
-        cost: (bucket?.total_estimated_cost_usd ?? 0) / 1_000_000,
+        count,
+        cost:  (bucket?.total_estimated_cost_usd ?? 0) / 1_000_000,
         color: DISTRICT_COLORS[i % DISTRICT_COLORS.length],
       };
     })
     .sort((a, b) => b.count - a.count);
 
-  console.log('[DistrictChart]', entries.map(e => `${e.label}:${e.count}`).join(' '));
+  console.log('[DistrictChart] counts:', entries.map(e => `${e.label}:${e.count}`).join(' '));
+
+  // If every district shows 0, data routing failed — show a clear message
+  const allZero = entries.every(e => e.count === 0);
+  if (allZero) {
+    return (
+      <p style={{
+        fontFamily: FONTS.body, fontSize: 13,
+        color: COLORS.warmGray, fontStyle: "italic", lineHeight: 1.6,
+      }}>
+        No per-district breakdown available. Generate a <strong>Citywide</strong> briefing to see permit counts across all 11 districts.
+      </p>
+    );
+  }
 
   const maxCount = Math.max(...entries.map(e => e.count), 1);
 
