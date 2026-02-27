@@ -14,17 +14,17 @@ import { COLORS, FONTS } from "../theme";
 // ── Data ──────────────────────────────────────────────────────────────────────
 
 const SUPERVISOR_INFO: Record<string, { name: string; slug?: string }> = {
-  "1":  { name: "Connie Chan" },
-  "2":  { name: "Stephen Sherrill" },
-  "3":  { name: "Danny Sauter",     slug: "d3-sauter" },
-  "4":  { name: "Alan Wong" },
-  "5":  { name: "Bilal Mahmood" },
-  "6":  { name: "Matt Dorsey" },
-  "7":  { name: "Myrna Melgar" },
-  "8":  { name: "Rafael Mandelman" },
-  "9":  { name: "Jackie Fielder" },
-  "10": { name: "Shamann Walton" },
-  "11": { name: "Chyanne Chen" },
+  "1":  { name: "Connie Chan",       slug: "d1-chan" },
+  "2":  { name: "Stephen Sherrill",  slug: "d2-sherrill" },
+  "3":  { name: "Danny Sauter",      slug: "d3-sauter" },
+  "4":  { name: "Alan Wong",         slug: "d4-wong" },
+  "5":  { name: "Bilal Mahmood",     slug: "d5-mahmood" },
+  "6":  { name: "Matt Dorsey",       slug: "d6-dorsey" },
+  "7":  { name: "Myrna Melgar",      slug: "d7-melgar" },
+  "8":  { name: "Rafael Mandelman",  slug: "d8-mandelman" },
+  "9":  { name: "Jackie Fielder",    slug: "d9-fielder" },
+  "10": { name: "Shamann Walton",    slug: "d10-walton" },
+  "11": { name: "Chyanne Chen",      slug: "d11-chen" },
 };
 
 /** Return the supervisor's full name for a given district number, or null. */

@@ -36,16 +36,44 @@ function districtStyle(num: string, selected: string, hovered: string | null): L
   };
 }
 
+// Page background cream — must match body/page background
+const PAGE_CREAM = "#FAF8F5";
+
+// Large rectangle well beyond any visible area — forms the "outer ring" of the mask
+const MASK_OUTER: [number, number][] = [
+  [-124, 37.0], [-124, 38.5], [-121, 38.5], [-121, 37.0], [-124, 37.0],
+];
+
+/** Build an inverted GeoJSON polygon: world rect with SF district polygons as holes.
+ *  Rendered with fillRule "evenodd" + cream fill → masks everything outside SF. */
+function buildMaskGeoJSON(boundaries: Map<string, GeoFeature>): GeoJsonObject {
+  const holes: number[][][] = [];
+  for (const [, feature] of boundaries) {
+    if (feature.geometry.type === "Polygon") {
+      holes.push(feature.geometry.coordinates[0]);
+    } else if (feature.geometry.type === "MultiPolygon") {
+      for (const polygon of feature.geometry.coordinates) {
+        holes.push(polygon[0]);
+      }
+    }
+  }
+  return {
+    type: "Feature",
+    properties: {},
+    geometry: { type: "Polygon", coordinates: [MASK_OUTER, ...holes] },
+  } as GeoJsonObject;
+}
+
 function DistrictLayer({
   selectedDistrict,
   onSelectDistrict,
   disabled,
 }: SFDistrictMapProps) {
   const map = useMap();
-  const layersRef  = useRef<Map<string, L.GeoJSON>>(new Map());
-  const hoveredRef = useRef<string | null>(null);
+  const layersRef   = useRef<Map<string, L.GeoJSON>>(new Map());
+  const maskRef     = useRef<L.GeoJSON | null>(null);
+  const hoveredRef  = useRef<string | null>(null);
   const selectedRef = useRef<string>(selectedDistrict);
-  const boundariesRef = useRef<Map<string, GeoFeature>>(new Map());
 
   function refreshStyles() {
     for (const [num, layer] of layersRef.current) {
@@ -55,9 +83,15 @@ function DistrictLayer({
 
   // Load boundaries once
   useEffect(() => {
-    fetchAllSFDistrictBoundaries().then(boundaries => {
-      boundariesRef.current = boundaries;
+    // Create a pane for the mask so it sits above districts but passes pointer events
+    if (!map.getPane("sfMaskPane")) {
+      const pane = map.createPane("sfMaskPane");
+      pane.style.zIndex = "450";
+      pane.style.pointerEvents = "none";
+    }
 
+    fetchAllSFDistrictBoundaries().then(boundaries => {
+      // District polygon layers
       for (const [num, feature] of boundaries) {
         const layer = L.geoJSON(feature as GeoJsonObject, {
           style: () => districtStyle(num, selectedRef.current, hoveredRef.current),
@@ -65,24 +99,30 @@ function DistrictLayer({
 
         if (!disabled) {
           layer.on("click", () => onSelectDistrict(num));
-          layer.on("mouseover", () => {
-            hoveredRef.current = num;
-            refreshStyles();
-          });
-          layer.on("mouseout", () => {
-            hoveredRef.current = null;
-            refreshStyles();
-          });
+          layer.on("mouseover", () => { hoveredRef.current = num; refreshStyles(); });
+          layer.on("mouseout",  () => { hoveredRef.current = null; refreshStyles(); });
         }
 
         layersRef.current.set(num, layer);
       }
-      // Do NOT fitBounds — let the fixed center/zoom + maxBounds control the view
+
+      // Inverted mask layer — cream fill everywhere outside SF, pointer-events none
+      maskRef.current = L.geoJSON(buildMaskGeoJSON(boundaries), {
+        pane: "sfMaskPane",
+        style: () => ({
+          fillColor:   PAGE_CREAM,
+          fillOpacity: 1,
+          fillRule:    "evenodd" as CanvasFillRule,
+          color:       "transparent",
+          weight:      0,
+        }),
+      }).addTo(map);
     });
 
     return () => {
       for (const [, layer] of layersRef.current) map.removeLayer(layer);
       layersRef.current.clear();
+      if (maskRef.current) { map.removeLayer(maskRef.current); maskRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

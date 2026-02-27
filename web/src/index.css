@@ -105,6 +105,11 @@ input:focus {
   cursor: pointer;
 }
 
+/* District map: cream background so water/gaps blend with page */
+.cp-district-map-circle .leaflet-container {
+  background: #FAF8F5;
+}
+
 /* Neighborhood boundary polygons (Leaflet SVG paths) */
 .cp-boundary {
   transition: fill-opacity 0.35s ease, stroke-opacity 0.35s ease, stroke-width 0.35s ease;
@@ -123,22 +128,23 @@ input:focus {
   }
 }
 
-/* ── Home page district map (circular) ─────────────────── */
+/* ── Home page district map ─────────────────────────────── */
 .cp-district-map-circle {
-  width: 300px;
-  height: 300px;
-  border-radius: 50%;
+  width: 320px;
+  height: 320px;
+  border-radius: 20px;
   overflow: hidden;
   margin: 0 auto 28px;
-  border: 1px solid rgba(0,0,0,0.08);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  border: 1px solid rgba(0,0,0,0.07);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.07);
   flex-shrink: 0;
+  background: #FAF8F5;
 }
 
 @media (max-width: 767px) {
   .cp-district-map-circle {
-    width: 250px;
-    height: 250px;
+    width: 260px;
+    height: 260px;
   }
 }
 
