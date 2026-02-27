@@ -68,7 +68,6 @@ function DistrictLayer({
           layer.on("mouseover", () => {
             hoveredRef.current = num;
             refreshStyles();
-            layer.getElement()?.style.setProperty("cursor", "pointer");
           });
           layer.on("mouseout", () => {
             hoveredRef.current = null;

@@ -100,6 +100,11 @@ input:focus {
   border-radius: 5px;
 }
 
+/* SF District map polygons — pointer cursor on hover */
+.leaflet-interactive {
+  cursor: pointer;
+}
+
 /* Neighborhood boundary polygons (Leaflet SVG paths) */
 .cp-boundary {
   transition: fill-opacity 0.35s ease, stroke-opacity 0.35s ease, stroke-width 0.35s ease;
