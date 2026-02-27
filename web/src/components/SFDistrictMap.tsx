@@ -25,8 +25,20 @@ const DEFAULT_FILL   = "#EDE8E3";
 const BORDER_COLOR   = "#FFFFFF";
 
 function districtStyle(num: string, selected: string, hovered: string | null): L.PathOptions {
+  const isAllSelected = selected === "0"; // Citywide — highlight every district
   const isSel = num === selected;
   const isHov = num === hovered;
+
+  if (isAllSelected) {
+    return {
+      color:       SELECTED_FILL,
+      weight:      isHov ? 2 : 1.5,
+      fillColor:   SELECTED_FILL,
+      fillOpacity: isHov ? 0.32 : 0.18,
+      opacity:     0.75,
+    };
+  }
+
   return {
     color:       BORDER_COLOR,
     weight:      isSel ? 2.5 : 1,

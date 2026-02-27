@@ -113,9 +113,9 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
                 background: isSelected
                   ? "linear-gradient(135deg, #FBEADE 0%, #F6D9C2 100%)"
                   : isHovered
-                  ? "linear-gradient(135deg, #FDF0E4 0%, #FAE3CE 100%)"
-                  : "linear-gradient(135deg, #FDF3EA 0%, #FAE8D6 100%)",
-                border: `2px solid ${isSelected ? COLORS.orange : isHovered ? "rgba(212,100,59,0.55)" : "rgba(212,100,59,0.32)"}`,
+                  ? "#F5F0EB"
+                  : "#FAF7F3",
+                border: `1px solid ${isSelected ? COLORS.orange : isHovered ? "#D9CFC8" : "#EDE8E3"}`,
                 borderRadius: 20,
                 padding: "28px 32px",
                 cursor: loading ? "not-allowed" : "pointer",
@@ -125,8 +125,8 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
                 boxShadow: isSelected
                   ? "0 8px 32px rgba(212,100,59,0.22)"
                   : isHovered
-                  ? "0 8px 24px rgba(212,100,59,0.14)"
-                  : "0 4px 16px rgba(212,100,59,0.10)",
+                  ? "0 4px 14px rgba(0,0,0,0.07)"
+                  : "0 1px 4px rgba(0,0,0,0.04)",
                 transform: isHovered && !isSelected ? "translateY(-2px)" : "none",
                 opacity: loading ? 0.6 : 1,
                 marginBottom: 8,
@@ -184,7 +184,7 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
                 src="/images/mayor-lurie-stylized.png"
                 alt="Mayor Daniel Lurie"
                 style={{
-                  width: 48, height: 48, borderRadius: "50%",
+                  width: 64, height: 64, borderRadius: "50%",
                   objectFit: "cover", objectPosition: "center top",
                   flexShrink: 0, display: "block",
                   border: `1.5px solid ${COLORS.lightBorder}`,
