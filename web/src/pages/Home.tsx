@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { COLORS, FONTS } from "../theme";
 import { CityPulseLogo } from "../components/Icons";
 import { DISTRICTS, DEFAULT_DISTRICT, CITYWIDE_DISTRICT } from "../districts";
@@ -7,32 +7,30 @@ import type { DistrictConfig } from "../districts";
 interface HomeProps {
   onNavigate: (page: string) => void;
   onGenerate: (district: DistrictConfig) => void;
-  loading: boolean;
-  error: string | null;
+  loading:    boolean;
+  error:      string | null;
 }
 
-const LOADING_MESSAGES = [
-  "Connecting to DataSF…",
-  "Pulling live permit data…",
-  "Analyzing development pipeline…",
-  "Generating AI briefing…",
-  "Compiling charts…",
-  "Almost ready…",
-];
+/** Current SF Board of Supervisors (2025) */
+const SUPERVISORS: Record<string, string> = {
+  "1":  "Connie Chan",
+  "2":  "Stephen Sherrill",
+  "3":  "Danny Sauter",
+  "4":  "Alan Wong",
+  "5":  "Bilal Mahmood",
+  "6":  "Matt Dorsey",
+  "7":  "Myrna Melgar",
+  "8":  "Rafael Mandelman",
+  "9":  "Jackie Fielder",
+  "10": "Shamann Walton",
+  "11": "Chyanne Chen",
+};
 
 const DISTRICT_LIST = Object.values(DISTRICTS);
 
 export function Home({ onGenerate, loading, error }: HomeProps) {
   const [selectedDistrict, setSelectedDistrict] = useState<DistrictConfig>(DEFAULT_DISTRICT);
-  const [msgIndex, setMsgIndex] = useState(0);
-
-  useEffect(() => {
-    if (!loading) { setMsgIndex(0); return; }
-    const interval = setInterval(() => {
-      setMsgIndex(prev => (prev + 1) % LOADING_MESSAGES.length);
-    }, 2200);
-    return () => clearInterval(interval);
-  }, [loading]);
+  const [hoveredDistrict,  setHoveredDistrict]  = useState<string | null>(null);
 
   return (
     <div style={{
@@ -41,83 +39,8 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
       display: "flex", flexDirection: "column", alignItems: "center",
       justifyContent: "center",
       padding: "60px 24px",
-      position: "relative",
     }}>
-      {/* Loading overlay */}
-      {loading && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 100,
-          background: "rgba(250,248,245,0.92)",
-          backdropFilter: "blur(6px)",
-          display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "center",
-        }}>
-          <div style={{
-            animation: "pulse-glow 2s ease-in-out infinite",
-            marginBottom: 36,
-          }}>
-            <CityPulseLogo size={80} />
-          </div>
-
-          <div style={{ display: "flex", gap: 8, marginBottom: 28 }}>
-            {[0, 1, 2].map(i => (
-              <div key={i} style={{
-                width: 10, height: 10, borderRadius: "50%",
-                background: COLORS.orange, opacity: 0.3,
-                animation: `dot-bounce 1.4s ease-in-out ${i * 0.16}s infinite`,
-              }} />
-            ))}
-          </div>
-
-          <p style={{
-            fontFamily: FONTS.body, fontSize: 16, fontWeight: 600,
-            color: COLORS.charcoal, textAlign: "center", minHeight: 24,
-          }}>
-            {LOADING_MESSAGES[msgIndex]}
-          </p>
-          <p style={{
-            fontFamily: FONTS.body, fontSize: 13, fontWeight: 500,
-            color: COLORS.warmGray, marginTop: 10,
-          }}>
-            This may take a few seconds
-          </p>
-
-          <div style={{
-            width: "min(240px, 80vw)", height: 4, background: COLORS.lightBorder,
-            borderRadius: 2, marginTop: 24, overflow: "hidden",
-          }}>
-            <div style={{
-              height: "100%",
-              background: `linear-gradient(90deg, ${COLORS.orange}, ${COLORS.orangeSoft})`,
-              borderRadius: 2,
-              animation: "progress-sweep 14s ease-in-out forwards",
-            }} />
-          </div>
-
-          <style>{`
-            @keyframes pulse-glow {
-              0%, 100% { transform: scale(1); filter: drop-shadow(0 4px 20px rgba(212,100,59,0.15)); }
-              50% { transform: scale(1.06); filter: drop-shadow(0 6px 28px rgba(212,100,59,0.3)); }
-            }
-            @keyframes dot-bounce {
-              0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
-              40% { opacity: 1; transform: scale(1.2); }
-            }
-            @keyframes progress-sweep {
-              0% { width: 0%; }
-              20% { width: 25%; }
-              50% { width: 55%; }
-              80% { width: 85%; }
-              100% { width: 98%; }
-            }
-          `}</style>
-        </div>
-      )}
-
-      <div style={{
-        marginBottom: 40,
-        filter: "drop-shadow(0 6px 24px rgba(212,100,59,0.2))",
-      }}>
+      <div style={{ marginBottom: 40, filter: "drop-shadow(0 6px 24px rgba(212,100,59,0.2))" }}>
         <CityPulseLogo size={72} />
       </div>
 
@@ -151,115 +74,115 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
           Select a Supervisor District
         </p>
 
-        {/* SF Citywide — full-width card above the grid */}
+        {/* SF Citywide — compact header card */}
         {(() => {
           const isSelected = selectedDistrict.number === "0";
+          const isHovered  = hoveredDistrict === "0";
           return (
             <button
               onClick={() => setSelectedDistrict(CITYWIDE_DISTRICT)}
+              onMouseEnter={() => setHoveredDistrict("0")}
+              onMouseLeave={() => setHoveredDistrict(null)}
               disabled={loading}
               style={{
                 width: "100%",
                 background: isSelected
-                  ? "linear-gradient(135deg, rgba(212,100,59,0.12) 0%, rgba(232,132,75,0.08) 100%)"
+                  ? "linear-gradient(135deg,rgba(212,100,59,0.1) 0%,rgba(232,132,75,0.06) 100%)"
                   : COLORS.white,
                 border: `1.5px solid ${isSelected ? COLORS.orange : COLORS.lightBorder}`,
-                borderRadius: 16,
-                padding: "18px 22px",
+                borderRadius: 14,
+                padding: "11px 18px",
                 cursor: loading ? "not-allowed" : "pointer",
                 textAlign: "left",
-                display: "flex",
-                alignItems: "center",
-                gap: 18,
-                transition: "all 0.2s ease",
+                display: "flex", alignItems: "center", gap: 14,
+                transition: "all 0.15s ease",
                 boxShadow: isSelected
-                  ? "0 4px 20px rgba(212,100,59,0.14)"
-                  : "0 1px 6px rgba(0,0,0,0.04)",
+                  ? "0 4px 16px rgba(212,100,59,0.12)"
+                  : isHovered
+                  ? "0 4px 14px rgba(0,0,0,0.08)"
+                  : "0 1px 4px rgba(0,0,0,0.04)",
+                transform: isHovered && !isSelected ? "translateY(-1px)" : "none",
                 opacity: loading ? 0.6 : 1,
-                marginBottom: 12,
+                marginBottom: 10,
               }}
             >
-              <div style={{
-                fontSize: 32, lineHeight: 1, flexShrink: 0,
-              }}>🌁</div>
+              <span style={{ fontSize: 22, lineHeight: 1, flexShrink: 0 }}>🌁</span>
               <div style={{ flex: 1 }}>
-                <div style={{
-                  fontFamily: "'Urbanist', sans-serif",
-                  fontSize: 20, fontWeight: 800,
+                <span style={{
+                  fontFamily: "'Urbanist',sans-serif",
+                  fontSize: 16, fontWeight: 800,
                   color: isSelected ? COLORS.orange : COLORS.charcoal,
-                  letterSpacing: "-0.01em", lineHeight: 1,
-                  marginBottom: 3,
-                }}>SF Citywide</div>
-                <div style={{
-                  fontFamily: FONTS.body, fontSize: 10, fontWeight: 700,
+                  letterSpacing: "-0.01em",
+                }}>SF Citywide</span>
+                <span style={{
+                  fontFamily: FONTS.body, fontSize: 11,
                   color: isSelected ? COLORS.orange : COLORS.warmGray,
-                  textTransform: "uppercase", letterSpacing: "0.06em",
-                  marginBottom: 4,
-                }}>All 11 Districts</div>
-                <div style={{
-                  fontFamily: FONTS.body, fontSize: 11, fontWeight: 500,
-                  color: isSelected ? COLORS.charcoal : COLORS.warmGray,
-                  lineHeight: 1.45,
-                }}>
-                  Full city analysis · Supervisor Districts 1–11
-                </div>
+                  marginLeft: 10,
+                }}>All 11 Districts</span>
               </div>
               {isSelected && (
-                <div style={{
+                <span style={{
                   fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
                   color: COLORS.orange, textTransform: "uppercase",
                   letterSpacing: "0.06em", flexShrink: 0,
-                }}>Selected ✓</div>
+                }}>✓</span>
               )}
             </button>
           );
         })()}
 
+        {/* District grid — 3 cols on desktop */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(min(155px, 100%), 1fr))",
-          gap: 10,
+          gridTemplateColumns: "repeat(auto-fill, minmax(min(250px, 100%), 1fr))",
+          gap: 8,
         }}>
           {DISTRICT_LIST.map(d => {
             const isSelected = selectedDistrict.number === d.number;
+            const isHovered  = hoveredDistrict === d.number;
+            const supervisor = SUPERVISORS[d.number] ?? "";
             return (
               <button
                 key={d.number}
                 onClick={() => setSelectedDistrict(d)}
+                onMouseEnter={() => setHoveredDistrict(d.number)}
+                onMouseLeave={() => setHoveredDistrict(null)}
                 disabled={loading}
                 style={{
                   background: isSelected ? COLORS.orangePale : COLORS.white,
                   border: `1.5px solid ${isSelected ? COLORS.orange : COLORS.lightBorder}`,
-                  borderRadius: 16,
-                  padding: "16px 14px",
+                  borderRadius: 14,
+                  padding: "12px 16px",
                   cursor: loading ? "not-allowed" : "pointer",
                   textAlign: "left",
-                  transition: "all 0.2s ease",
+                  transition: "all 0.15s ease",
                   boxShadow: isSelected
                     ? "0 4px 16px rgba(212,100,59,0.12)"
+                    : isHovered
+                    ? "0 4px 14px rgba(0,0,0,0.08)"
                     : "0 1px 4px rgba(0,0,0,0.04)",
+                  transform: isHovered && !isSelected ? "translateY(-2px)" : "none",
                   opacity: loading ? 0.6 : 1,
                 }}
               >
                 <div style={{
-                  fontFamily: "'Urbanist', sans-serif",
-                  fontSize: 26, fontWeight: 800,
+                  fontFamily: "'Urbanist',sans-serif",
+                  fontSize: 24, fontWeight: 800,
                   color: isSelected ? COLORS.orange : COLORS.charcoal,
-                  lineHeight: 1, marginBottom: 2,
+                  lineHeight: 1, marginBottom: 4,
                   letterSpacing: "-0.02em",
                 }}>{d.number}</div>
                 <div style={{
-                  fontFamily: FONTS.body, fontSize: 10,
-                  fontWeight: 700, color: isSelected ? COLORS.orange : COLORS.warmGray,
-                  textTransform: "uppercase", letterSpacing: "0.05em",
-                  marginBottom: 5,
-                }}>District</div>
-                <div style={{
                   fontFamily: FONTS.body, fontSize: 11,
                   color: isSelected ? COLORS.charcoal : COLORS.warmGray,
-                  lineHeight: 1.45, fontWeight: 500,
+                  fontWeight: 500, lineHeight: 1.3,
                 }}>
-                  {d.neighborhoods.map(n => n.name).join(" · ")}
+                  {d.label}
+                  {supervisor && (
+                    <span style={{ color: isSelected ? COLORS.orange : COLORS.warmGray }}>
+                      {" · "}Sup. {supervisor}
+                    </span>
+                  )}
                 </div>
               </button>
             );
