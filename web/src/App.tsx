@@ -81,7 +81,7 @@ export default function App() {
   return (
     <ErrorBoundary label="App">
       {!splashDone && <SplashScreen onComplete={handleSplashComplete} />}
-      {page !== "Home" && <NavBar activePage={page} onNavigate={setPage} />}
+      {page !== "Home" && <NavBar activePage={page} onNavigate={setPage} districtConfig={districtConfig} />}
       <ErrorBoundary label={page}>
         <Suspense fallback={<div />}>
           {renderPage()}
