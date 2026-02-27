@@ -107,7 +107,7 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
           gridTemplateColumns: "repeat(auto-fill, minmax(min(250px, 100%), 1fr))",
           gap: 8,
         }}>
-          {/* Citywide — spans 2 columns, ~2× height */}
+          {/* Citywide — spans 2 columns, 2× height, primary option */}
           {(() => {
             const isSelected = selectedDistrict.number === "0";
             const isHovered  = hoveredDistrict === "0";
@@ -119,45 +119,73 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
                 disabled={loading}
                 style={{
                   gridColumn: "span 2",
-                  minHeight: 110,
+                  minHeight: 148,
+                  position: "relative",
                   background: isSelected
-                    ? "linear-gradient(135deg,rgba(212,100,59,0.1) 0%,rgba(232,132,75,0.06) 100%)"
-                    : COLORS.white,
-                  border: `1.5px solid ${isSelected ? COLORS.orange : COLORS.lightBorder}`,
-                  borderRadius: 14,
-                  padding: "24px 24px",
+                    ? "linear-gradient(135deg, rgba(212,100,59,0.13) 0%, rgba(232,132,75,0.07) 100%)"
+                    : isHovered
+                    ? "linear-gradient(135deg, #FAF2ED 0%, #F7EDE7 100%)"
+                    : "linear-gradient(135deg, #FAF6F2 0%, #F5EFE9 100%)",
+                  border: `2px solid ${isSelected ? COLORS.orange : isHovered ? "rgba(212,100,59,0.35)" : "rgba(212,100,59,0.20)"}`,
+                  borderRadius: 18,
+                  padding: "26px 28px",
                   cursor: loading ? "not-allowed" : "pointer",
                   textAlign: "left",
-                  display: "flex", alignItems: "center", gap: 18,
+                  display: "flex", alignItems: "center", gap: 22,
                   transition: "all 0.15s ease",
                   boxShadow: isSelected
-                    ? "0 4px 16px rgba(212,100,59,0.12)"
+                    ? "0 6px 24px rgba(212,100,59,0.16)"
                     : isHovered
-                    ? "0 4px 14px rgba(0,0,0,0.08)"
-                    : "0 1px 4px rgba(0,0,0,0.04)",
-                  transform: isHovered && !isSelected ? "translateY(-1px)" : "none",
+                    ? "0 6px 20px rgba(212,100,59,0.10)"
+                    : "0 2px 10px rgba(212,100,59,0.07)",
+                  transform: isHovered && !isSelected ? "translateY(-2px)" : "none",
                   opacity: loading ? 0.6 : 1,
                 }}
               >
-                <span style={{ fontSize: 36, lineHeight: 1, flexShrink: 0 }}>🌁</span>
+                {/* Badge — top right */}
+                <div style={{
+                  position: "absolute", top: 13, right: 15,
+                  fontFamily: FONTS.body, fontSize: 10, fontWeight: 700,
+                  letterSpacing: "0.06em", textTransform: "uppercase",
+                  borderRadius: 10, padding: "3px 10px",
+                  ...(isSelected
+                    ? { background: COLORS.orange, color: COLORS.white }
+                    : { background: COLORS.orangePale, color: COLORS.orange,
+                        border: "1px solid rgba(212,100,59,0.22)" }),
+                }}>
+                  {isSelected ? "✓ Selected" : "Start here"}
+                </div>
+
+                <span style={{ fontSize: 52, lineHeight: 1, flexShrink: 0 }}>🌁</span>
+
                 <div style={{ flex: 1 }}>
                   <div style={{
-                    fontFamily: "'Urbanist',sans-serif",
-                    fontSize: 22, fontWeight: 800,
+                    fontFamily: "'Urbanist', sans-serif",
+                    fontSize: 30, fontWeight: 800,
                     color: isSelected ? COLORS.orange : COLORS.charcoal,
-                    letterSpacing: "-0.02em", marginBottom: 4,
-                  }}>SF Citywide</div>
+                    letterSpacing: "-0.025em", lineHeight: 1.1, marginBottom: 7,
+                  }}>
+                    SF Citywide
+                  </div>
                   <div style={{
-                    fontFamily: FONTS.body, fontSize: 12,
+                    fontFamily: FONTS.body, fontSize: 13,
                     color: isSelected ? COLORS.orange : COLORS.warmGray,
-                  }}>All 11 Districts · Citywide urban intelligence</div>
+                    lineHeight: 1.5, marginBottom: 12,
+                  }}>
+                    All 11 Supervisor Districts · Full city urban intelligence
+                  </div>
+                  {/* Data type tags */}
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {["Permits", "Pipeline", "Planning", "Evictions", "Assessments"].map(tag => (
+                      <span key={tag} style={{
+                        fontFamily: FONTS.body, fontSize: 10, fontWeight: 600,
+                        color: isSelected ? COLORS.orange : COLORS.warmGray,
+                        background: isSelected ? "rgba(212,100,59,0.09)" : "rgba(0,0,0,0.045)",
+                        borderRadius: 6, padding: "3px 9px",
+                      }}>{tag}</span>
+                    ))}
+                  </div>
                 </div>
-                {isSelected && (
-                  <span style={{
-                    fontFamily: FONTS.body, fontSize: 13, fontWeight: 700,
-                    color: COLORS.orange, flexShrink: 0,
-                  }}>✓ Selected</span>
-                )}
               </button>
             );
           })()}
