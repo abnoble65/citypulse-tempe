@@ -106,8 +106,8 @@ function DistrictLayer({
 export function SFDistrictMap(props: SFDistrictMapProps) {
   return (
     <MapContainer
-      center={[37.757, -122.440]}
-      zoom={11}
+      center={[37.76, -122.44]}
+      zoom={12}
       style={{ height: 220, width: "100%" }}
       scrollWheelZoom={false}
       zoomControl={false}

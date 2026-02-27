@@ -101,96 +101,94 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
           Select a Supervisor District
         </p>
 
-        {/* District grid — 3 fixed cols desktop, 2 cols mobile */}
-        <div className="cp-district-grid">
-          {/* Citywide — hero card, spans 2 columns */}
-          {(() => {
-            const isSelected = selectedDistrict.number === "0";
-            const isHovered  = hoveredDistrict === "0";
-            return (
-              <button
-                className="cp-citywide-card"
-                onClick={() => setSelectedDistrict(CITYWIDE_DISTRICT)}
-                onMouseEnter={() => setHoveredDistrict("0")}
-                onMouseLeave={() => setHoveredDistrict(null)}
-                disabled={loading}
-                style={{
-                  minHeight: 160,
-                  position: "relative",
-                  background: isSelected
-                    ? "linear-gradient(135deg, #FBEADE 0%, #F6D9C2 100%)"
-                    : isHovered
-                    ? "linear-gradient(135deg, #FDF0E4 0%, #FAE3CE 100%)"
-                    : "linear-gradient(135deg, #FDF3EA 0%, #FAE8D6 100%)",
-                  border: `2px solid ${isSelected ? COLORS.orange : isHovered ? "rgba(212,100,59,0.55)" : "rgba(212,100,59,0.32)"}`,
-                  borderRadius: 20,
-                  padding: "28px 32px",
-                  cursor: loading ? "not-allowed" : "pointer",
-                  textAlign: "left",
-                  display: "flex", alignItems: "center", gap: 26,
-                  transition: "all 0.15s ease",
-                  boxShadow: isSelected
-                    ? "0 8px 32px rgba(212,100,59,0.22)"
-                    : isHovered
-                    ? "0 8px 24px rgba(212,100,59,0.14)"
-                    : "0 4px 16px rgba(212,100,59,0.10)",
-                  transform: isHovered && !isSelected ? "translateY(-2px)" : "none",
-                  opacity: loading ? 0.6 : 1,
-                }}
-              >
-                {/* Selected indicator — top right */}
-                {isSelected && (
-                  <div style={{
-                    position: "absolute", top: 14, right: 16,
-                    fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
-                    color: COLORS.white, background: COLORS.orange,
-                    borderRadius: 10, padding: "4px 12px",
-                    letterSpacing: "0.04em",
-                  }}>✓ Selected</div>
-                )}
+        {/* Row 1: Citywide hero card — full width, above the grid */}
+        {(() => {
+          const isSelected = selectedDistrict.number === "0";
+          const isHovered  = hoveredDistrict === "0";
+          return (
+            <button
+              onClick={() => setSelectedDistrict(CITYWIDE_DISTRICT)}
+              onMouseEnter={() => setHoveredDistrict("0")}
+              onMouseLeave={() => setHoveredDistrict(null)}
+              disabled={loading}
+              style={{
+                width: "100%",
+                minHeight: 160,
+                position: "relative",
+                background: isSelected
+                  ? "linear-gradient(135deg, #FBEADE 0%, #F6D9C2 100%)"
+                  : isHovered
+                  ? "linear-gradient(135deg, #FDF0E4 0%, #FAE3CE 100%)"
+                  : "linear-gradient(135deg, #FDF3EA 0%, #FAE8D6 100%)",
+                border: `2px solid ${isSelected ? COLORS.orange : isHovered ? "rgba(212,100,59,0.55)" : "rgba(212,100,59,0.32)"}`,
+                borderRadius: 20,
+                padding: "28px 32px",
+                cursor: loading ? "not-allowed" : "pointer",
+                textAlign: "left",
+                display: "flex", alignItems: "center", gap: 26,
+                transition: "all 0.15s ease",
+                boxShadow: isSelected
+                  ? "0 8px 32px rgba(212,100,59,0.22)"
+                  : isHovered
+                  ? "0 8px 24px rgba(212,100,59,0.14)"
+                  : "0 4px 16px rgba(212,100,59,0.10)",
+                transform: isHovered && !isSelected ? "translateY(-2px)" : "none",
+                opacity: loading ? 0.6 : 1,
+                marginBottom: 8,
+              }}
+            >
+              {isSelected && (
+                <div style={{
+                  position: "absolute", top: 14, right: 16,
+                  fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
+                  color: COLORS.white, background: COLORS.orange,
+                  borderRadius: 10, padding: "4px 12px",
+                  letterSpacing: "0.04em",
+                }}>✓ Selected</div>
+              )}
 
-                <span style={{ fontSize: 56, lineHeight: 1, flexShrink: 0 }}>🌁</span>
+              <span style={{ fontSize: 56, lineHeight: 1, flexShrink: 0 }}>🌁</span>
 
-                <div style={{ flex: 1 }}>
-                  {/* Label above title */}
-                  <div style={{
-                    fontFamily: FONTS.body, fontSize: 10, fontWeight: 800,
-                    color: COLORS.orange, letterSpacing: "0.12em",
-                    textTransform: "uppercase", marginBottom: 6,
-                  }}>
-                    Start here
-                  </div>
-                  <div style={{
-                    fontFamily: "'Urbanist', sans-serif",
-                    fontSize: 32, fontWeight: 800,
-                    color: isSelected ? COLORS.orange : COLORS.charcoal,
-                    letterSpacing: "-0.025em", lineHeight: 1.05, marginBottom: 7,
-                  }}>
-                    SF Citywide
-                  </div>
-                  <div style={{
-                    fontFamily: FONTS.body, fontSize: 14,
-                    color: isSelected ? COLORS.orange : "#8A7E76",
-                    lineHeight: 1.45, marginBottom: 14,
-                  }}>
-                    All 11 Supervisor Districts · Complete city intelligence
-                  </div>
-                  {/* Data type chips */}
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {["Permits", "Pipeline", "Planning", "Evictions", "Assessments"].map(tag => (
-                      <span key={tag} style={{
-                        fontFamily: FONTS.body, fontSize: 10, fontWeight: 600,
-                        color: isSelected ? COLORS.orange : "#7A6E68",
-                        background: "rgba(212,100,59,0.10)",
-                        borderRadius: 6, padding: "3px 9px",
-                      }}>{tag}</span>
-                    ))}
-                  </div>
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontFamily: FONTS.body, fontSize: 10, fontWeight: 800,
+                  color: COLORS.orange, letterSpacing: "0.12em",
+                  textTransform: "uppercase", marginBottom: 6,
+                }}>
+                  Start here
                 </div>
-              </button>
-            );
-          })()}
+                <div style={{
+                  fontFamily: "'Urbanist', sans-serif",
+                  fontSize: 32, fontWeight: 800,
+                  color: isSelected ? COLORS.orange : COLORS.charcoal,
+                  letterSpacing: "-0.025em", lineHeight: 1.05, marginBottom: 7,
+                }}>
+                  SF Citywide
+                </div>
+                <div style={{
+                  fontFamily: FONTS.body, fontSize: 14,
+                  color: isSelected ? COLORS.orange : "#8A7E76",
+                  lineHeight: 1.45, marginBottom: 14,
+                }}>
+                  All 11 Supervisor Districts · Complete city intelligence
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {["Permits", "Pipeline", "Planning", "Evictions", "Assessments"].map(tag => (
+                    <span key={tag} style={{
+                      fontFamily: FONTS.body, fontSize: 10, fontWeight: 600,
+                      color: isSelected ? COLORS.orange : "#7A6E68",
+                      background: "rgba(212,100,59,0.10)",
+                      borderRadius: 6, padding: "3px 9px",
+                    }}>{tag}</span>
+                  ))}
+                </div>
+              </div>
+            </button>
+          );
+        })()}
 
+        {/* Row 2+: District grid — 3 fixed cols desktop, 2 cols mobile */}
+        <div className="cp-district-grid">
           {DISTRICT_LIST.map(d => {
             const isSelected = selectedDistrict.number === d.number;
             const isHovered  = hoveredDistrict === d.number;
