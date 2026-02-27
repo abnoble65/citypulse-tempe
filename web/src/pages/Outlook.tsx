@@ -221,7 +221,7 @@ export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookP
 
         {districtConfig.number !== "0" && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
-            <SupervisorAvatar districtNumber={districtConfig.number} size={30} showName={true} />
+            <SupervisorAvatar districtNumber={districtConfig.number} size={60} showName={true} />
           </div>
         )}
         <SectionLabel text="The Outlook" />
