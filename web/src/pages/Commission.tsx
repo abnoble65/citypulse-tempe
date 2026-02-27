@@ -686,11 +686,11 @@ export function Commission({ districtConfig }: CommissionProps) {
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
       <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
       <NeighborhoodHero districtConfig={districtConfig} selected={filter} />
-      <div style={{ maxWidth: 820, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
+      <div style={{ maxWidth: 860, margin: "0 auto", padding: "clamp(32px, 5vw, 52px) 24px" }}>
         <SectionLabel text="Commission Hearings" />
         <h2 style={{
           fontFamily: "'Urbanist', sans-serif",
-          fontSize: "clamp(28px, 5vw, 42px)",
+          fontSize: "clamp(28px, 5vw, 44px)",
           fontWeight: 800, color: COLORS.charcoal,
           lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: 8,
         }}>

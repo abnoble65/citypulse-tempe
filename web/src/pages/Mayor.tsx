@@ -268,8 +268,7 @@ export function Mayor({ districtConfig }: MayorProps) {
       </svg>
 
       {/* Sticky filter bar */}
-      <div style={{
-        position: "sticky", top: 60, zIndex: 90,
+      <div className="cp-sticky-bar" style={{
         background: COLORS.white,
         borderBottom: `1px solid ${COLORS.lightBorder}`,
         padding: "12px 24px",

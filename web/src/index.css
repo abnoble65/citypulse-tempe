@@ -20,7 +20,7 @@ body {
 }
 
 button {
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 button:hover {
@@ -41,17 +41,31 @@ input:focus {
   background: rgba(212, 100, 59, 0.15);
 }
 
-/* NavBar pill row: hide scrollbar, smooth iOS scroll */
-.nav-pills {
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-.nav-pills::-webkit-scrollbar {
-  display: none;
+/* ── Page fade-in on navigation ─────────────────────────── */
+@keyframes cp-page-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
-/* FilterBar: hide scrollbar, smooth iOS scroll */
+/* ── Accordion / panel expand-in ───────────────────────── */
+@keyframes cp-expand-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Sticky filter bar below NavBar ─────────────────────── */
+/* Desktop NavBar = 60px; mobile NavBar = 48px             */
+.cp-sticky-bar {
+  position: sticky;
+  top: 60px;
+  z-index: 90;
+}
+
+/* FilterBar: sticky + hide scrollbar + smooth iOS scroll */
 .cp-filter {
+  position: sticky;
+  top: 60px;
+  z-index: 90;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -59,34 +73,13 @@ input:focus {
   display: none;
 }
 
-@media (max-width: 640px) {
-  /* NavBar outer padding */
-  nav {
-    padding: 0 14px !important;
-  }
-
-  /* NeighborhoodHero: allow icon+name and stats to stack */
-  .cp-hero-content {
-    flex-wrap: wrap !important;
-    padding: 10px 16px !important;
-    height: auto !important;
-    min-height: 60px !important;
-    gap: 6px !important;
-    align-items: center !important;
-  }
-
-  /* FilterBar: tighter padding on mobile */
-  .cp-filter {
-    padding: 10px 12px !important;
-  }
-
-  /* Commission search row: stack vertically */
-  .cp-search-row {
-    flex-direction: column !important;
-  }
-  .cp-search-row button {
-    width: 100% !important;
-  }
+/* NavBar pill row: hide scrollbar, smooth iOS scroll */
+.nav-pills {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.nav-pills::-webkit-scrollbar {
+  display: none;
 }
 
 /* ── Skeleton loading pulse ─────────────────────────────── */
@@ -122,5 +115,40 @@ input:focus {
 @keyframes drawPulse {
   to {
     stroke-dashoffset: 0;
+  }
+}
+
+/* ── Mobile overrides ───────────────────────────────────── */
+@media (max-width: 639px) {
+  /* Sticky bars: NavBar is 48px on mobile */
+  .cp-sticky-bar {
+    top: 48px;
+  }
+  .cp-filter {
+    top: 48px;
+    padding: 10px 12px !important;
+  }
+
+  /* NavBar outer padding */
+  nav {
+    padding: 0 14px !important;
+  }
+
+  /* NeighborhoodHero: allow icon+name and stats to stack */
+  .cp-hero-content {
+    flex-wrap: wrap !important;
+    padding: 10px 16px !important;
+    height: auto !important;
+    min-height: 60px !important;
+    gap: 6px !important;
+    align-items: center !important;
+  }
+
+  /* Commission search row: stack vertically */
+  .cp-search-row {
+    flex-direction: column !important;
+  }
+  .cp-search-row button {
+    width: 100% !important;
   }
 }

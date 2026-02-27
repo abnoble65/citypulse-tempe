@@ -154,7 +154,9 @@ export default function App() {
       {page !== "Home" && <NavBar activePage={page} onNavigate={setPage} districtConfig={districtConfig} />}
       <ErrorBoundary label={page}>
         <Suspense fallback={<div />}>
-          {renderPage()}
+          <div key={page} style={{ animation: "cp-page-in 0.15s ease-out" }}>
+            {renderPage()}
+          </div>
         </Suspense>
       </ErrorBoundary>
     </ErrorBoundary>

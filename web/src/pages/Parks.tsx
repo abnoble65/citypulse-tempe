@@ -68,7 +68,7 @@ function actionStyle(action: string | null): { bg: string; text: string; border:
   if (!action) return { bg: "#F5F4F2", text: "#7A746D", border: "#DDD8D0" };
   const a = action.toLowerCase();
   if (a.includes("approved") && !a.includes("amended"))
-    return { bg: "#EAF7EE", text: "#3A8A55", border: "#B8DFCA" };
+    return { bg: "#EDF5ED", text: "#3D7A3F", border: "#C8E0C8" };
   if (a.includes("amended"))
     return { bg: "#EBF3FF", text: "#3B6CB5", border: "#C4D9F0" };
   if (a.includes("continued") || a.includes("tabled"))
@@ -293,7 +293,7 @@ function MeetingCard({
 
       {/* Expanded items */}
       {isExpanded && (
-        <div style={{ padding: "0 16px 16px 16px", borderTop: `1px solid ${COLORS.lightBorder}` }}>
+        <div style={{ padding: "0 16px 16px 16px", borderTop: `1px solid ${COLORS.lightBorder}`, animation: "cp-expand-in 0.2s ease" }}>
           {visibleItems.length === 0 ? (
             <p style={{
               fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,
@@ -380,13 +380,12 @@ export function Parks({ districtConfig: _districtConfig }: ParksProps) {
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
 
       {/* Sticky filter bar */}
-      <div style={{
-        position: "sticky", top: 60, zIndex: 90,
+      <div className="cp-sticky-bar" style={{
         background: COLORS.white,
         borderBottom: `1px solid ${COLORS.lightBorder}`,
         padding: "12px 24px",
       }}>
-        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ maxWidth: 860, margin: "0 auto" }}>
 
           {/* Topic pills */}
           <div style={{
@@ -458,7 +457,7 @@ export function Parks({ districtConfig: _districtConfig }: ParksProps) {
       </div>
 
       {/* Page content */}
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: "clamp(32px, 5vw, 52px) 24px" }}>
+      <div style={{ maxWidth: 860, margin: "0 auto", padding: "clamp(32px, 5vw, 52px) 24px" }}>
         <SectionLabel text="Recreation & Parks" />
         <h2 style={{
           fontFamily: "'Urbanist', sans-serif",

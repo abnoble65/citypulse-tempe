@@ -689,7 +689,7 @@ function DistrictComparisonChart({ ps }: { ps: PermitSummary }) {
 function ChartsSkeletons() {
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "clamp(32px, 5vw, 52px) 24px" }}>
         {/* Header */}
         <div className="sk" style={{ height: 13, width: 60, marginBottom: 16 }} />
         <div className="sk" style={{ height: 42, width: "48%", marginBottom: 10 }} />
@@ -976,11 +976,11 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
       <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
       <NeighborhoodHero districtConfig={districtConfig} selected={filter} />
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "clamp(32px, 5vw, 52px) 24px" }}>
         <SectionLabel text="Charts" />
         <h2 style={{
           fontFamily: "'Urbanist', sans-serif",
-          fontSize: "clamp(28px, 5vw, 42px)",
+          fontSize: "clamp(28px, 5vw, 44px)",
           fontWeight: 800, color: COLORS.charcoal,
           lineHeight: 1.1, letterSpacing: "-0.02em",
           marginBottom: 8,

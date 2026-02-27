@@ -91,7 +91,7 @@ export function SupervisorAvatar({
           />
         ) : (
           <span style={{
-            fontFamily: FONTS.heading,
+            fontFamily: FONTS.display,
             fontSize, fontWeight: 800,
             color: COLORS.orange,
             lineHeight: 1, userSelect: "none",
