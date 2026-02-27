@@ -263,20 +263,6 @@ export function Mayor({ districtConfig }: MayorProps) {
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
-      {/* Duotone SVG filter — charcoal shadows (#3D3832) → warm cream highlights (#F5F0EB) */}
-      <svg width="0" height="0" style={{ position: "absolute", overflow: "hidden" }} aria-hidden="true">
-        <defs>
-          <filter id="mayor-duotone" colorInterpolationFilters="sRGB">
-            <feColorMatrix type="saturate" values="0" />
-            <feComponentTransfer>
-              <feFuncR type="linear" slope="0.722" intercept="0.239" />
-              <feFuncG type="linear" slope="0.721" intercept="0.220" />
-              <feFuncB type="linear" slope="0.726" intercept="0.196" />
-            </feComponentTransfer>
-          </filter>
-        </defs>
-      </svg>
-
       {/* Sticky filter bar */}
       <div className="cp-sticky-bar" style={{
         background: COLORS.white,
@@ -365,54 +351,45 @@ export function Mayor({ districtConfig }: MayorProps) {
 
         {/* ── Mayor header ─────────────────────────────────────────────────── */}
         <div style={{
-          display: "flex", alignItems: "center",
-          gap: "clamp(20px, 4vw, 36px)",
-          marginBottom: 28, flexWrap: "wrap",
+          display: "flex", flexDirection: "column", alignItems: "center",
+          textAlign: "center", marginBottom: 36,
         }}>
-          {/* Duotone portrait */}
-          <div style={{
-            width: 120, height: 120, borderRadius: "50%",
-            overflow: "hidden", flexShrink: 0,
-            boxShadow: "0 4px 24px rgba(212,100,59,0.22)",
-            border: `2.5px solid ${COLORS.orange}`,
-          }}>
-            <img
-              src="/images/mayor-lurie.jpg"
-              alt="Mayor Daniel Lurie"
-              style={{
-                width: "100%", height: "100%",
-                objectFit: "cover", objectPosition: "center top",
-                display: "block",
-                filter: "url(#mayor-duotone)",
-              }}
-            />
-          </div>
+          {/* Stylized portrait */}
+          <img
+            src="/images/mayor-lurie-stylized.png"
+            alt="Mayor Daniel Lurie"
+            style={{
+              width: "clamp(160px, 22vw, 200px)",
+              borderRadius: 20,
+              display: "block",
+              boxShadow: "0 8px 32px rgba(61,56,50,0.14), 0 2px 8px rgba(61,56,50,0.08)",
+              marginBottom: 20,
+            }}
+          />
 
           {/* Name + context */}
-          <div>
-            <div style={{
-              fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
-              color: COLORS.orange, textTransform: "uppercase",
-              letterSpacing: "0.08em", marginBottom: 6,
-            }}>
-              Mayor of San Francisco
-            </div>
-            <h1 style={{
-              fontFamily: "'Urbanist', sans-serif",
-              fontSize: "clamp(26px, 4vw, 38px)",
-              fontWeight: 800, color: COLORS.charcoal,
-              letterSpacing: "-0.02em", lineHeight: 1.05,
-              marginBottom: 8,
-            }}>
-              Daniel Lurie
-            </h1>
-            <p style={{
-              fontFamily: FONTS.body, fontSize: 13,
-              color: COLORS.warmGray, lineHeight: 1.5,
-            }}>
-              Elected November 2024 · Took office January 8, 2025
-            </p>
+          <div style={{
+            fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
+            color: COLORS.orange, textTransform: "uppercase",
+            letterSpacing: "0.08em", marginBottom: 8,
+          }}>
+            Mayor of San Francisco
           </div>
+          <h1 style={{
+            fontFamily: "'Urbanist', sans-serif",
+            fontSize: 32,
+            fontWeight: 800, color: COLORS.charcoal,
+            letterSpacing: "-0.02em", lineHeight: 1.05,
+            marginBottom: 8,
+          }}>
+            Mayor Daniel Lurie
+          </h1>
+          <p style={{
+            fontFamily: FONTS.body, fontSize: 13,
+            color: COLORS.warmGray, lineHeight: 1.5,
+          }}>
+            Elected November 2024 · Took office January 8, 2025
+          </p>
         </div>
 
         <hr style={{
