@@ -78,13 +78,6 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function tallyVotes(votes: Vote[]) {
-  return {
-    aye:    votes.filter(v => v.vote === "aye").length,
-    nay:    votes.filter(v => v.vote === "nay").length,
-    absent: votes.filter(v => ["absent", "recused", "abstain"].includes(v.vote)).length,
-  };
-}
 
 function actionStyle(norm: "Approved" | "Continued" | "Disapproved") {
   if (norm === "Approved")    return { bg: "#EDF5ED", text: "#3D7A3F", border: "#C8E0C8" };
@@ -403,6 +396,48 @@ function cardTitle(p: GroupedProject): { title: string; subtitle: string | null 
   return { title, subtitle };
 }
 
+/* ─── Sort & Headline helpers ────────────────── */
+
+type SortMode = 'recent' | 'significant' | 'alpha';
+
+/**
+ * Derives a plain-language one-line headline from project_description.
+ * Rule-based, no API call. Extracts the "to allow/construct/convert X" clause,
+ * or strips legal boilerplate and takes the first meaningful sentence fragment.
+ */
+function deriveHeadline(desc: string | null, address: string | null): string {
+  if (!desc) return address ?? 'Planning hearing';
+  let h = desc.trim();
+  const verbMatch = h.match(
+    /\bto\s+(allow|permit|authorize|establish|construct|install|change|convert|expand|demolish|legalize|operate|replace|maintain|relocate|remove)\b[^.]{0,120}/i
+  );
+  if (verbMatch) {
+    h = verbMatch[0].trim();
+    h = h.charAt(0).toUpperCase() + h.slice(1);
+  } else {
+    h = h
+      .replace(/^(CONDITIONAL USE AUTHORIZATION|VARIANCE|BUILDING PERMIT APPLICATION[^,]*,?|CERTIFICATE OF APPROPRIATENESS|PLANNING CODE AMENDMENT|DISCRETIONARY REVIEW|APPEAL OF|CATEGORICAL EXEMPTION)[^a-z]*,?\s*/i, '')
+      .replace(/\bpursuant to\b.{0,60}(Planning Code|Section)[^,;]*/gi, '')
+      .split(/[.!?;]/)[0]
+      .trim();
+    if (h.length < 10) h = desc.slice(0, 90);
+  }
+  if (h.length > 90) h = h.slice(0, 87).replace(/\s+\S*$/, '') + '…';
+  return h || (address ?? 'Planning hearing');
+}
+
+function sortGrouped(cards: GroupedProject[], mode: SortMode): GroupedProject[] {
+  if (mode === 'recent') return cards; // server-sorted by hearing_id DESC
+  if (mode === 'alpha') return [...cards].sort((a, b) =>
+    (a.address ?? '').localeCompare(b.address ?? ''));
+  // 'significant': rank by commissioner votes + public speakers
+  return [...cards].sort((a, b) => {
+    const score = (p: GroupedProject) =>
+      (p.votes?.length ?? 0) + (p.hearing?.public_sentiment?.[0]?.speakers ?? 0);
+    return score(b) - score(a);
+  });
+}
+
 /* ─── Skeleton Card ──────────────────────────── */
 
 function SkeletonCard() {
@@ -455,6 +490,8 @@ export function Commission({ districtConfig }: CommissionProps) {
   const [filter, setFilter]               = useState(districtConfig.allLabel);
   const [search, setSearch]               = useState("");
   const [expandedId, setExpandedId]       = useState<string | null>(null);
+  const [visibleCount, setVisibleCount]   = useState(6);
+  const [sortMode, setSortMode]           = useState<SortMode>('recent');
   const [projects, setProjects]           = useState<LiveProject[]>([]);
   const [searchResults, setSearchResults] = useState<LiveProject[] | null>(null);
   const [loading, setLoading]             = useState(true);
@@ -501,10 +538,12 @@ export function Commission({ districtConfig }: CommissionProps) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Reset neighbourhood filter pill and clear expanded card when district changes
+  // Reset neighbourhood filter pill, expanded card, and pagination when district changes
   useEffect(() => {
     setFilter(districtConfig.allLabel);
     setExpandedId(null);
+    setVisibleCount(6);
+    setSortMode('recent');
   }, [districtConfig.allLabel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Geocode all project addresses once the initial batch loads.
@@ -625,11 +664,15 @@ export function Commission({ districtConfig }: CommissionProps) {
         return true;
       });
 
-  // Computed once — used for both the card list and the empty-state check below.
-  const grouped = groupAndDedup(visible);
+  // Computed once — used for card list, pagination, and map markers.
+  const grouped       = groupAndDedup(visible);
+  const isSearching   = search.trim().length > 0;
+  const sortedGrouped = sortGrouped(grouped, sortMode);
+  const visibleCards  = isSearching ? sortedGrouped : sortedGrouped.slice(0, visibleCount);
+  const hasMore       = !isSearching && sortedGrouped.length > visibleCount;
 
-  // Build map markers from whichever addresses have been geocoded.
-  const commissionMarkers: CommissionMarker[] = grouped
+  // Map markers scoped to visible cards only (reflects current sort + pagination).
+  const commissionMarkers: CommissionMarker[] = visibleCards
     .filter(p => !!p.address && coords.has(p.address))
     .map(p => ({
       key: p.groupKey,
@@ -706,6 +749,30 @@ export function Commission({ districtConfig }: CommissionProps) {
             }}>Search</button>
         </div>
 
+        {/* Sort controls */}
+        {!loading && !error && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 20, overflowX: "auto", scrollbarWidth: "none" }}>
+            {(['recent', 'significant', 'alpha'] as const).map(mode => (
+              <button key={mode}
+                onClick={() => { setSortMode(mode); setVisibleCount(6); setExpandedId(null); }}
+                style={{
+                  background: sortMode === mode ? COLORS.charcoal : COLORS.cream,
+                  color:      sortMode === mode ? COLORS.white    : COLORS.midGray,
+                  border: `1px solid ${sortMode === mode ? COLORS.charcoal : COLORS.lightBorder}`,
+                  borderRadius: 20, padding: "7px 16px", fontSize: 12, fontWeight: 700,
+                  cursor: "pointer", fontFamily: FONTS.body, transition: "all 0.15s", whiteSpace: "nowrap",
+                }}>
+                {mode === 'recent' ? 'Most Recent' : mode === 'significant' ? 'Most Significant' : 'A–Z'}
+              </button>
+            ))}
+            {!isSearching && sortedGrouped.length > 0 && (
+              <span style={{ marginLeft: "auto", fontSize: 12, color: COLORS.warmGray, fontFamily: FONTS.body, alignSelf: "center", whiteSpace: "nowrap", flexShrink: 0 }}>
+                {visibleCards.length} of {sortedGrouped.length}
+              </span>
+            )}
+          </div>
+        )}
+
         <div style={{
           fontSize: 12, fontWeight: 700, color: COLORS.orange,
           letterSpacing: "0.08em", textTransform: "uppercase",
@@ -746,27 +813,16 @@ export function Commission({ districtConfig }: CommissionProps) {
           </div>
         )}
 
-        {/* Project cards */}
-        {!loading && !searchLoading && !error && grouped.map((p) => {
-          const norm = normalizeAction(p.action);
-          const ac   = actionStyle(norm);
-          const tally = tallyVotes(p.votes);
+        {/* Project cards — compact collapsed, accordion expand */}
+        {!loading && !searchLoading && !error && visibleCards.map((p) => {
+          const norm      = normalizeAction(p.action);
+          const ac        = actionStyle(norm);
           const sentiment = p.hearing?.public_sentiment?.[0] ?? null;
           const isExpanded = expandedId === p.groupKey;
           const latestDate = p.hearing?.hearing_date ? formatDate(p.hearing.hearing_date) : "";
-          // All hearing dates except the most recent (shown separately as the main date)
-          const priorDates = p.allHearingDates.slice(0, -1);
           const { title, subtitle } = cardTitle(p);
-          // When multiple cases share the same address + hearing date, they're merged here.
           const allInCard = p.mergedWith && p.mergedWith.length > 0 ? [p, ...p.mergedWith] : null;
-          // Bullet list only for sub-projects whose description adds information beyond
-          // the action badge — skip when description is absent or identical to action text.
-          const mergedBullets = allInCard
-            ? allInCard.filter(mp => {
-                const desc = mp.project_description?.trim() ?? "";
-                return desc && desc.toLowerCase() !== (mp.action ?? "").trim().toLowerCase();
-              })
-            : null;
+          const headline  = deriveHeadline(p.project_description, p.address);
 
           return (
             <div key={p.groupKey} ref={el => {
@@ -774,184 +830,137 @@ export function Commission({ districtConfig }: CommissionProps) {
               else cardRefs.current.delete(p.groupKey);
             }} style={{
               background: COLORS.white, borderRadius: 16,
-              padding: "clamp(16px, 3vw, 28px)", marginBottom: 14,
+              padding: "clamp(14px, 2.5vw, 22px)", marginBottom: 12,
               border: `1px solid ${isExpanded ? COLORS.orange : COLORS.lightBorder}`,
               boxShadow: isExpanded
                 ? "0 4px 20px rgba(212,100,59,0.08)"
                 : "0 2px 8px rgba(0,0,0,0.03)",
-              transition: "border 0.3s, box-shadow 0.3s",
+              transition: "border 0.2s, box-shadow 0.2s",
             }}>
-              <div style={{
-                display: "flex", justifyContent: "space-between",
-                alignItems: "flex-start", marginBottom: 14, flexWrap: "wrap", gap: 8,
-              }}>
-                <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
-                  {/* Card headline — case_number when address is a long description */}
-                  <div style={{
-                    fontSize: 20, fontWeight: 800, color: COLORS.charcoal,
-                    fontFamily: "'Urbanist', sans-serif",
-                  }}>{title}</div>
-
-                  {/* Subtitle: only shown when title is the case_number */}
-                  {subtitle && (
+              {/* ── Collapsed header — entire area is clickable ── */}
+              <div
+                onClick={() => setExpandedId(isExpanded ? null : p.groupKey)}
+                style={{ cursor: "pointer" }}
+              >
+                {/* Row 1: address title + action badge(s) + chevron */}
+                <div style={{
+                  display: "flex", justifyContent: "space-between",
+                  alignItems: "flex-start", gap: 10,
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
-                      fontSize: 12, color: COLORS.warmGray, marginTop: 3,
-                      fontFamily: FONTS.body, fontWeight: 400, lineHeight: 1.4,
-                    }}>{subtitle}</div>
-                  )}
-
-                  {/* Most recent hearing date */}
-                  {latestDate && (
-                    <div style={{
-                      fontSize: 13, color: COLORS.warmGray, marginTop: 4,
-                      fontFamily: FONTS.body, fontWeight: 500,
-                    }}>{latestDate}</div>
-                  )}
-
-                  {/* Prior hearing dates for multi-hearing projects */}
-                  {priorDates.length > 0 && (
-                    <div style={{
-                      fontSize: 12, color: COLORS.warmGray, marginTop: 3,
-                      fontFamily: FONTS.body, fontWeight: 400,
-                    }}>
-                      Also heard: {priorDates.map(d => formatDate(d)).join(" · ")}
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flexShrink: 0 }}>
-                  {p.shadow_flag && (
-                    <span style={{
-                      background: "#FEF5EC", color: "#B47A2E",
-                      padding: "5px 12px", borderRadius: 20,
-                      fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
-                      border: "1px solid #F0DFC4",
-                    }}>☀ Shadow</span>
-                  )}
-                  {sentiment && sentiment.speakers > 0 && (
-                    <span style={{
-                      background: COLORS.softBlue, color: "#4A6FA5",
-                      padding: "5px 12px", borderRadius: 20,
-                      fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
-                      border: "1px solid #C8D8E8",
-                    }}>💬 {sentiment.speakers} Comments</span>
-                  )}
-                  {allInCard
-                    ? allInCard.map((mp, i) => {
-                        const mpNorm = normalizeAction(mp.action);
-                        const mpAc = actionStyle(mpNorm);
-                        return (
-                          <span key={i} style={{
-                            background: mpAc.bg, color: mpAc.text,
-                            padding: "5px 14px", borderRadius: 20,
-                            fontSize: 12, fontWeight: 700, fontFamily: FONTS.body,
-                            border: `1px solid ${mpAc.border}`,
-                          }}>{mp.action ?? mpNorm}</span>
-                        );
-                      })
-                    : (
-                      <span style={{
-                        background: ac.bg, color: ac.text,
-                        padding: "5px 14px", borderRadius: 20,
-                        fontSize: 12, fontWeight: 700, fontFamily: FONTS.body,
-                        border: `1px solid ${ac.border}`,
-                      }}>{p.action ?? norm}</span>
-                    )
-                  }
-                </div>
-              </div>
-
-              {allInCard
-                ? mergedBullets && mergedBullets.length > 0 && (
-                  <div style={{ marginBottom: 16 }}>
-                    {mergedBullets.map((mp, i) => {
-                      const desc = mp.project_description!.trim();
-                      return (
-                        <div key={i} style={{
-                          display: "flex", gap: 10, alignItems: "flex-start",
-                          marginBottom: i < mergedBullets.length - 1 ? 8 : 0,
-                        }}>
-                          <span style={{
-                            color: COLORS.orange, fontWeight: 700, flexShrink: 0,
-                            fontFamily: FONTS.body, fontSize: 14, lineHeight: "1.65",
-                          }}>•</span>
-                          <p style={{
-                            fontSize: 14, color: COLORS.midGray,
-                            lineHeight: 1.65, margin: 0, fontFamily: FONTS.body,
-                          }}>
-                            {desc.slice(0, 200)}{desc.length > 200 ? "…" : ""}
-                          </p>
-                        </div>
-                      );
-                    })}
+                      fontSize: 16, fontWeight: 800, color: COLORS.charcoal,
+                      fontFamily: "'Urbanist', sans-serif", lineHeight: 1.25,
+                    }}>{title}</div>
+                    {subtitle && (
+                      <div style={{
+                        fontSize: 11, color: COLORS.warmGray, marginTop: 2,
+                        fontFamily: FONTS.body, lineHeight: 1.4,
+                      }}>{subtitle}</div>
+                    )}
                   </div>
-                )
-                : p.project_description && (
-                  <p style={{
-                    fontSize: 14, color: COLORS.midGray,
-                    lineHeight: 1.65, marginBottom: 16, fontFamily: FONTS.body,
-                  }}>
-                    {p.project_description.slice(0, 200)}
-                    {p.project_description.length > 200 ? "…" : ""}
-                  </p>
-                )
-              }
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                    {allInCard
+                      ? allInCard.map((mp, i) => {
+                          const mpAc = actionStyle(normalizeAction(mp.action));
+                          return (
+                            <span key={i} style={{
+                              background: mpAc.bg, color: mpAc.text,
+                              padding: "4px 11px", borderRadius: 20,
+                              fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
+                              border: `1px solid ${mpAc.border}`,
+                            }}>{mp.action ?? normalizeAction(mp.action)}</span>
+                          );
+                        })
+                      : (
+                        <span style={{
+                          background: ac.bg, color: ac.text,
+                          padding: "4px 11px", borderRadius: 20,
+                          fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
+                          border: `1px solid ${ac.border}`,
+                        }}>{p.action ?? norm}</span>
+                      )
+                    }
+                    <span style={{ color: COLORS.warmGray, fontSize: 12, paddingLeft: 2 }}>
+                      {isExpanded ? '▲' : '▼'}
+                    </span>
+                  </div>
+                </div>
 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                {tally.aye > 0 && (
+                {/* Row 2: date + meta badges inline */}
+                {(latestDate || p.shadow_flag || (sentiment && sentiment.speakers > 0)) && (
                   <div style={{
-                    display: "flex", gap: 16, fontSize: 13,
-                    fontFamily: FONTS.body, fontWeight: 700,
-                    padding: "10px 14px", background: COLORS.cream, borderRadius: 10,
+                    display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center",
+                    marginTop: 6, fontSize: 12, color: COLORS.warmGray, fontFamily: FONTS.body,
                   }}>
-                    <span style={{ color: "#3D7A3F" }}>✓ {tally.aye} Aye</span>
-                    <span style={{ color: "#B44040" }}>✕ {tally.nay} Nay</span>
-                    {tally.absent > 0 && (
-                      <span style={{ color: COLORS.warmGray }}>— {tally.absent} Absent</span>
+                    {latestDate && <span>{latestDate}</span>}
+                    {p.shadow_flag && <span style={{ color: "#B47A2E" }}>☀ Shadow</span>}
+                    {sentiment && sentiment.speakers > 0 && (
+                      <span>💬 {sentiment.speakers} comments</span>
                     )}
                   </div>
                 )}
-                <button
-                  onClick={() => setExpandedId(isExpanded ? null : p.groupKey)}
-                  style={{
-                    background: isExpanded ? COLORS.charcoal : COLORS.cream,
-                    color: isExpanded ? COLORS.white : COLORS.charcoal,
-                    border: `1px solid ${isExpanded ? COLORS.charcoal : COLORS.lightBorder}`,
-                    borderRadius: 10, padding: "8px 18px",
-                    fontSize: 13, fontWeight: 700,
-                    cursor: "pointer", fontFamily: FONTS.body,
-                    transition: "all 0.2s", marginLeft: "auto",
-                  }}
-                >
-                  {isExpanded ? "Hide Details ▲" : "Full Analysis ▼"}
-                </button>
+
+                {/* Row 3: AI headline */}
+                <div style={{
+                  fontSize: 13, color: COLORS.midGray, marginTop: 7,
+                  lineHeight: 1.5, fontFamily: FONTS.body,
+                }}>
+                  {headline}
+                </div>
               </div>
 
+              {/* ── Expanded content — ProjectDetailCard unchanged ── */}
               {isExpanded && (
-                allInCard
-                  ? allInCard.map((mp, i) => (
-                      <div key={mp.groupKey}>
-                        {i > 0 && (
-                          <div style={{
-                            fontSize: 11, fontWeight: 700, color: COLORS.warmGray,
-                            fontFamily: FONTS.body, letterSpacing: "0.06em",
-                            textTransform: "uppercase", paddingTop: 24,
-                            borderTop: `1px solid ${COLORS.lightBorder}`,
-                            marginTop: 8, marginBottom: 4,
-                          }}>
-                            {mp.case_number ?? `Action ${i + 1}`}
-                          </div>
-                        )}
-                        <ProjectDetailCard project={mp} />
-                      </div>
-                    ))
-                  : <ProjectDetailCard project={p} />
+                <div style={{
+                  borderTop: `1px solid ${COLORS.lightBorder}`,
+                  marginTop: 16,
+                }}>
+                  {allInCard
+                    ? allInCard.map((mp, i) => (
+                        <div key={mp.groupKey}>
+                          {i > 0 && (
+                            <div style={{
+                              fontSize: 11, fontWeight: 700, color: COLORS.warmGray,
+                              fontFamily: FONTS.body, letterSpacing: "0.06em",
+                              textTransform: "uppercase", paddingTop: 20,
+                              borderTop: `1px solid ${COLORS.lightBorder}`,
+                              marginTop: 4, marginBottom: 4,
+                            }}>
+                              {mp.case_number ?? `Action ${i + 1}`}
+                            </div>
+                          )}
+                          <ProjectDetailCard project={mp} />
+                        </div>
+                      ))
+                    : <ProjectDetailCard project={p} />
+                  }
+                </div>
               )}
             </div>
           );
         })}
 
-        {!loading && !searchLoading && !error && grouped.length === 0 && (
+        {/* Show more button */}
+        {!loading && !searchLoading && !error && hasMore && (
+          <div style={{ textAlign: "center", marginTop: 24, marginBottom: 8 }}>
+            <button
+              onClick={() => setVisibleCount(v => v + 6)}
+              style={{
+                background: COLORS.cream, color: COLORS.charcoal,
+                border: `1px solid ${COLORS.lightBorder}`, borderRadius: 12,
+                padding: "12px 32px", fontSize: 14, fontWeight: 700,
+                cursor: "pointer", fontFamily: FONTS.body, transition: "all 0.15s",
+              }}>
+              Show {Math.min(6, sortedGrouped.length - visibleCount)} more{' '}
+              <span style={{ color: COLORS.warmGray, fontWeight: 400 }}>
+                ({sortedGrouped.length - visibleCount} remaining)
+              </span>
+            </button>
+          </div>
+        )}
+
+        {!loading && !searchLoading && !error && sortedGrouped.length === 0 && (
           <div style={{ textAlign: "center", padding: "48px 0", color: COLORS.warmGray, fontFamily: FONTS.body }}>
             No hearings found{search ? ` matching "${search}"` : ""}
             {!search && selectedNeighborhood?.name ? ` in ${selectedNeighborhood.name}` : ""}.
