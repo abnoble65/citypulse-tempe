@@ -166,14 +166,14 @@ function MapController({
   const popupTimerRef = useRef<number>(0);
 
   useEffect(() => {
-    clearTimeout(popupTimerRef.current);
+    window.clearTimeout(popupTimerRef.current);
 
     if (selectedKey) {
       // Priority 1: fly to geocoded marker + open its popup
       const m = markers.find(mk => mk.key === selectedKey);
       if (m) {
         map.flyTo([m.lat, m.lng], 16, { duration: 0.5 });
-        popupTimerRef.current = setTimeout(() => {
+        popupTimerRef.current = window.setTimeout(() => {
           markerLayerRefs.current.get(selectedKey)?.openPopup();
         }, 580);
         return;
