@@ -142,7 +142,17 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
                 }}>✓ Selected</div>
               )}
 
-              <span style={{ fontSize: 56, lineHeight: 1, flexShrink: 0 }}>🌁</span>
+              {/* Fastcast logo — left side, mix-blend-mode:multiply removes white bg */}
+              <img
+                src="/images/fastcast-logo.jpg"
+                alt="Fastcast"
+                style={{
+                  width: 48, height: 48, borderRadius: 8,
+                  objectFit: "contain",
+                  flexShrink: 0, display: "block",
+                  mixBlendMode: "multiply",
+                }}
+              />
 
               <div style={{ flex: 1 }}>
                 <div style={{
@@ -179,16 +189,16 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
                 </div>
               </div>
 
-              {/* Fastcast logo — right side */}
+              {/* Mayor portrait — right side */}
               <img
-                src="/images/fastcast-logo.jpg"
-                alt="Fastcast"
+                src="/images/mayor-lurie-stylized.png"
+                alt="Mayor Daniel Lurie"
                 style={{
-                  width: 64, height: 64, borderRadius: 8,
-                  objectFit: "contain",
+                  width: 64, height: 64, borderRadius: "50%",
+                  objectFit: "cover", objectPosition: "center top",
                   flexShrink: 0, display: "block",
-                  border: `1px solid ${COLORS.lightBorder}`,
-                  background: COLORS.white,
+                  border: `1.5px solid ${COLORS.lightBorder}`,
+                  boxShadow: "0 2px 8px rgba(61,56,50,0.12)",
                 }}
               />
             </button>
