@@ -163,7 +163,7 @@ function MapController({
   markerLayerRefs: { current: Map<string, L.CircleMarker> };
 }) {
   const map = useMap();
-  const popupTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const popupTimerRef = useRef<number>(0);
 
   useEffect(() => {
     clearTimeout(popupTimerRef.current);
