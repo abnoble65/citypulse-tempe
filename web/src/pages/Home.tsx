@@ -194,7 +194,7 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
                 src="/images/mayor-lurie-stylized.png"
                 alt="Mayor Daniel Lurie"
                 style={{
-                  width: 64, height: 64, borderRadius: "50%",
+                  width: 88, height: 88, borderRadius: "50%",
                   objectFit: "cover", objectPosition: "center top",
                   flexShrink: 0, display: "block",
                   border: `1.5px solid ${COLORS.lightBorder}`,
