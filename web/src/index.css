@@ -118,6 +118,27 @@ input:focus {
   }
 }
 
+/* ── Home page district grid ────────────────────────────── */
+/* Desktop: 3 fixed columns so Citywide (span 2) is always  */
+/* visually distinct from the 11 district cards (1 col each) */
+.cp-district-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.cp-district-grid .cp-citywide-card {
+  grid-column: span 2;
+}
+
+@media (max-width: 767px) {
+  .cp-district-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .cp-district-grid .cp-citywide-card {
+    grid-column: span 2; /* still full width on mobile */
+  }
+}
+
 /* ── Mobile overrides ───────────────────────────────────── */
 @media (max-width: 639px) {
   /* Sticky bars: NavBar is 48px on mobile */

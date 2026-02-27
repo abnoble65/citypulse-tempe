@@ -101,24 +101,20 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
           Select a Supervisor District
         </p>
 
-        {/* District grid — Citywide first (spans 2 cols), then D1–D11 */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(min(250px, 100%), 1fr))",
-          gap: 8,
-        }}>
+        {/* District grid — 3 fixed cols desktop, 2 cols mobile */}
+        <div className="cp-district-grid">
           {/* Citywide — hero card, spans 2 columns */}
           {(() => {
             const isSelected = selectedDistrict.number === "0";
             const isHovered  = hoveredDistrict === "0";
             return (
               <button
+                className="cp-citywide-card"
                 onClick={() => setSelectedDistrict(CITYWIDE_DISTRICT)}
                 onMouseEnter={() => setHoveredDistrict("0")}
                 onMouseLeave={() => setHoveredDistrict(null)}
                 disabled={loading}
                 style={{
-                  gridColumn: "span 2",
                   minHeight: 160,
                   position: "relative",
                   background: isSelected
