@@ -1,16 +1,15 @@
 /**
- * CommissionMap.tsx — Interactive project map for the Commission page.
+ * CommissionMap.tsx — Orientation-only project map for the Commission page.
  *
  * All markers are orange CircleMarkers. One dot per unique geocoded address
  * (deduplication happens in Commission.tsx). Auto-fits to show all dots on
  * initial load. "Show All" resets the view.
  *
- * Two-way sync:
- *   Card expand  → MapController flies to that marker (selectedKey)
- *   Dot click    → onSelectMarker(address, keys) — parent decides expand vs. filter
+ * Read-only orientation map — no click interactions. Hover a dot to see the
+ * address and project count.
  */
 import { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { GeoJsonObject } from "geojson";
@@ -84,14 +83,10 @@ function MapController({
   markers,
   showAllTrigger,
   districtConfig,
-  focusLat,
-  focusLng,
 }: {
   markers:        CommissionMarker[];
   showAllTrigger: number;
   districtConfig: DistrictConfig;
-  focusLat:       number | null;
-  focusLng:       number | null;
 }) {
   const map = useMap();
   // Track which district we've auto-fitted so we don't jump when more cards load
@@ -119,45 +114,25 @@ function MapController({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAllTrigger]);
 
-  // Card expanded → fly to resolved coordinates.
-  // Using primitive lat/lng (not selectedKey + marker-lookup) so this effect
-  // also fires when geocoding completes after the card was already expanded.
-  useEffect(() => {
-    if (focusLat == null || focusLng == null) return;
-    map.flyTo([focusLat, focusLng], 16, { duration: 0.45 });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusLat, focusLng]);
-
   return null;
 }
 
 // ── Public props ──────────────────────────────────────────────────────────────
 export interface CommissionMapProps {
-  markers:         CommissionMarker[];
-  /** groupKey of the currently expanded card — used for dot highlighting */
-  selectedKey:     string | null;
-  /** Resolved lat/lng of the expanded card. Passed as primitives so the flyTo
-   *  effect re-fires when geocoding completes, even if selectedKey hasn't changed. */
-  focusLat?:       number | null;
-  focusLng?:       number | null;
+  markers:          CommissionMarker[];
   /** Increment to trigger fit-all-markers animation */
-  showAllTrigger:  number;
-  districtConfig:  DistrictConfig;
+  showAllTrigger:   number;
+  districtConfig:   DistrictConfig;
   districtBoundary?: GeoFeature | null;
-  onSelectMarker:  (address: string, keys: string[]) => void;
-  onShowAll:       () => void;
+  onShowAll:        () => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function CommissionMap({
   markers,
-  selectedKey,
-  focusLat   = null,
-  focusLng   = null,
   showAllTrigger,
   districtConfig,
   districtBoundary,
-  onSelectMarker,
   onShowAll,
 }: CommissionMapProps) {
   const center = DISTRICT_CENTERS[districtConfig.number] ?? [37.773, -122.431];
@@ -166,13 +141,18 @@ export function CommissionMap({
   return (
     <div style={{
       position: "relative", marginBottom: 28,
-      borderRadius: 20, border: "1px solid rgba(0,0,0,0.06)",
+      borderRadius: 16, border: "1px solid rgba(0,0,0,0.06)",
       boxShadow: "0 2px 12px rgba(0,0,0,0.04)", overflow: "hidden",
     }}>
+      <style>{`
+        .cp-commission-map { height: 320px; }
+        @media (max-width: 600px) { .cp-commission-map { height: 260px; } }
+      `}</style>
       <MapContainer
         center={center}
         zoom={zoom}
-        style={{ height: 240, width: "100%" }}
+        className="cp-commission-map"
+        style={{ width: "100%" }}
         scrollWheelZoom={false}
         zoomControl={false}
         attributionControl={false}
@@ -184,44 +164,35 @@ export function CommissionMap({
         />
         <MapController
           markers={markers}
-          focusLat={focusLat}
-          focusLng={focusLng}
           showAllTrigger={showAllTrigger}
           districtConfig={districtConfig}
         />
         <DistrictOutline districtBoundary={districtBoundary} />
 
-        {markers.map(m => {
-          const isSelected = !!selectedKey && m.keys.includes(selectedKey);
-          return (
-            <CircleMarker
-              key={m.key}
-              center={[m.lat, m.lng]}
-              radius={isSelected ? 9 : 6}
-              pathOptions={{
-                color:       isSelected ? "#8B3A1F" : ORANGE,
-                fillColor:   ORANGE,
-                fillOpacity: isSelected ? 1 : 0.82,
-                weight:      isSelected ? 2.5 : 1.5,
-              }}
-              eventHandlers={{ click: () => onSelectMarker(m.address, m.keys) }}
-            >
-              <Popup>
-                <div style={{
-                  fontFamily: "system-ui, sans-serif",
-                  fontSize: 13, lineHeight: 1.5, minWidth: 150,
-                }}>
-                  <div style={{ fontWeight: 700, marginBottom: 4, color: "#1A1A2E" }}>
-                    {m.address}
-                  </div>
-                  <div style={{ color: ORANGE, fontWeight: 600, fontSize: 12 }}>
-                    {m.count === 1 ? "1 project" : `${m.count} projects here`}
-                  </div>
+        {markers.map(m => (
+          <CircleMarker
+            key={m.key}
+            center={[m.lat, m.lng]}
+            radius={6}
+            pathOptions={{
+              color:       ORANGE,
+              fillColor:   ORANGE,
+              fillOpacity: 0.82,
+              weight:      1.5,
+            }}
+          >
+            <Tooltip>
+              <div style={{ fontFamily: "system-ui, sans-serif", fontSize: 12, lineHeight: 1.4 }}>
+                <div style={{ fontWeight: 700, color: "#1A1A2E", marginBottom: 2 }}>
+                  {m.address}
                 </div>
-              </Popup>
-            </CircleMarker>
-          );
-        })}
+                <div style={{ color: ORANGE, fontWeight: 600, fontSize: 11 }}>
+                  {m.count === 1 ? "1 project" : `${m.count} projects`}
+                </div>
+              </div>
+            </Tooltip>
+          </CircleMarker>
+        ))}
       </MapContainer>
 
       {/* "Show All" reset button */}

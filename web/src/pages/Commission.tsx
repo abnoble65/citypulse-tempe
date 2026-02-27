@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { COLORS, FONTS } from "../theme";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
@@ -490,7 +490,6 @@ export function Commission({ districtConfig }: CommissionProps) {
   const [filter, setFilter]               = useState(districtConfig.allLabel);
   const [search, setSearch]               = useState("");
   const [expandedId, setExpandedId]       = useState<string | null>(null);
-  const [locationFilter, setLocationFilter] = useState<string | null>(null);
   const [showAllTrigger, setShowAllTrigger] = useState(0);
   const [visibleCount, setVisibleCount]   = useState(6);
   const [sortMode, setSortMode]           = useState<SortMode>('recent');
@@ -501,10 +500,6 @@ export function Commission({ districtConfig }: CommissionProps) {
   const [error, setError]                 = useState<string | null>(null);
   const [coords, setCoords]               = useState<Map<string, LatLng>>(new Map());
   const [districtBoundary, setDistrictBoundary] = useState<GeoFeature | null>(null);
-  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  // Refs so handleMarkerClick (useCallback with []) can read latest derived values
-  const sortedGroupedRef = useRef<GroupedProject[]>([]);
-  const visibleCountRef  = useRef(6);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -547,7 +542,6 @@ export function Commission({ districtConfig }: CommissionProps) {
   useEffect(() => {
     setFilter(districtConfig.allLabel);
     setExpandedId(null);
-    setLocationFilter(null);
     setVisibleCount(6);
     setSortMode('recent');
   }, [districtConfig.allLabel]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -581,27 +575,7 @@ export function Commission({ districtConfig }: CommissionProps) {
     fetchSFSupervisorBoundary(districtConfig.number).then(setDistrictBoundary);
   }, [districtConfig.number]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Dot clicked → single project: expand its card; multiple projects: filter list
-  const handleMarkerClick = useCallback((address: string, keys: string[]) => {
-    if (keys.length === 1) {
-      setLocationFilter(null);
-      setExpandedId(keys[0]);
-      // If the card is beyond the current pagination, expand to include it
-      const idx = sortedGroupedRef.current.findIndex(p => p.groupKey === keys[0]);
-      if (idx >= 0 && idx >= visibleCountRef.current) {
-        setVisibleCount(idx + 1);
-      }
-      setTimeout(() => {
-        cardRefs.current.get(keys[0])?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 120);
-    } else {
-      setLocationFilter(address);
-      setExpandedId(null);
-    }
-  }, []);
-
   const handleShowAll = useCallback(() => {
-    setLocationFilter(null);
     setExpandedId(null);
     setShowAllTrigger(t => t + 1);
   }, []);
@@ -692,16 +666,8 @@ export function Commission({ districtConfig }: CommissionProps) {
   const grouped       = groupAndDedup(visible);
   const isSearching   = search.trim().length > 0;
   const sortedGrouped = sortGrouped(grouped, sortMode);
-  // Location filter: applied when user clicks a multi-project dot on the map
-  const locationFiltered = locationFilter
-    ? sortedGrouped.filter(p => p.address === locationFilter)
-    : sortedGrouped;
-  const visibleCards  = (isSearching || locationFilter) ? locationFiltered : locationFiltered.slice(0, visibleCount);
-  const hasMore       = !isSearching && !locationFilter && locationFiltered.length > visibleCount;
-
-  // Update refs so callbacks always see latest derived values
-  sortedGroupedRef.current = sortedGrouped;
-  visibleCountRef.current  = visibleCount;
+  const visibleCards  = isSearching ? sortedGrouped : sortedGrouped.slice(0, visibleCount);
+  const hasMore       = !isSearching && sortedGrouped.length > visibleCount;
 
   // One dot per unique geocoded address across ALL sortedGrouped (not just paginated
   // visibleCards) so Show All and fitBounds work on the complete project set.
@@ -727,14 +693,6 @@ export function Commission({ districtConfig }: CommissionProps) {
     }
     return [...byAddress.values()];
   })();
-
-  // Resolve focus coordinates for the expanded card.
-  // Passed as primitives so the map controller effect re-fires when geocoding
-  // completes (coords updated), even if expandedId hasn't changed.
-  const focusedProject = expandedId ? sortedGrouped.find(p => p.groupKey === expandedId) : null;
-  const focusAddress   = focusedProject?.address ?? null;
-  const focusLat       = focusAddress ? (coords.get(focusAddress)?.lat ?? null) : null;
-  const focusLng       = focusAddress ? (coords.get(focusAddress)?.lng ?? null) : null;
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
@@ -769,13 +727,9 @@ export function Commission({ districtConfig }: CommissionProps) {
           }>
             <CommissionMapLazy
               markers={commissionMarkers}
-              selectedKey={expandedId}
-              focusLat={focusLat}
-              focusLng={focusLng}
               showAllTrigger={showAllTrigger}
               districtConfig={districtConfig}
               districtBoundary={districtBoundary}
-              onSelectMarker={handleMarkerClick}
               onShowAll={handleShowAll}
             />
           </Suspense>
@@ -818,9 +772,9 @@ export function Commission({ districtConfig }: CommissionProps) {
                 {mode === 'recent' ? 'Most Recent' : mode === 'significant' ? 'Most Significant' : 'A–Z'}
               </button>
             ))}
-            {!isSearching && locationFiltered.length > 0 && (
+            {!isSearching && sortedGrouped.length > 0 && (
               <span style={{ marginLeft: "auto", fontSize: 12, color: COLORS.warmGray, fontFamily: FONTS.body, alignSelf: "center", whiteSpace: "nowrap", flexShrink: 0 }}>
-                {visibleCards.length} of {locationFiltered.length}
+                {visibleCards.length} of {sortedGrouped.length}
               </span>
             )}
           </div>
@@ -831,30 +785,6 @@ export function Commission({ districtConfig }: CommissionProps) {
           letterSpacing: "0.08em", textTransform: "uppercase",
           marginBottom: 16, fontFamily: FONTS.body,
         }}>Recent Hearings</div>
-
-        {/* Location filter banner — shown when user clicks a multi-project map dot */}
-        {locationFilter && !loading && !error && (
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            gap: 12, marginBottom: 16,
-            background: "#FEF5EC", border: "1px solid #F0DFC4",
-            borderRadius: 12, padding: "10px 16px",
-          }}>
-            <span style={{ fontFamily: FONTS.body, fontSize: 13, color: COLORS.charcoal, lineHeight: 1.4 }}>
-              Showing projects at <strong>{locationFilter}</strong>
-            </span>
-            <button
-              onClick={() => { setLocationFilter(null); setExpandedId(null); setShowAllTrigger(t => t + 1); }}
-              style={{
-                background: "none", border: `1px solid #D4A870`, borderRadius: 8,
-                padding: "4px 12px", fontSize: 12, fontWeight: 600,
-                color: "#B47A2E", cursor: "pointer", fontFamily: FONTS.body, flexShrink: 0,
-              }}
-            >
-              Clear ✕
-            </button>
-          </div>
-        )}
 
         {/* Loading skeleton */}
         {(loading || searchLoading) && [0, 1, 2].map(i => <SkeletonCard key={i} />)}
@@ -902,10 +832,7 @@ export function Commission({ districtConfig }: CommissionProps) {
           const headline  = deriveHeadline(p.project_description, p.address);
 
           return (
-            <div key={p.groupKey} ref={el => {
-              if (el) cardRefs.current.set(p.groupKey, el);
-              else cardRefs.current.delete(p.groupKey);
-            }} style={{
+            <div key={p.groupKey} style={{
               background: COLORS.white, borderRadius: 16,
               padding: "clamp(14px, 2.5vw, 22px)", marginBottom: 12,
               border: `1px solid ${isExpanded ? COLORS.orange : COLORS.lightBorder}`,
@@ -919,7 +846,7 @@ export function Commission({ districtConfig }: CommissionProps) {
                 onClick={() => setExpandedId(isExpanded ? null : p.groupKey)}
                 style={{ cursor: "pointer" }}
               >
-                {/* Row 1: address title + action badge(s) + chevron */}
+                {/* Row 1: address title + chevron only */}
                 <div style={{
                   display: "flex", justifyContent: "space-between",
                   alignItems: "flex-start", gap: 10,
@@ -936,35 +863,45 @@ export function Commission({ districtConfig }: CommissionProps) {
                       }}>{subtitle}</div>
                     )}
                   </div>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                    {allInCard
-                      ? allInCard.map((mp, i) => {
-                          const mpAc = actionStyle(normalizeAction(mp.action));
-                          return (
-                            <span key={i} style={{
-                              background: mpAc.bg, color: mpAc.text,
-                              padding: "4px 11px", borderRadius: 20,
-                              fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
-                              border: `1px solid ${mpAc.border}`,
-                            }}>{mp.action ?? normalizeAction(mp.action)}</span>
-                          );
-                        })
-                      : (
-                        <span style={{
-                          background: ac.bg, color: ac.text,
-                          padding: "4px 11px", borderRadius: 20,
-                          fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
-                          border: `1px solid ${ac.border}`,
-                        }}>{p.action ?? norm}</span>
-                      )
-                    }
-                    <span style={{ color: COLORS.warmGray, fontSize: 12, paddingLeft: 2 }}>
-                      {isExpanded ? '▲' : '▼'}
-                    </span>
-                  </div>
+                  <span style={{ color: COLORS.warmGray, fontSize: 12, flexShrink: 0 }}>
+                    {isExpanded ? '▲' : '▼'}
+                  </span>
                 </div>
 
-                {/* Row 2: date + meta badges inline */}
+                {/* Row 2: action badge(s) — wrapped below the title */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                  {allInCard
+                    ? allInCard.map((mp, i) => {
+                        const mpAc  = actionStyle(normalizeAction(mp.action));
+                        const label = mp.action ?? normalizeAction(mp.action);
+                        return (
+                          <span key={i} style={{
+                            background: mpAc.bg, color: mpAc.text,
+                            padding: "4px 11px", borderRadius: 20,
+                            fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
+                            border: `1px solid ${mpAc.border}`,
+                          }}>
+                            {label.length > 30 ? label.slice(0, 27) + "…" : label}
+                          </span>
+                        );
+                      })
+                    : (() => {
+                        const label = p.action ?? norm;
+                        return (
+                          <span style={{
+                            background: ac.bg, color: ac.text,
+                            padding: "4px 11px", borderRadius: 20,
+                            fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
+                            border: `1px solid ${ac.border}`,
+                          }}>
+                            {label.length > 30 ? label.slice(0, 27) + "…" : label}
+                          </span>
+                        );
+                      })()
+                  }
+                </div>
+
+                {/* Row 3: date + meta badges inline */}
                 {(latestDate || p.shadow_flag || (sentiment && sentiment.speakers > 0)) && (
                   <div style={{
                     display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center",
