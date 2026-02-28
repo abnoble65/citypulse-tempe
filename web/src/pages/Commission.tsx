@@ -868,8 +868,8 @@ export function Commission({ districtConfig }: CommissionProps) {
                   </span>
                 </div>
 
-                {/* Row 2: action badge(s) — separate div, never in the title row */}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                {/* Row 2: action badge(s) — block-level div, completely separate from title row */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, width: "100%" }}>
                   {allInCard
                     ? allInCard.map((mp, i) => {
                         const mpAc = actionStyle(normalizeAction(mp.action));
@@ -879,9 +879,8 @@ export function Commission({ districtConfig }: CommissionProps) {
                             padding: "4px 11px", borderRadius: 20,
                             fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
                             border: `1px solid ${mpAc.border}`,
-                            maxWidth: 200, overflow: "hidden",
-                            textOverflow: "ellipsis", whiteSpace: "nowrap",
-                            display: "inline-block",
+                            maxWidth: "200px", minWidth: 0, flex: "0 1 auto",
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                           }}>
                             {mp.action ?? normalizeAction(mp.action)}
                           </span>
@@ -893,9 +892,8 @@ export function Commission({ districtConfig }: CommissionProps) {
                           padding: "4px 11px", borderRadius: 20,
                           fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
                           border: `1px solid ${ac.border}`,
-                          maxWidth: 200, overflow: "hidden",
-                          textOverflow: "ellipsis", whiteSpace: "nowrap",
-                          display: "inline-block",
+                          maxWidth: "200px", minWidth: 0, flex: "0 1 auto",
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                         }}>
                           {p.action ?? norm}
                         </span>
