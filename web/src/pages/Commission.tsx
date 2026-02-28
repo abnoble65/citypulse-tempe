@@ -846,14 +846,14 @@ export function Commission({ districtConfig }: CommissionProps) {
                 onClick={() => setExpandedId(isExpanded ? null : p.groupKey)}
                 style={{ cursor: "pointer" }}
               >
-                {/* Row 1: address title + chevron only */}
+                {/* Row 1: address title + chevron — badges are NEVER here */}
                 <div style={{
                   display: "flex", justifyContent: "space-between",
                   alignItems: "flex-start", gap: 10,
                 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
-                      fontSize: 16, fontWeight: 800, color: COLORS.charcoal,
+                      fontSize: 18, fontWeight: 800, color: COLORS.charcoal,
                       fontFamily: "'Urbanist', sans-serif", lineHeight: 1.25,
                     }}>{title}</div>
                     {subtitle && (
@@ -863,41 +863,43 @@ export function Commission({ districtConfig }: CommissionProps) {
                       }}>{subtitle}</div>
                     )}
                   </div>
-                  <span style={{ color: COLORS.warmGray, fontSize: 12, flexShrink: 0 }}>
+                  <span style={{ color: COLORS.warmGray, fontSize: 12, flexShrink: 0, paddingTop: 3 }}>
                     {isExpanded ? '▲' : '▼'}
                   </span>
                 </div>
 
-                {/* Row 2: action badge(s) — wrapped below the title */}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                {/* Row 2: action badge(s) — separate div, never in the title row */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
                   {allInCard
                     ? allInCard.map((mp, i) => {
-                        const mpAc  = actionStyle(normalizeAction(mp.action));
-                        const label = mp.action ?? normalizeAction(mp.action);
+                        const mpAc = actionStyle(normalizeAction(mp.action));
                         return (
                           <span key={i} style={{
                             background: mpAc.bg, color: mpAc.text,
                             padding: "4px 11px", borderRadius: 20,
                             fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
                             border: `1px solid ${mpAc.border}`,
+                            maxWidth: 200, overflow: "hidden",
+                            textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            display: "inline-block",
                           }}>
-                            {label.length > 30 ? label.slice(0, 27) + "…" : label}
+                            {mp.action ?? normalizeAction(mp.action)}
                           </span>
                         );
                       })
-                    : (() => {
-                        const label = p.action ?? norm;
-                        return (
-                          <span style={{
-                            background: ac.bg, color: ac.text,
-                            padding: "4px 11px", borderRadius: 20,
-                            fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
-                            border: `1px solid ${ac.border}`,
-                          }}>
-                            {label.length > 30 ? label.slice(0, 27) + "…" : label}
-                          </span>
-                        );
-                      })()
+                    : (
+                        <span style={{
+                          background: ac.bg, color: ac.text,
+                          padding: "4px 11px", borderRadius: 20,
+                          fontSize: 11, fontWeight: 700, fontFamily: FONTS.body,
+                          border: `1px solid ${ac.border}`,
+                          maxWidth: 200, overflow: "hidden",
+                          textOverflow: "ellipsis", whiteSpace: "nowrap",
+                          display: "inline-block",
+                        }}>
+                          {p.action ?? norm}
+                        </span>
+                      )
                   }
                 </div>
 
