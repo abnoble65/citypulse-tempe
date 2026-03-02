@@ -241,6 +241,7 @@ type SentimentRow = {
 };
 
 async function getSentimentContext(districtNumber: string): Promise<string> {
+  console.log('[sentiment] getSentimentContext called', districtNumber);
   if (_sentimentCache.has(districtNumber)) return _sentimentCache.get(districtNumber)!;
 
   try {
@@ -379,7 +380,7 @@ async function readSignalsFromDB(
       .from('signal_cache')
       .select('signals, generated_at')
       .eq('cache_key', cacheKey)
-      .single();
+      .maybeSingle();
 
     if (error || !data) return null;
 
@@ -426,7 +427,7 @@ async function readOutlookFromDB(
       .from('outlook_cache')
       .select('outlook, generated_at')
       .eq('cache_key', cacheKey)
-      .single();
+      .maybeSingle();
     if (error || !data) return null;
     const age = Date.now() - new Date(data.generated_at as string).getTime();
     if (age > OUTLOOK_DB_TTL_MS) return null;
@@ -466,7 +467,7 @@ async function readConcernsFromDB(
       .from('concerns_cache')
       .select('concerns, generated_at')
       .eq('cache_key', cacheKey)
-      .single();
+      .maybeSingle();
     if (error || !data) return null;
     const age = Date.now() - new Date(data.generated_at as string).getTime();
     if (age > CONCERNS_DB_TTL_MS) return null;
@@ -669,6 +670,7 @@ export async function generateSignals(
   }
 
   // 3 — Generate via Claude
+  console.log(`[signals] generating fresh for key: ${key}`);
   let analysisData = data;
 
   if (focus) {
