@@ -245,47 +245,31 @@ async function getSentimentContext(districtNumber: string): Promise<string> {
   if (_sentimentCache.has(districtNumber)) return _sentimentCache.get(districtNumber)!;
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query: any = supabase
-      .from('projects')
-      .select(`
-        hearing:hearing_id(
-          public_sentiment(
-            speakers, for_project, against_project, neutral,
-            top_themes, notable_quotes
-          )
-        )
-      `)
-      .not('hearing_id', 'is', null)
+    // public_sentiment links to hearings via hearing_id (1:1).
+    // hearings has no district column — district lives on projects.
+    // Planning Commission hearings cover all districts, so we pull the
+    // most recent N rows citywide and use them as context regardless of district.
+    const { data, error } = await supabase
+      .from('public_sentiment')
+      .select('speakers, for_project, against_project, neutral, top_themes, notable_quotes, hearing:hearing_id(hearing_date)')
       .order('id', { ascending: false })
-      .limit(districtNumber === '0' ? 60 : 30);
+      .limit(districtNumber === '0' ? 20 : 10);
 
-    if (districtNumber !== '0') {
-      query = query.eq('district', districtNumber);
-    }
-
-    const { data } = await query;
     console.log('[sentiment] query returned rows:', data?.length ?? 0);
+    if (error) console.log('[sentiment] query error:', error.message);
+
     if (!data || data.length === 0) {
       console.log('[sentiment] no sentiment rows found');
-      _sentimentCache.set(districtNumber, ''); return '';
+      _sentimentCache.set(districtNumber, '');
+      return '';
     }
 
-    // Flatten all sentiment records (one per hearing)
-    const sentiments: SentimentRow[] = [];
-    for (const row of data as Array<{ hearing: { public_sentiment: SentimentRow[] } | null }>) {
-      const sent = row.hearing?.public_sentiment?.[0];
-      if (sent) sentiments.push(sent);
-    }
-    if (sentiments.length === 0) {
-      console.log('[sentiment] no sentiment rows found');
-      _sentimentCache.set(districtNumber, ''); return '';
-    }
+    const rows = data as SentimentRow[];
 
-    const totalSpeakers = sentiments.reduce((s, r) => s + (r.speakers ?? 0), 0);
-    const totalFor      = sentiments.reduce((s, r) => s + (r.for_project ?? 0), 0);
-    const totalAgainst  = sentiments.reduce((s, r) => s + (r.against_project ?? 0), 0);
-    const totalNeutral  = sentiments.reduce((s, r) => s + (r.neutral ?? 0), 0);
+    const totalSpeakers = rows.reduce((s, r) => s + (r.speakers ?? 0), 0);
+    const totalFor      = rows.reduce((s, r) => s + (r.for_project ?? 0), 0);
+    const totalAgainst  = rows.reduce((s, r) => s + (r.against_project ?? 0), 0);
+    const totalNeutral  = rows.reduce((s, r) => s + (r.neutral ?? 0), 0);
     const totalVoiced   = totalFor + totalAgainst + totalNeutral || 1;
 
     const pctFor     = Math.round((totalFor     / totalVoiced) * 100);
@@ -294,7 +278,7 @@ async function getSentimentContext(districtNumber: string): Promise<string> {
 
     // Theme frequency count → top 5
     const themeCounts = new Map<string, number>();
-    for (const row of sentiments) {
+    for (const row of rows) {
       for (const t of row.top_themes ?? []) {
         themeCounts.set(t, (themeCounts.get(t) ?? 0) + 1);
       }
@@ -305,12 +289,12 @@ async function getSentimentContext(districtNumber: string): Promise<string> {
       .map(([t]) => t);
 
     // Pick up to 3 notable quotes
-    const quotes = sentiments.flatMap(r => r.notable_quotes ?? []).filter(Boolean).slice(0, 3);
+    const quotes = rows.flatMap(r => r.notable_quotes ?? []).filter(Boolean).slice(0, 3);
 
     const scope = districtNumber === '0' ? 'across all SF districts' : `in District ${districtNumber}`;
     const ctx = `
 PUBLIC COMMENT SUMMARY (from recent Planning Commission hearings ${scope}):
-Across ${sentiments.length} recent hearing${sentiments.length !== 1 ? 's' : ''}, ${totalSpeakers} speakers gave public comment. ${pctFor}% supported projects, ${pctAgainst}% opposed, ${pctNeutral}% were neutral.
+Across ${rows.length} recent hearing${rows.length !== 1 ? 's' : ''}, ${totalSpeakers} speakers gave public comment. ${pctFor}% supported projects, ${pctAgainst}% opposed, ${pctNeutral}% were neutral.
 Most common themes raised: ${topThemes.length > 0 ? topThemes.join(', ') : 'none recorded'}.${quotes.length > 0 ? `\nNotable quotes: ${quotes.map(q => `"${q}"`).join(' | ')}` : ''}
 
 Use this sentiment data to add resident voice to your analysis. Reference specific themes or opposition patterns where relevant.
@@ -322,7 +306,6 @@ Use this sentiment data to add resident voice to your analysis. Reference specif
     return ctx;
   } catch (error) {
     console.log('[sentiment] error:', error instanceof Error ? error.message : String(error));
-    // Table may not exist yet — silently skip
     _sentimentCache.set(districtNumber, '');
     return '';
   }
