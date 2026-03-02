@@ -726,6 +726,7 @@ IMPORTANT EDITORIAL RULES:
 - Cite specific numbers from the data (counts, dollar amounts, percentages)
 - No political opinions; describe what the data shows
 - If two or more high-value permits (estimated_cost_usd > $1M) are at addresses that share a street number block (e.g., 750 and 758 Pacific), note they may represent a single merged development and estimate the combined value
+- When public comment data is available, you MUST include at least one signal that references what residents actually said. Quote 1–2 brief resident statements to give voice to the community. Format quotes like: *One resident told the Commission, "it seems to be extremely out of scale to the neighborhood."* These quotes make the analysis feel human, not algorithmic.
 
 For each signal return an object with these exact keys:
 - "title": short headline, max 10 words
@@ -940,6 +941,7 @@ IMPORTANT EDITORIAL RULES:
 - When adjacent addresses have large permits (like 758 and 772 Pacific Ave), identify them as likely one project and describe the combined scope.
 - Balance every risk with context. If evictions are elevated, also note if they've declined from peak.
 - Priority ratings should be based on data magnitude, not emotional framing.
+- When public comment data is available, you MUST include at least one risk or event that references what residents actually said. Quote 1–2 brief resident statements to give voice to the community. Format quotes like: *One resident told the Commission, "it seems to be extremely out of scale to the neighborhood."* These quotes make the analysis feel human, not algorithmic.
 
 IMPORTANT: Include one risk about shadow impact (☀️ icon) and, if eviction_summary.total > 0, one displacement risk (🏘️ icon) citing eviction counts and types. If assessment_summary.yoy_change_pct is notable (> 5% or < −2%), mention property value trajectory in a risk or event. If the data shows the displacement trifecta — rising assessed values AND elevated evictions AND a low affordable_housing_summary.affordable_ratio or few active construction-phase affordable units — flag this as a critical combined risk (🚨 icon) citing all three signals together.`;
 
@@ -1044,6 +1046,7 @@ IMPORTANT EDITORIAL RULES:
 - Be balanced and factual — cite specific numbers (counts, dollar amounts, percentages)
 - No political opinions; describe what the data shows
 - Focus on resident impact: housing costs, displacement risk, construction disruption, affordability, infrastructure
+- When public comment data is available, you MUST include at least one concern that references what residents actually said. Quote 1–2 brief resident statements to give voice to the community. Format quotes like: *One resident told the Commission, "it seems to be extremely out of scale to the neighborhood."* These quotes make the analysis feel human, not algorithmic.
 
 Severity guide:
 - "critical": immediate or significant displacement/affordability risk backed by strong data signals
@@ -1079,5 +1082,161 @@ Return ONLY a JSON object in this exact shape (no other text):
 
   const result = { concerns: parsed.concerns, generatedAt };
   _concernsCache.set(key, result);
+  return result;
+}
+
+// ── Supabase briefing_overview_cache helpers ───────────────────────────────────
+const OVERVIEW_DB_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function readOverviewFromDB(
+  cacheKey: string,
+): Promise<{ overview: string; generatedAt: string } | null> {
+  try {
+    const { data, error } = await supabase
+      .from('briefing_overview_cache')
+      .select('overview, generated_at')
+      .eq('cache_key', cacheKey)
+      .maybeSingle();
+    if (error || !data) return null;
+    const age = Date.now() - new Date(data.generated_at as string).getTime();
+    if (age > OVERVIEW_DB_TTL_MS) return null;
+    return { overview: data.overview as string, generatedAt: data.generated_at as string };
+  } catch {
+    return null;
+  }
+}
+
+async function writeOverviewToDB(
+  cacheKey: string,
+  overview: string,
+): Promise<string | null> {
+  try {
+    const generatedAt = new Date().toISOString();
+    const { error } = await supabase
+      .from('briefing_overview_cache')
+      .upsert(
+        { cache_key: cacheKey, overview, generated_at: generatedAt },
+        { onConflict: 'cache_key' },
+      );
+    if (error) return null;
+    return generatedAt;
+  } catch {
+    return null;
+  }
+}
+
+// ── Briefing overview (Haiku, 3-tier cache) ────────────────────────────────────
+// Generates a 3–4 sentence morning-news-style paragraph from key data points
+// + public sentiment. Much cheaper than the full Sonnet briefing.
+
+const _overviewCache = new Map<string, { overview: string; generatedAt: string | null }>();
+
+export function getCachedBriefingOverview(
+  district: DistrictConfig,
+  focus?: { zip: string; name: string },
+): { overview: string; generatedAt: string | null } | null {
+  return _overviewCache.get(contentCacheKey(district, focus)) ?? null;
+}
+
+export async function generateBriefingOverview(
+  data: DistrictData,
+  district: DistrictConfig,
+  focus?: { zip: string; name: string },
+): Promise<{ overview: string; generatedAt: string | null }> {
+  const key = contentCacheKey(district, focus);
+
+  // 1 — in-memory cache
+  const memCached = _overviewCache.get(key);
+  if (memCached) return memCached;
+
+  // 2 — Supabase DB cache (24h TTL)
+  const dbCached = await readOverviewFromDB(key);
+  if (dbCached) {
+    _overviewCache.set(key, dbCached);
+    return dbCached;
+  }
+
+  // 3 — Generate with Claude Haiku
+  const ps = focus
+    ? (data.permit_summary.by_zip?.[focus.zip] ?? data.permit_summary)
+    : data.permit_summary;
+  const topPermit = data.permit_summary.notable_permits?.[0] ?? null;
+  const topEvictionNeighborhood = Object.entries(data.eviction_summary.by_neighborhood)
+    .sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+  // Hearing count (last 90 days) + recent sentiment — parallel fetch
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+    .toISOString().split('T')[0];
+
+  type SentRow = { speakers: number; for_project: number; against_project: number; notable_quotes: string[] | null };
+
+  const [hearingCount, sentimentRows] = await Promise.all([
+    (async () => {
+      try {
+        const r = await supabase
+          .from('hearings')
+          .select('id', { count: 'exact', head: true })
+          .gte('hearing_date', ninetyDaysAgo);
+        return r.count ?? 0;
+      } catch { return 0; }
+    })(),
+    (async () => {
+      try {
+        const r = await supabase
+          .from('public_sentiment')
+          .select('speakers, for_project, against_project, notable_quotes')
+          .order('id', { ascending: false })
+          .limit(10);
+        return (r.data ?? []) as SentRow[];
+      } catch { return [] as SentRow[]; }
+    })(),
+  ]);
+
+  let sentimentLine = '';
+  let quotesLine = '';
+  if (sentimentRows.length > 0) {
+    const totalSpeakers = sentimentRows.reduce((s: number, r: SentRow) => s + (r.speakers ?? 0), 0);
+    const totalFor      = sentimentRows.reduce((s: number, r: SentRow) => s + (r.for_project ?? 0), 0);
+    const totalAgainst  = sentimentRows.reduce((s: number, r: SentRow) => s + (r.against_project ?? 0), 0);
+    const pctFor = Math.round((totalFor / (totalFor + totalAgainst || 1)) * 100);
+    sentimentLine = `${totalSpeakers} residents gave public comment at recent hearings; ${pctFor}% supported projects.`;
+    const quotes = sentimentRows
+      .flatMap((r: SentRow) => r.notable_quotes ?? [])
+      .filter((q: string) => !!q)
+      .slice(0, 2);
+    if (quotes.length > 0) {
+      quotesLine = `Notable resident quotes: ${quotes.map((q: string) => `"${q}"`).join(' | ')}`;
+    }
+  }
+
+  const locationLabel = focus ? focus.name : district.label;
+  const ctx = [
+    `Location: ${locationLabel}`,
+    `Total active permits: ${ps.total.toLocaleString()}`,
+    topPermit
+      ? `Largest permit: $${(topPermit.estimated_cost_usd / 1_000_000).toFixed(1)}M at ${topPermit.address}`
+      : null,
+    `Evictions in past year: ${data.eviction_summary.total}${topEvictionNeighborhood ? ` (highest in ${topEvictionNeighborhood})` : ''}`,
+    `Planning Commission hearings in last 90 days: ${hearingCount}`,
+    sentimentLine || null,
+    quotesLine || null,
+  ].filter(Boolean).join('\n');
+
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 300,
+    messages: [{
+      role: 'user',
+      content: `${ctx}\n\nWrite a 3–4 sentence morning news briefing overview for ${locationLabel}. Be specific: use real numbers, real addresses, real neighborhoods from the data above. If there are resident quotes, weave in one briefly. Close with one thing residents should watch. Write in third person ("residents"). No markdown, no bullet points. Plain prose only.`,
+    }],
+  });
+
+  const block = message.content[0];
+  if (block.type !== 'text') throw new Error('Unexpected response type');
+  const overview = block.text.trim();
+
+  const generatedAt = await writeOverviewToDB(key, overview);
+  const result = { overview, generatedAt };
+  _overviewCache.set(key, result);
   return result;
 }

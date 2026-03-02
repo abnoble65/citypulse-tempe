@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
-import { parseBriefingSections, generateBriefingFromData } from "../services/briefing";
+import { parseBriefingSections, generateBriefingFromData, generateBriefingOverview, getCachedBriefingOverview } from "../services/briefing";
 import type { DistrictData } from "../services/briefing";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { SupervisorAvatar } from "../components/SupervisorAvatar";
@@ -28,12 +28,30 @@ interface BriefingProps {
   onNavigate: (page: string) => void;
 }
 
+function formatOverviewTimestamp(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth()    === now.getMonth() &&
+    d.getDate()     === now.getDate();
+  return sameDay
+    ? `Updated today at ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+    : `Updated ${d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
+}
+
 export function Briefing({ briefingText, aggregatedData, districtConfig, onNavigate }: BriefingProps) {
   const [filter, setFilter]             = useState(districtConfig.allLabel);
   const [localText, setLocalText]       = useState(briefingText);
   const [isGenerating, setIsGenerating] = useState(false);
   const [genError, setGenError]         = useState<string | null>(null);
   const [latestHearing, setLatestHearing] = useState<string | null>(null);
+
+  // Overview state — instant from cache, async if missing
+  const [overview, setOverview]                   = useState<string | null>(null);
+  const [overviewGeneratedAt, setOverviewGeneratedAt] = useState<string | null>(null);
+  const [overviewLoading, setOverviewLoading]     = useState(false);
 
   // Fetch the most recent Planning Commission hearing date once on mount.
   useEffect(() => {
@@ -47,12 +65,38 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
       });
   }, []);
 
+  // Overview — instant from cache, async otherwise. Re-runs when data or filter changes.
+  useEffect(() => {
+    if (!aggregatedData) return;
+    const neighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
+    const focus = neighborhood ? { zip: neighborhood.zip, name: neighborhood.name } : undefined;
+
+    const cached = getCachedBriefingOverview(districtConfig, focus);
+    if (cached) {
+      setOverview(cached.overview);
+      setOverviewGeneratedAt(cached.generatedAt);
+      return;
+    }
+
+    setOverviewLoading(true);
+    generateBriefingOverview(aggregatedData, districtConfig, focus)
+      .then(({ overview: o, generatedAt }) => {
+        setOverview(o);
+        setOverviewGeneratedAt(generatedAt);
+      })
+      .catch(err => console.error("[Briefing] overview generation failed:", err))
+      .finally(() => setOverviewLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, aggregatedData]);
+
   // When a new district-wide briefing arrives (new generation or district change),
   // reset to it and clear any neighborhood filter.
   useEffect(() => {
     setLocalText(briefingText);
     setFilter(districtConfig.allLabel);
     setGenError(null);
+    setOverview(null);
+    setOverviewGeneratedAt(null);
   }, [briefingText]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-generate when the neighborhood filter changes.
@@ -228,6 +272,41 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
                 </div>
               ))}
             </div>
+
+            {/* AI Overview — morning-briefing paragraph */}
+            {(overviewLoading || overview) && (
+              <div style={{
+                background: COLORS.orangePale,
+                borderRadius: 20, padding: "clamp(20px, 5vw, 36px)",
+                border: `1px solid rgba(212,100,59,0.18)`,
+                marginBottom: 20,
+              }}>
+                {overviewLoading && !overview ? (
+                  <>
+                    <div className="sk" style={{ height: 15, width: "96%", marginBottom: 10 }} />
+                    <div className="sk" style={{ height: 15, width: "88%", marginBottom: 10 }} />
+                    <div className="sk" style={{ height: 15, width: "74%" }} />
+                  </>
+                ) : (
+                  <>
+                    <p style={{
+                      fontFamily: FONTS.body, fontSize: 15.5, lineHeight: 1.8,
+                      color: COLORS.charcoal, margin: 0,
+                    }}>
+                      {overview}
+                    </p>
+                    {overviewGeneratedAt && (
+                      <p style={{
+                        fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray,
+                        marginTop: 12, marginBottom: 0, opacity: 0.75,
+                      }}>
+                        {formatOverviewTimestamp(overviewGeneratedAt)}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             <div style={{
               background: COLORS.white,
