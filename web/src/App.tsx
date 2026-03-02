@@ -5,6 +5,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Home } from "./pages/Home";
 import { generateBriefing } from "./services/briefing";
 import type { DistrictData } from "./services/briefing";
+import { aggregateDistrictData, aggregateCitywideData } from "./services/aggregator";
 import { DEFAULT_DISTRICT } from "./districts";
 import type { DistrictConfig } from "./districts";
 import { CityPulseLogo } from "./components/Icons";
@@ -140,6 +141,24 @@ export default function App() {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
+
+  // Auto-load DataSF data when the user lands directly on a data-dependent page
+  // (e.g. via bookmark or refresh). aggregatedData is in-memory-only so it's
+  // always null on a fresh load — we fetch without triggering a Claude call.
+  const DATA_PAGES = new Set(["Briefing", "Charts", "Signals", "Outlook"]);
+  useEffect(() => {
+    if (!DATA_PAGES.has(page) || aggregatedData) return;
+    console.log(`[app] direct URL load — auto-fetching data for /${page.toLowerCase()}`);
+    setLoading(true);
+    const load = districtConfig.number === "0"
+      ? aggregateCitywideData()
+      : aggregateDistrictData(districtConfig);
+    load
+      .then(data => setAggregatedData(data))
+      .catch(err => console.warn("[app] auto-load failed:", err))
+      .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally runs once on mount only
 
   async function handleGenerate(district: DistrictConfig) {
     console.time(`[app] generate ${district.label}`);

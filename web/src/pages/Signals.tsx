@@ -132,7 +132,7 @@ function formatLastUpdated(iso: string | null): string | null {
   return `Generated ${d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
-export function Signals({ aggregatedData, districtConfig, onNavigate }: SignalsProps) {
+export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
   const [filter, setFilter]             = useState(districtConfig.allLabel);
   const [signals, setSignals]           = useState<Signal[] | null>(null);
   const [lastUpdated, setLastUpdated]   = useState<string | null>(null);
@@ -179,24 +179,27 @@ export function Signals({ aggregatedData, districtConfig, onNavigate }: SignalsP
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]); // intentionally only re-run when filter changes
 
+  // aggregatedData is null when the user lands directly via URL (refresh/bookmark).
+  // App.tsx auto-fetches it behind the LoadingOverlay; show skeletons here as fallback.
   if (!aggregatedData) {
     return (
-      <div style={{ background: COLORS.cream, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center", padding: "48px 32px", maxWidth: 380 }}>
-          <p style={{
-            fontFamily: "'Urbanist', sans-serif", fontSize: 18, fontWeight: 800,
-            color: COLORS.charcoal, marginBottom: 12,
-          }}>
-            No data available
-          </p>
-          <p style={{ color: COLORS.midGray, fontSize: 14, fontFamily: FONTS.body, lineHeight: 1.65, marginBottom: 28 }}>
-            Generate a briefing from the home page to view signals.
-          </p>
-          <button onClick={() => onNavigate("Home")} style={{
-            background: COLORS.orange, color: COLORS.white, border: "none",
-            borderRadius: 24, padding: "12px 28px", fontSize: 14, fontWeight: 700,
-            cursor: "pointer", fontFamily: "'Urbanist', sans-serif",
-          }}>← Go to Home</button>
+      <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
+        <div style={{ maxWidth: 820, margin: "0 auto", padding: "clamp(80px,12vw,120px) 24px" }}>
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} style={{
+              background: COLORS.white, borderRadius: 20,
+              padding: "clamp(20px,4vw,32px) clamp(16px,4vw,36px)",
+              marginBottom: 20, border: `1px solid ${COLORS.lightBorder}`,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+                <div className="sk" style={{ height: 22, flex: 1, marginRight: 16 }} />
+                <div className="sk" style={{ height: 22, width: 70 }} />
+              </div>
+              <div className="sk" style={{ height: 14, width: "100%", marginBottom: 9 }} />
+              <div className="sk" style={{ height: 14, width: "88%", marginBottom: 9 }} />
+              <div className="sk" style={{ height: 14, width: "72%" }} />
+            </div>
+          ))}
         </div>
       </div>
     );
