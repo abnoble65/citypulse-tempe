@@ -4,8 +4,14 @@ import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { SupervisorAvatar } from "../components/SupervisorAvatar";
-import { generateOutlook, getCachedOutlook } from "../services/briefing";
-import type { OutlookData, OutlookEvent, OutlookRisk, OutlookEngagement } from "../services/briefing";
+import {
+  generateOutlook, getCachedOutlook,
+  generatePublicConcerns, getCachedConcerns,
+} from "../services/briefing";
+import { ResidentQuotes } from "../components/ResidentQuotes";
+import type {
+  OutlookData, OutlookEvent, OutlookRisk, OutlookEngagement, PublicConcern,
+} from "../services/briefing";
 import type { DistrictData } from "../services/aggregator";
 import type { DistrictConfig } from "../districts";
 
@@ -135,16 +141,96 @@ function EngagementCard({ item }: { item: OutlookEngagement }) {
   );
 }
 
+/* ─── Public Concern card ────────────────────── */
+
+const CONCERN_SEVERITY_CFG = {
+  critical: { label: "CRITICAL", bg: "#FDEEEE", text: "#B44040", border: "#F0C8C8" },
+  alert:    { label: "ALERT",    bg: "#FEF5EC", text: "#B47A2E", border: "#F0DFC4" },
+  watch:    { label: "WATCH",    bg: COLORS.softBlue, text: "#4A6FA5", border: "#C8D8E8" },
+} as const;
+
+function ConcernCard({ concern }: { concern: PublicConcern }) {
+  const cfg = CONCERN_SEVERITY_CFG[concern.severity] ?? CONCERN_SEVERITY_CFG.watch;
+  return (
+    <div style={{
+      display: "flex", gap: 16, alignItems: "flex-start",
+      padding: "20px 0",
+      borderBottom: `1px solid ${COLORS.lightBorder}`,
+    }}>
+      <span style={{
+        fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
+        color: cfg.text, background: cfg.bg,
+        border: `1px solid ${cfg.border}`,
+        borderRadius: 6, padding: "4px 10px",
+        whiteSpace: "nowrap", flexShrink: 0, marginTop: 2,
+        letterSpacing: "0.04em",
+      }}>{cfg.label}</span>
+      <div>
+        <div style={{
+          fontFamily: "'Urbanist', sans-serif", fontSize: 16,
+          fontWeight: 700, color: COLORS.charcoal, marginBottom: 6,
+        }}>{concern.headline}</div>
+        <p style={{
+          fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.7,
+          color: COLORS.midGray, margin: 0, marginBottom: 6,
+        }}>{concern.evidence}</p>
+        <p style={{
+          fontFamily: FONTS.body, fontSize: 13, lineHeight: 1.65,
+          color: COLORS.charcoal, fontWeight: 500, margin: 0, marginBottom: 4,
+        }}>
+          <strong>Affects: </strong>{concern.affects}
+        </p>
+        <p style={{
+          fontFamily: FONTS.body, fontSize: 13, lineHeight: 1.65,
+          color: COLORS.charcoal, fontWeight: 500, margin: 0,
+        }}>
+          <strong>Action: </strong>{concern.action}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Helper ─────────────────────────────────── */
+
+function formatLastUpdated(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) {
+    return `Generated today at ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  }
+  return `Generated ${d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
+}
+
 /* ─── Page ───────────────────────────────────── */
 
-export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookProps) {
-  const [filter, setFilter]             = useState(districtConfig.allLabel);
-  const [outlook, setOutlook]           = useState<OutlookData | null>(null);
-  // Init: if we have a cached result for the initial "all district" view, don't show spinner
-  const [isGenerating, setIsGenerating] = useState(
+export function Outlook({ aggregatedData, districtConfig }: OutlookProps) {
+  console.log("[OUTLOOK] RENDER", { hasData: !!aggregatedData, filter: districtConfig.allLabel });
+
+  const [filter, setFilter]               = useState(districtConfig.allLabel);
+  const [outlook, setOutlook]             = useState<OutlookData | null>(
+    () => getCachedOutlook(districtConfig, undefined)?.outlook ?? null,
+  );
+  const [lastUpdated, setLastUpdated]     = useState<string | null>(
+    () => getCachedOutlook(districtConfig, undefined)?.generatedAt ?? null,
+  );
+  const [isGenerating, setIsGenerating]   = useState(
     () => !!aggregatedData && !getCachedOutlook(districtConfig, undefined),
   );
-  const [genError, setGenError]         = useState<string | null>(null);
+  const [genError, setGenError]           = useState<string | null>(null);
+
+  const [concerns, setConcerns]                             = useState<PublicConcern[] | null>(
+    () => getCachedConcerns(districtConfig, undefined)?.concerns ?? null,
+  );
+  const [isConcernsGenerating, setIsConcernsGenerating]     = useState(
+    () => !!aggregatedData && !getCachedConcerns(districtConfig, undefined),
+  );
+  const [concernsError, setConcernsError]                   = useState<string | null>(null);
 
   // Reset filter when district changes
   useEffect(() => {
@@ -155,56 +241,132 @@ export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookP
   function doGenerate(focus?: { zip: string; name: string }) {
     if (!aggregatedData) return;
     setIsGenerating(true);
+    setIsConcernsGenerating(true);
     setGenError(null);
+    setConcernsError(null);
+
     generateOutlook(aggregatedData, districtConfig, focus)
-      .then(d => setOutlook(d))
+      .then(({ outlook: o, generatedAt }) => {
+        setOutlook(o);
+        setLastUpdated(generatedAt);
+      })
       .catch(err => {
         console.error("[Outlook] generation failed:", err);
         setGenError(err instanceof Error ? err.message : "Generation failed");
       })
       .finally(() => setIsGenerating(false));
+
+    generatePublicConcerns(aggregatedData, districtConfig, focus)
+      .then(({ concerns: c }) => setConcerns(c))
+      .catch(err => {
+        console.error("[Outlook] concerns generation failed:", err);
+        setConcernsError(err instanceof Error ? err.message : "Generation failed");
+      })
+      .finally(() => setIsConcernsGenerating(false));
   }
 
   // Generate when filter changes (also fires on mount).
   useEffect(() => {
-    if (!aggregatedData) return;
+    console.log("[OUTLOOK] EFFECT fired", { hasData: !!aggregatedData, isGenerating, hasOutlook: !!outlook, filter });
+    if (!aggregatedData) {
+      console.log("[OUTLOOK] EFFECT early-return — no aggregatedData");
+      return;
+    }
     const neighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
     const focus = neighborhood ? { zip: neighborhood.zip, name: neighborhood.name } : undefined;
 
     // Synchronous cache check — instant display, no loading flash
-    const cached = getCachedOutlook(districtConfig, focus);
-    if (cached) {
-      setOutlook(cached);
+    const cachedOutlook  = getCachedOutlook(districtConfig, focus);
+    const cachedConcerns = getCachedConcerns(districtConfig, focus);
+
+    if (cachedOutlook) {
+      setOutlook(cachedOutlook.outlook);
+      setLastUpdated(cachedOutlook.generatedAt);
       setIsGenerating(false);
-      return;
     }
+    if (cachedConcerns) {
+      setConcerns(cachedConcerns.concerns);
+      setIsConcernsGenerating(false);
+    }
+    if (cachedOutlook && cachedConcerns) return;
 
     // Not cached — debounce 300ms before calling Claude
-    setIsGenerating(true);
-    setGenError(null);
-    const timer = setTimeout(() => doGenerate(focus), 300);
+    if (!cachedOutlook) { setIsGenerating(true); setGenError(null); }
+    if (!cachedConcerns) { setIsConcernsGenerating(true); setConcernsError(null); }
+
+    const timer = setTimeout(() => {
+      if (!cachedOutlook) {
+        generateOutlook(aggregatedData, districtConfig, focus)
+          .then(({ outlook: o, generatedAt }) => {
+            setOutlook(o);
+            setLastUpdated(generatedAt);
+          })
+          .catch(err => {
+            console.error("[Outlook] generation failed:", err);
+            setGenError(err instanceof Error ? err.message : "Generation failed");
+          })
+          .finally(() => setIsGenerating(false));
+      }
+      if (!cachedConcerns) {
+        generatePublicConcerns(aggregatedData, districtConfig, focus)
+          .then(({ concerns: c }) => setConcerns(c))
+          .catch(err => {
+            console.error("[Outlook] concerns generation failed:", err);
+            setConcernsError(err instanceof Error ? err.message : "Generation failed");
+          })
+          .finally(() => setIsConcernsGenerating(false));
+      }
+    }, 300);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]); // intentionally only re-run when filter changes
+  }, [filter, aggregatedData]); // re-run when filter changes OR when data first arrives after refresh
 
+  // aggregatedData is null when the user lands directly via URL (refresh/bookmark).
+  // App.tsx auto-fetches it behind the LoadingOverlay; show skeletons here as fallback.
   if (!aggregatedData) {
     return (
-      <div style={{ background: COLORS.cream, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center", padding: "48px 32px", maxWidth: 380 }}>
-          <p style={{
-            fontFamily: "'Urbanist', sans-serif", fontSize: 18, fontWeight: 800,
-            color: COLORS.charcoal, marginBottom: 12,
+      <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
+        <div style={{ maxWidth: 820, margin: "0 auto", padding: "clamp(80px,12vw,120px) 24px" }}>
+          <div style={{
+            background: COLORS.white, borderRadius: 20,
+            padding: "8px clamp(20px,4vw,44px) 4px",
+            border: `1px solid ${COLORS.lightBorder}`,
+            marginBottom: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
           }}>
-            No data available
-          </p>
-          <p style={{ color: COLORS.midGray, fontSize: 14, fontFamily: FONTS.body, lineHeight: 1.65, marginBottom: 28 }}>
-            Generate a briefing from the home page to view the outlook.
-          </p>
-          <button onClick={() => onNavigate("Home")} style={{
-            background: COLORS.orange, color: COLORS.white, border: "none",
-            borderRadius: 24, padding: "12px 28px", fontSize: 14, fontWeight: 700,
-            cursor: "pointer", fontFamily: "'Urbanist', sans-serif",
-          }}>← Go to Home</button>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ padding: "24px 0", borderBottom: `1px solid ${COLORS.lightBorder}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 10 }}>
+                  <div className="sk" style={{ height: 22, flex: 1, minWidth: 120 }} />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <div className="sk" style={{ height: 22, width: 84 }} />
+                    <div className="sk" style={{ height: 22, width: 62 }} />
+                  </div>
+                </div>
+                <div className="sk" style={{ height: 13, width: "100%", marginBottom: 8 }} />
+                <div className="sk" style={{ height: 13, width: "88%", marginBottom: 8 }} />
+                <div className="sk" style={{ height: 13, width: "60%" }} />
+              </div>
+            ))}
+          </div>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))",
+            gap: 16, marginBottom: 24,
+          }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{
+                background: COLORS.cream, borderRadius: 16, padding: "24px 28px",
+                border: `1px solid ${COLORS.lightBorder}`,
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                  <div className="sk" style={{ height: 24, width: "62%" }} />
+                  <div className="sk" style={{ height: 22, width: 60 }} />
+                </div>
+                <div className="sk" style={{ height: 13, width: "100%", marginBottom: 8 }} />
+                <div className="sk" style={{ height: 13, width: "78%" }} />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -235,10 +397,18 @@ export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookP
         </h2>
         <p style={{
           fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,
-          marginBottom: 36,
+          marginBottom: lastUpdated ? 8 : 36,
         }}>
           Powered by live DataSF permit activity and development pipeline data.
         </p>
+        {lastUpdated && (
+          <p style={{
+            fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray,
+            marginBottom: 36, opacity: 0.75,
+          }}>
+            {formatLastUpdated(lastUpdated)}
+          </p>
+        )}
 
         {/* Loading spinner + skeletons */}
         {isGenerating && (
@@ -310,15 +480,15 @@ export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookP
         {/* Error state */}
         {!isGenerating && genError && (
           <div style={{
-            background: "#FDEEEE", border: "1px solid #F0C8C8", borderRadius: 16,
+            background: COLORS.cream, border: `1px solid ${COLORS.lightBorder}`, borderRadius: 16,
             padding: "36px 32px", textAlign: "center", marginBottom: 24,
           }}>
             <p style={{
               fontFamily: "'Urbanist', sans-serif", fontSize: 17, fontWeight: 800,
-              color: "#B44040", marginBottom: 10,
-            }}>Failed to generate outlook</p>
+              color: COLORS.charcoal, marginBottom: 10,
+            }}>Outlook is being generated</p>
             <p style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.midGray, lineHeight: 1.6, marginBottom: 24 }}>
-              {genError}
+              Check back shortly. If this persists, reload the page.
             </p>
             <button
               onClick={() => {
@@ -397,16 +567,84 @@ export function Outlook({ aggregatedData, districtConfig, onNavigate }: OutlookP
           </>
         )}
 
+        {/* Public Concerns */}
+        {(isConcernsGenerating || !!concerns || !!concernsError) && (
+          <>
+            <SectionLabel text="Public Concerns" />
+            <div style={{
+              background: COLORS.white, borderRadius: 20,
+              padding: "clamp(20px, 5vw, 40px) clamp(16px, 4vw, 44px)",
+              border: `1px solid ${COLORS.lightBorder}`,
+              boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+              marginBottom: 24,
+            }}>
+              <h2 style={{
+                fontFamily: "'Urbanist', sans-serif",
+                fontSize: "clamp(22px, 3.5vw, 32px)",
+                fontWeight: 800, color: COLORS.charcoal,
+                lineHeight: 1.15, letterSpacing: "-0.02em",
+                marginBottom: 8,
+              }}>
+                What the data raises for residents.
+              </h2>
+              <p style={{
+                fontFamily: FONTS.body, fontSize: 15, lineHeight: 1.8,
+                color: COLORS.midGray, marginBottom: 8,
+              }}>
+                Based on current permit activity and development pipeline for {locationLabel}.
+              </p>
+
+              {/* Concerns loading skeletons */}
+              {isConcernsGenerating && (
+                <>
+                  {[0, 1, 2].map(i => (
+                    <div key={i} style={{
+                      display: "flex", gap: 16,
+                      padding: "20px 0",
+                      borderBottom: `1px solid ${COLORS.lightBorder}`,
+                    }}>
+                      <div className="sk" style={{ height: 26, width: 72, flexShrink: 0, marginTop: 2 }} />
+                      <div style={{ flex: 1 }}>
+                        <div className="sk" style={{ height: 18, width: "70%", marginBottom: 10 }} />
+                        <div className="sk" style={{ height: 13, width: "100%", marginBottom: 8 }} />
+                        <div className="sk" style={{ height: 13, width: "88%", marginBottom: 8 }} />
+                        <div className="sk" style={{ height: 13, width: "60%" }} />
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {/* Concerns error */}
+              {!isConcernsGenerating && concernsError && (
+                <p style={{
+                  fontFamily: FONTS.body, fontSize: 14, color: COLORS.midGray,
+                  lineHeight: 1.6, marginTop: 8,
+                }}>
+                  Concerns are being generated. Check back shortly.
+                </p>
+              )}
+
+              {/* Concern cards */}
+              {!isConcernsGenerating && concerns && concerns.map((concern, i) => (
+                <ConcernCard key={i} concern={concern} />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Resident quotes — rendered only when public_sentiment data exists */}
+        <ResidentQuotes style={{ marginBottom: 24 }} />
+
         {/* Data freshness */}
-        <p style={{
-          fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray,
-          textAlign: "center", paddingBottom: 8,
-        }}>
-          Briefing generated {new Date().toLocaleString("en-US", {
-            month: "short", day: "numeric",
-            hour: "numeric", minute: "2-digit",
-          })} · Data from DataSF
-        </p>
+        {lastUpdated && (
+          <p style={{
+            fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray,
+            textAlign: "center", paddingBottom: 8,
+          }}>
+            {formatLastUpdated(lastUpdated)} · Data from DataSF
+          </p>
+        )}
       </div>
     </div>
   );

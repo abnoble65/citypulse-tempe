@@ -4,6 +4,7 @@ import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { SupervisorAvatar } from "../components/SupervisorAvatar";
+import { ResidentQuotes } from "../components/ResidentQuotes";
 import { generateSignals, getCachedSignals } from "../services/briefing";
 import type { Signal } from "../services/briefing";
 import type { DistrictData } from "../services/aggregator";
@@ -177,7 +178,7 @@ export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
     }, 300);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]); // intentionally only re-run when filter changes
+  }, [filter, aggregatedData]); // re-run when filter changes OR when data first arrives after refresh
 
   // aggregatedData is null when the user lands directly via URL (refresh/bookmark).
   // App.tsx auto-fetches it behind the LoadingOverlay; show skeletons here as fallback.
@@ -326,6 +327,9 @@ export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
             </div>
           </>
         )}
+
+        {/* Resident quotes — rendered only when public_sentiment data exists */}
+        {!isGenerating && <ResidentQuotes style={{ marginTop: 0 }} />}
       </div>
     </div>
   );
