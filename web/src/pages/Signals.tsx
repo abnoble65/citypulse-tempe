@@ -118,11 +118,26 @@ function ConcernItem({ level, title, detail }: {
 
 /* ─── Page ───────────────────────────────────── */
 
+function formatLastUpdated(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) {
+    return `Generated today at ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  }
+  return `Generated ${d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
+}
+
 export function Signals({ aggregatedData, districtConfig, onNavigate }: SignalsProps) {
-  const [filter, setFilter]       = useState(districtConfig.allLabel);
-  const [signals, setSignals]     = useState<Signal[] | null>(null);
+  const [filter, setFilter]             = useState(districtConfig.allLabel);
+  const [signals, setSignals]           = useState<Signal[] | null>(null);
+  const [lastUpdated, setLastUpdated]   = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [genError, setGenError]   = useState<string | null>(null);
+  const [genError, setGenError]         = useState<string | null>(null);
 
   // Reset filter when district changes
   useEffect(() => {
@@ -139,7 +154,8 @@ export function Signals({ aggregatedData, districtConfig, onNavigate }: SignalsP
     // Synchronous cache check — instant display, no loading flash
     const cached = getCachedSignals(districtConfig, focus);
     if (cached) {
-      setSignals(cached);
+      setSignals(cached.signals);
+      setLastUpdated(cached.generatedAt);
       setIsGenerating(false);
       return;
     }
@@ -149,7 +165,10 @@ export function Signals({ aggregatedData, districtConfig, onNavigate }: SignalsP
     setGenError(null);
     const timer = setTimeout(() => {
       generateSignals(aggregatedData, districtConfig, focus)
-        .then(s => setSignals(s))
+        .then(({ signals: s, generatedAt }) => {
+          setSignals(s);
+          setLastUpdated(generatedAt);
+        })
         .catch(err => {
           console.error("[Signals] generation failed:", err);
           setGenError(err instanceof Error ? err.message : "Generation failed");
@@ -215,10 +234,18 @@ export function Signals({ aggregatedData, districtConfig, onNavigate }: SignalsP
         </h2>
         <p style={{
           fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,
-          marginBottom: 36,
+          marginBottom: lastUpdated ? 8 : 36,
         }}>
           Powered by live DataSF permit activity and development pipeline data.
         </p>
+        {lastUpdated && (
+          <p style={{
+            fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray,
+            marginBottom: 36, opacity: 0.75,
+          }}>
+            {formatLastUpdated(lastUpdated)}
+          </p>
+        )}
 
         {/* Loading skeletons */}
         {isGenerating && (
@@ -248,15 +275,15 @@ export function Signals({ aggregatedData, districtConfig, onNavigate }: SignalsP
         {/* Error state */}
         {!isGenerating && genError && (
           <div style={{
-            background: "#FDEEEE", border: "1px solid #F0C8C8", borderRadius: 16,
+            background: COLORS.cream, border: `1px solid ${COLORS.lightBorder}`, borderRadius: 16,
             padding: "36px 32px", textAlign: "center", marginBottom: 24,
           }}>
             <p style={{
               fontFamily: "'Urbanist', sans-serif", fontSize: 17, fontWeight: 800,
-              color: "#B44040", marginBottom: 10,
-            }}>Failed to generate signals</p>
+              color: COLORS.charcoal, marginBottom: 10,
+            }}>Signals are being generated</p>
             <p style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.midGray, lineHeight: 1.6, margin: 0 }}>
-              {genError}
+              Check back shortly. If this persists, reload the page.
             </p>
           </div>
         )}

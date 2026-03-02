@@ -88,6 +88,28 @@ const Parks      = lazy(() => import("./pages/Parks").then(m => ({ default: m.Pa
 
 const SPLASH_KEY = "citypulse_splash_seen";
 
+// ── URL ↔ page name mapping ───────────────────────────────────────────────────
+const PATH_TO_PAGE: Record<string, string> = {
+  "":           "Home",
+  "briefing":   "Briefing",
+  "charts":     "Charts",
+  "signals":    "Signals",
+  "outlook":    "Outlook",
+  "commission": "Commission",
+  "board":      "Board",
+  "mayor":      "Mayor",
+  "parks":      "Parks",
+};
+
+function pageFromPath(path: string): string {
+  const seg = path.replace(/^\//, "").toLowerCase();
+  return PATH_TO_PAGE[seg] ?? "Home";
+}
+
+function pathFromPage(pageName: string): string {
+  return pageName === "Home" ? "/" : `/${pageName.toLowerCase()}`;
+}
+
 export default function App() {
   const [splashDone, setSplashDone] = useState(() => sessionStorage.getItem(SPLASH_KEY) === "1");
 
@@ -96,12 +118,28 @@ export default function App() {
     setSplashDone(true);
   }
 
-  const [page, setPage]                       = useState("Home");
+  // Initialise from URL so a refresh lands on the correct page
+  const [page, setPage]                       = useState(() => pageFromPath(window.location.pathname));
   const [briefingText, setBriefingText]       = useState("");
   const [aggregatedData, setAggregatedData]   = useState<DistrictData | null>(null);
   const [districtConfig, setDistrictConfig]   = useState<DistrictConfig>(DEFAULT_DISTRICT);
   const [loading, setLoading]                 = useState(false);
   const [error, setError]                     = useState<string | null>(null);
+
+  // Keep URL in sync with page state
+  function navigate(newPage: string) {
+    history.pushState(null, "", pathFromPage(newPage));
+    setPage(newPage);
+  }
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    function onPop() {
+      setPage(pageFromPath(window.location.pathname));
+    }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   async function handleGenerate(district: DistrictConfig) {
     console.time(`[app] generate ${district.label}`);
@@ -109,14 +147,14 @@ export default function App() {
     setError(null);
     // Navigate immediately — user sees Briefing with loading overlay rather than waiting on Home
     setDistrictConfig(district);
-    setPage("Briefing");
+    navigate("Briefing");
     try {
       const { text, data } = await generateBriefing(district);
       setBriefingText(text);
       setAggregatedData(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred.");
-      setPage("Home");
+      navigate("Home");
     } finally {
       setLoading(false);
       console.timeEnd(`[app] generate ${district.label}`);
@@ -126,15 +164,15 @@ export default function App() {
   const renderPage = () => {
     switch (page) {
       case "Home":
-        return <Home onNavigate={setPage} onGenerate={handleGenerate} loading={loading} error={error} />;
+        return <Home onNavigate={navigate} onGenerate={handleGenerate} loading={loading} error={error} />;
       case "Briefing":
-        return <Briefing briefingText={briefingText} aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={setPage} />;
+        return <Briefing briefingText={briefingText} aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={navigate} />;
       case "Charts":
-        return <Charts aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={setPage} />;
+        return <Charts aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={navigate} />;
       case "Signals":
-        return <Signals aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={setPage} />;
+        return <Signals aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={navigate} />;
       case "Outlook":
-        return <Outlook aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={setPage} />;
+        return <Outlook aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={navigate} />;
       case "Commission":
         return <Commission districtConfig={districtConfig} />;
       case "Board":
@@ -144,7 +182,7 @@ export default function App() {
       case "Parks":
         return <Parks districtConfig={districtConfig} />;
       default:
-        return <Home onNavigate={setPage} onGenerate={handleGenerate} loading={loading} error={error} />;
+        return <Home onNavigate={navigate} onGenerate={handleGenerate} loading={loading} error={error} />;
     }
   };
 
@@ -152,7 +190,7 @@ export default function App() {
     <ErrorBoundary label="App">
       {!splashDone && <SplashScreen onComplete={handleSplashComplete} />}
       <LoadingOverlay loading={loading} />
-      {page !== "Home" && <NavBar activePage={page} onNavigate={setPage} districtConfig={districtConfig} />}
+      {page !== "Home" && <NavBar activePage={page} onNavigate={navigate} districtConfig={districtConfig} />}
       <ErrorBoundary label={page}>
         <Suspense fallback={<div />}>
           <div key={page} style={{ animation: "cp-page-in 0.15s ease-out" }}>

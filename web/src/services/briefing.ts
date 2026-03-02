@@ -260,8 +260,55 @@ export async function generateGovHeadlines(
 // Keyed by "districtNumber:zip" (neighborhood-filtered) or "districtNumber:all".
 // Switching between previously-visited combos is instant — no Claude call needed.
 const _briefingCache = new Map<string, string>();
-const _signalsCache  = new Map<string, Signal[]>();
+const _signalsCache  = new Map<string, { signals: Signal[]; generatedAt: string | null }>();
 const _outlookCache  = new Map<string, OutlookData>();
+
+// ── Supabase signal_cache helpers ─────────────────────────────────────────────
+// 24-hour TTL: stale signals are silently replaced on next generation.
+const SIGNALS_DB_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function readSignalsFromDB(
+  cacheKey: string,
+): Promise<{ signals: Signal[]; generatedAt: string } | null> {
+  try {
+    const { data, error } = await supabase
+      .from('signal_cache')
+      .select('signals, generated_at')
+      .eq('cache_key', cacheKey)
+      .single();
+
+    if (error || !data) return null;
+
+    const age = Date.now() - new Date(data.generated_at as string).getTime();
+    if (age > SIGNALS_DB_TTL_MS) return null; // expired — regenerate
+
+    return {
+      signals: data.signals as Signal[],
+      generatedAt: data.generated_at as string,
+    };
+  } catch {
+    return null; // table may not exist yet — fail silently
+  }
+}
+
+async function writeSignalsToDB(
+  cacheKey: string,
+  signals: Signal[],
+): Promise<string | null> {
+  try {
+    const generatedAt = new Date().toISOString();
+    const { error } = await supabase
+      .from('signal_cache')
+      .upsert(
+        { cache_key: cacheKey, signals, generated_at: generatedAt },
+        { onConflict: 'cache_key' },
+      );
+    if (error) return null;
+    return generatedAt;
+  } catch {
+    return null;
+  }
+}
 
 function contentCacheKey(
   district: DistrictConfig,
@@ -274,7 +321,7 @@ function contentCacheKey(
 export function getCachedSignals(
   district: DistrictConfig,
   focus?: { zip: string; name: string },
-): Signal[] | null {
+): { signals: Signal[]; generatedAt: string | null } | null {
   return _signalsCache.get(contentCacheKey(district, focus)) ?? null;
 }
 
@@ -405,16 +452,30 @@ export async function generateBriefingFromData(
 /**
  * Generate structured signals from already-fetched DistrictData.
  * If `focus` is provided, scopes the analysis to that zip's permit data.
+ *
+ * Returns signals plus `generatedAt` — an ISO timestamp from the Supabase
+ * cache row (if loaded from DB) or the moment generation completed.
  */
 export async function generateSignals(
   data: DistrictData,
   district: DistrictConfig,
   focus?: { zip: string; name: string },
-): Promise<Signal[]> {
+): Promise<{ signals: Signal[]; generatedAt: string | null }> {
   const key = contentCacheKey(district, focus);
-  const cached = _signalsCache.get(key);
-  if (cached) { console.log(`[signals] cache hit ${key}`); return cached; }
 
+  // 1 — In-memory cache (instant, no async)
+  const memCached = _signalsCache.get(key);
+  if (memCached) { console.log(`[signals] memory cache hit ${key}`); return memCached; }
+
+  // 2 — Supabase DB cache (survives page refresh; 24-hour TTL)
+  const dbCached = await readSignalsFromDB(key);
+  if (dbCached) {
+    console.log(`[signals] DB cache hit ${key}`);
+    _signalsCache.set(key, dbCached);
+    return dbCached;
+  }
+
+  // 3 — Generate via Claude
   let analysisData = data;
 
   if (focus) {
@@ -453,15 +514,21 @@ export async function generateSignals(
 
   const userContent = `${JSON.stringify(promptData, null, 2)}${crossRefs}
 
-TASK: ${citywideTask ?? `Identify exactly 4 key signals or trends for ${locationLabel} based on the data above.`}
+TASK: ${citywideTask ?? `Identify 3–5 key signals or trends for ${locationLabel} based on the data above. Generate as many signals as the data supports — never pad with generic observations if the data is thin.`}
+
+Editorial rules:
+- Be balanced and factual — present optimistic signals first, then challenges
+- Cite specific numbers from the data (counts, dollar amounts, percentages)
+- No political opinions; describe what the data shows
+- If two or more high-value permits (estimated_cost_usd > $1M) are at addresses that share a street number block (e.g., 750 and 758 Pacific), note they may represent a single merged development and estimate the combined value
 
 For each signal return an object with these exact keys:
-- "title": short title, 5–8 words
+- "title": short headline, max 10 words
 - "body": 2–3 sentences explaining what the data shows, citing specific numbers
 - "severity": exactly one of "low", "medium", or "high"
-- "concern": 1–2 sentences on why residents should care
+- "concern": 1 sentence on why this matters to residents
 
-Focus on: unusual permit volume, clustering of similar project types, potential displacement risk (pay close attention to eviction data — Ellis Act and owner move-in notices are strong indicators of involuntary tenant displacement), affordability impact, infrastructure strain, and property value trends (use assessment_summary.yoy_change_pct and the split between residential vs commercial assessed values to flag gentrification pressure or investment shifts). Also examine affordable_housing_summary: flag if affordable_ratio is below 0.20 (market-rate development dominating), if Construction-phase affordable units are low relative to total pipeline, or if deep affordable (≤50% AMI) units are a small share of ami_distribution. If eviction_summary shows elevated totals or a rising monthly trend, flag this as a signal.
+Focus on: unusual permit volume or cost spikes, clustering of similar project types, potential displacement risk (pay close attention to eviction data — Ellis Act and owner move-in notices are strong indicators of involuntary tenant displacement), affordability impact, infrastructure strain, and property value trends (use assessment_summary.yoy_change_pct and the split between residential vs commercial assessed values to flag gentrification pressure or investment shifts). Also examine affordable_housing_summary: flag if affordable_ratio is below 0.20 (market-rate development dominating), if Construction-phase affordable units are low relative to total pipeline, or if deep affordable (≤50% AMI) units are a small share of ami_distribution. If eviction_summary shows elevated totals or a rising monthly trend, flag this as a signal.
 
 Return ONLY a JSON object in this exact shape (no other text):
 {"signals": [{"title":"...","body":"...","severity":"...","concern":"..."}]}`;
@@ -479,8 +546,13 @@ Return ONLY a JSON object in this exact shape (no other text):
   if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
 
   const parsed = repairAndParseJSON<{ signals: Signal[] }>(block.text);
-  _signalsCache.set(key, parsed.signals);
-  return parsed.signals;
+
+  // 4 — Persist to Supabase DB (fire-and-forget; failure is non-fatal)
+  const generatedAt = await writeSignalsToDB(key, parsed.signals);
+
+  const result = { signals: parsed.signals, generatedAt };
+  _signalsCache.set(key, result);
+  return result;
 }
 
 /**
