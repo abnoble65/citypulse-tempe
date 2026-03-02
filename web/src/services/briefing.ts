@@ -715,18 +715,24 @@ export async function generateSignals(
 
 TASK: ${citywideTask ?? `Identify 3–5 key signals or trends for ${locationLabel} based on the data above. Generate as many signals as the data supports — never pad with generic observations if the data is thin.`}
 
-IMPORTANT EDITORIAL RULES:
-- Always include at least one positive development or trend if the data supports it. Look for: new affordable housing projects, declining violation rates, community investment, approved developments that add housing stock.
-- Lead with facts, not alarm. Present data and let residents draw conclusions.
-- Avoid advocacy language: do not use 'crisis', 'severe', 'accelerating', 'exacerbating'. Use neutral descriptors.
-- When adjacent addresses have large permits (like 758 and 772 Pacific Ave), identify them as likely one project and describe the combined scope.
-- Balance every concern with context. If evictions are elevated, also note if they've declined from peak.
-- Severity ratings should be based on data magnitude, not emotional framing.
-- Be balanced and factual — present optimistic signals first, then challenges
-- Cite specific numbers from the data (counts, dollar amounts, percentages)
-- No political opinions; describe what the data shows
-- If two or more high-value permits (estimated_cost_usd > $1M) are at addresses that share a street number block (e.g., 750 and 758 Pacific), note they may represent a single merged development and estimate the combined value
-- When public comment data is available, you MUST include at least one signal that references what residents actually said. Quote 1–2 brief resident statements to give voice to the community. Format quotes like: *One resident told the Commission, "it seems to be extremely out of scale to the neighborhood."* These quotes make the analysis feel human, not algorithmic.
+EDITORIAL VOICE — FOLLOW THESE RULES STRICTLY:
+
+Tone: You are a trusted local journalist, not an activist. Present facts. Let residents decide how to feel.
+
+REQUIRED STRUCTURE:
+- Your FIRST signal MUST be a positive development (new housing approved, investment in neighborhood, declining violation rates, community wins). If the data contains a large affordable housing project, lead with it.
+- Balance every negative finding with context. If evictions are elevated, note whether they've declined from peak. If permits cluster in one area, note that other areas are stable.
+
+BANNED WORDS: crisis, severe, alarming, accelerating, exacerbating, threatens, devastating, critical (as adjective). Use instead: elevated, notable, concentrated, shifting, worth watching.
+
+BANNED FRAMING: Do not speculate about gentrification, displacement, or equity without specific data to support it. State what the data shows, not what it might mean politically.
+
+SEVERITY RATINGS must match data magnitude:
+- low: trend is emerging, worth monitoring
+- medium: clear pattern with measurable impact
+- high: only for statistically significant outliers (use sparingly)
+
+When public comment data is available, include at least one signal that reflects what residents said. Reference specific themes from the public record.
 
 For each signal return an object with these exact keys:
 - "title": short headline, max 10 words
@@ -934,14 +940,24 @@ For each engagement item use these exact keys:
 - "title": specific opportunity name (6–10 words)
 - "detail": 1 sentence on how residents can participate
 
-IMPORTANT EDITORIAL RULES:
-- Always include at least one positive development or opportunity if the data supports it. Look for: new affordable housing projects, declining violation rates, community investment, approved developments that add housing stock.
-- Lead with facts, not alarm. Present data and let residents draw conclusions.
-- Avoid advocacy language: do not use 'crisis', 'severe', 'accelerating', 'exacerbating'. Use neutral descriptors.
-- When adjacent addresses have large permits (like 758 and 772 Pacific Ave), identify them as likely one project and describe the combined scope.
-- Balance every risk with context. If evictions are elevated, also note if they've declined from peak.
-- Priority ratings should be based on data magnitude, not emotional framing.
-- When public comment data is available, you MUST include at least one risk or event that references what residents actually said. Quote 1–2 brief resident statements to give voice to the community. Format quotes like: *One resident told the Commission, "it seems to be extremely out of scale to the neighborhood."* These quotes make the analysis feel human, not algorithmic.
+EDITORIAL VOICE — FOLLOW THESE RULES STRICTLY:
+
+Tone: You are a trusted local journalist, not an activist. Present facts. Let residents decide how to feel.
+
+REQUIRED STRUCTURE:
+- Your FIRST event or risk MUST be a positive development or opportunity (new housing approved, investment, community win, declining violation rates). If the data contains a large affordable housing project, lead with it.
+- Balance every negative finding with context. If evictions are elevated, note whether they've declined from peak. If permits cluster in one area, note that other areas are stable.
+
+BANNED WORDS: crisis, severe, alarming, accelerating, exacerbating, threatens, devastating, critical (as adjective). Use instead: elevated, notable, concentrated, shifting, worth watching.
+
+BANNED FRAMING: Do not speculate about gentrification, displacement, or equity without specific data to support it. State what the data shows, not what it might mean politically.
+
+PRIORITY RATINGS must match data magnitude:
+- low: trend is emerging, worth monitoring
+- medium: clear pattern with measurable impact
+- high: only for statistically significant outliers (use sparingly)
+
+When public comment data is available, include at least one item that reflects what residents said. Reference specific themes from the public record.
 
 IMPORTANT: Include one risk about shadow impact (☀️ icon) and, if eviction_summary.total > 0, one displacement risk (🏘️ icon) citing eviction counts and types. If assessment_summary.yoy_change_pct is notable (> 5% or < −2%), mention property value trajectory in a risk or event. If the data shows the displacement trifecta — rising assessed values AND elevated evictions AND a low affordable_housing_summary.affordable_ratio or few active construction-phase affordable units — flag this as a critical combined risk (🚨 icon) citing all three signals together.`;
 
@@ -1036,17 +1052,19 @@ export async function generatePublicConcerns(
 
 TASK: Based on the data above, identify 3–5 public concerns residents of ${locationLabel} should be aware of. Generate as many concerns as the data supports — never pad with generic items.
 
-IMPORTANT EDITORIAL RULES:
-- Always include at least one positive development or trend if the data supports it. Look for: new affordable housing projects, declining violation rates, community investment, approved developments that add housing stock.
-- Lead with facts, not alarm. Present data and let residents draw conclusions.
-- Avoid advocacy language: do not use 'crisis', 'severe', 'accelerating', 'exacerbating'. Use neutral descriptors.
-- When adjacent addresses have large permits (like 758 and 772 Pacific Ave), identify them as likely one project and describe the combined scope.
-- Balance every concern with context. If evictions are elevated, also note if they've declined from peak.
-- Severity ratings should be based on data magnitude, not emotional framing.
-- Be balanced and factual — cite specific numbers (counts, dollar amounts, percentages)
-- No political opinions; describe what the data shows
-- Focus on resident impact: housing costs, displacement risk, construction disruption, affordability, infrastructure
-- When public comment data is available, you MUST include at least one concern that references what residents actually said. Quote 1–2 brief resident statements to give voice to the community. Format quotes like: *One resident told the Commission, "it seems to be extremely out of scale to the neighborhood."* These quotes make the analysis feel human, not algorithmic.
+EDITORIAL VOICE — FOLLOW THESE RULES STRICTLY:
+
+Tone: You are a trusted local journalist, not an activist. Present facts. Let residents decide how to feel.
+
+REQUIRED STRUCTURE:
+- Your FIRST concern MUST be a positive development or community win (new affordable housing, investment, improvement). If the data contains a large affordable housing project, lead with it.
+- Balance every negative finding with context. If evictions are elevated, note whether they've declined from peak. Cite specific numbers.
+
+BANNED WORDS: crisis, severe, alarming, accelerating, exacerbating, threatens, devastating. Use instead: elevated, notable, concentrated, shifting, worth watching.
+
+BANNED FRAMING: Do not speculate about gentrification, displacement, or equity without specific data to support it. State what the data shows, not what it might mean politically.
+
+When public comment data is available, include at least one concern that reflects what residents said. Reference specific themes from the public record.
 
 Severity guide:
 - "critical": immediate or significant displacement/affordability risk backed by strong data signals
@@ -1227,7 +1245,7 @@ export async function generateBriefingOverview(
     max_tokens: 300,
     messages: [{
       role: 'user',
-      content: `${ctx}\n\nWrite a 3–4 sentence morning news briefing overview for ${locationLabel}. Be specific: use real numbers, real addresses, real neighborhoods from the data above. If there are resident quotes, weave in one briefly. Close with one thing residents should watch. Write in third person ("residents"). No markdown, no bullet points. Plain prose only.`,
+      content: `${ctx}\n\nWrite a 3–4 sentence morning news briefing overview for ${locationLabel}. Open with the most significant positive development or largest investment. Be specific: use real numbers, real addresses, real neighborhoods. If there are resident quotes, weave in one briefly. Close with one thing residents should watch. Tone: trusted local journalist, not activist. No advocacy language (no "crisis", "severe", "alarming"). No markdown, no bullet points. Plain prose only.`,
     }],
   });
 
