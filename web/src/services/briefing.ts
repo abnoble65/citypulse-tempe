@@ -707,7 +707,8 @@ export async function generateSignals(
     console.warn('[sentiment] failed or timed out, continuing without:', e);
   }
   const crossRefs = mayorCtx + bosCtx + parksCtx + sentimentCtx;
-  console.log('[signals] sentiment in prompt:', crossRefs.includes('Public Comment') ? 'YES' : 'NO');
+  console.log('[signals] sentimentCtx length:', sentimentCtx.length);
+  console.log('[signals] sentiment in prompt:', crossRefs.toLowerCase().includes('public comment') ? 'YES' : 'NO');
 
   try {
   const userContent = `${JSON.stringify(promptData, null, 2)}${crossRefs}
