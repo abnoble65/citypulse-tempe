@@ -265,7 +265,11 @@ async function getSentimentContext(districtNumber: string): Promise<string> {
     }
 
     const { data } = await query;
-    if (!data || data.length === 0) { _sentimentCache.set(districtNumber, ''); return ''; }
+    console.log('[sentiment] query returned rows:', data?.length ?? 0);
+    if (!data || data.length === 0) {
+      console.log('[sentiment] no sentiment rows found');
+      _sentimentCache.set(districtNumber, ''); return '';
+    }
 
     // Flatten all sentiment records (one per hearing)
     const sentiments: SentimentRow[] = [];
@@ -273,7 +277,10 @@ async function getSentimentContext(districtNumber: string): Promise<string> {
       const sent = row.hearing?.public_sentiment?.[0];
       if (sent) sentiments.push(sent);
     }
-    if (sentiments.length === 0) { _sentimentCache.set(districtNumber, ''); return ''; }
+    if (sentiments.length === 0) {
+      console.log('[sentiment] no sentiment rows found');
+      _sentimentCache.set(districtNumber, ''); return '';
+    }
 
     const totalSpeakers = sentiments.reduce((s, r) => s + (r.speakers ?? 0), 0);
     const totalFor      = sentiments.reduce((s, r) => s + (r.for_project ?? 0), 0);
@@ -310,9 +317,11 @@ Use this sentiment data to add resident voice to your analysis. Reference specif
 `;
 
     _sentimentCache.set(districtNumber, ctx);
-    console.log("[sentiment] context:", ctx);
+    console.log('[sentiment] returning context length:', ctx.length);
+    console.log('[sentiment] context:', ctx);
     return ctx;
-  } catch {
+  } catch (error) {
+    console.log('[sentiment] error:', error instanceof Error ? error.message : String(error));
     // Table may not exist yet — silently skip
     _sentimentCache.set(districtNumber, '');
     return '';
@@ -715,6 +724,7 @@ export async function generateSignals(
     console.warn('[sentiment] failed or timed out, continuing without:', e);
   }
   const crossRefs = mayorCtx + bosCtx + parksCtx + sentimentCtx;
+  console.log('[signals] sentiment in prompt:', crossRefs.includes('Public Comment') ? 'YES' : 'NO');
 
   try {
   const userContent = `${JSON.stringify(promptData, null, 2)}${crossRefs}
