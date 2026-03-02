@@ -6,6 +6,7 @@ import { SectionLabel } from "./SectionLabel";
 interface QuoteEntry {
   text: string;
   hearingDate: string | null;
+  projectContext: string | null; // address or description for attribution
 }
 
 // Module-level cache so the query only runs once per session.
@@ -15,9 +16,17 @@ async function fetchResidentQuotes(): Promise<QuoteEntry[]> {
   if (_cachedQuotes !== null) return _cachedQuotes;
 
   try {
+    // public_sentiment → hearings (hearing_date) → projects (address, description)
+    // hearings has many projects, so projects comes back as an array.
     const { data } = await supabase
       .from("public_sentiment")
-      .select("notable_quotes, hearing:hearing_id(hearing_date)")
+      .select(`
+        notable_quotes,
+        hearing:hearing_id(
+          hearing_date,
+          projects(address, project_description)
+        )
+      `)
       .order("id", { ascending: false })
       .limit(15);
 
@@ -26,17 +35,39 @@ async function fetchResidentQuotes(): Promise<QuoteEntry[]> {
       return [];
     }
 
-    // Supabase returns the joined FK as an array even for 1:1 relations
-    type Row = { notable_quotes: string[] | null; hearing: { hearing_date: string }[] | null };
+    type Project = { address: string | null; project_description: string | null };
+    // hearing is to-one FK join; Supabase JS client may return it as object or
+    // single-element array depending on the generated types — handle both.
+    type HearingShape = { hearing_date: string | null; projects: Project[] } | null;
+    type Row = {
+      notable_quotes: string[] | null;
+      hearing: HearingShape | HearingShape[];
+    };
 
     const entries: QuoteEntry[] = [];
+
     for (const row of data as unknown as Row[]) {
       const quotes = row.notable_quotes ?? [];
-      const hearingArr = Array.isArray(row.hearing) ? row.hearing : [];
-      const date = hearingArr[0]?.hearing_date ?? null;
+
+      // Normalise hearing to a single object regardless of how Supabase returned it
+      const hearing: HearingShape = Array.isArray(row.hearing)
+        ? (row.hearing[0] ?? null)
+        : row.hearing;
+
+      const date = hearing?.hearing_date ?? null;
+
+      // Pick the first project that has a usable address or description
+      const projects = hearing?.projects ?? [];
+      const bestProject = projects.find(p => p.address || p.project_description) ?? null;
+      const projectContext =
+        bestProject?.address ??
+        (bestProject?.project_description
+          ? bestProject.project_description.slice(0, 60).trimEnd()
+          : null);
+
       for (const q of quotes) {
         if (q && q.trim().length > 10) {
-          entries.push({ text: q.trim(), hearingDate: date });
+          entries.push({ text: q.trim(), hearingDate: date, projectContext });
           if (entries.length >= 3) break;
         }
       }
@@ -51,13 +82,20 @@ async function fetchResidentQuotes(): Promise<QuoteEntry[]> {
   }
 }
 
-function formatHearingDate(iso: string | null): string {
-  if (!iso) return "Planning Commission";
+function formatDate(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
-  if (!y || !m || !d) return "Planning Commission";
-  return `Planning Commission, ${new Date(y, m - 1, d).toLocaleDateString("en-US", {
+  if (!y || !m || !d) return "";
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
     month: "short", day: "numeric", year: "numeric",
-  })}`;
+  });
+}
+
+function formatAttribution(q: QuoteEntry): string {
+  const datePart = q.hearingDate ? `, ${formatDate(q.hearingDate)}` : "";
+  if (q.projectContext) {
+    return `Public comment on ${q.projectContext}${datePart}`;
+  }
+  return `Public comment, Planning Commission hearing${datePart}`;
 }
 
 export function ResidentQuotes({ style }: { style?: React.CSSProperties }) {
@@ -122,7 +160,7 @@ export function ResidentQuotes({ style }: { style?: React.CSSProperties }) {
                 fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray,
                 margin: 0, letterSpacing: "0.01em",
               }}>
-                — {formatHearingDate(q.hearingDate)}
+                — {formatAttribution(q)}
               </p>
             </div>
           </div>
