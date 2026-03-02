@@ -45,6 +45,14 @@ export interface OutlookEngagement {
   detail: string;
 }
 
+export interface PublicConcern {
+  headline: string;
+  severity: 'watch' | 'alert' | 'critical';
+  evidence: string;
+  affects: string;
+  action: string;
+}
+
 export interface OutlookData {
   events: OutlookEvent[];
   risks: OutlookRisk[];
@@ -215,6 +223,100 @@ async function getParksContext(districtNumber: string): Promise<string> {
   }
 }
 
+// ── Public sentiment cross-reference ──────────────────────────────────────────
+// Aggregates public comment data from recent Planning Commission hearings and
+// injects a speaker-count / theme / quote summary into AI prompts.
+// Cached per district number (sentiment is not reliably zip-filterable without
+// geocoding; neighborhood views fall back to district-level data).
+
+const _sentimentCache = new Map<string, string>(); // districtNumber → context string
+
+type SentimentRow = {
+  speakers:        number;
+  for_project:     number;
+  against_project: number;
+  neutral:         number;
+  top_themes:      string[] | null;
+  notable_quotes:  string[] | null;
+};
+
+async function getSentimentContext(districtNumber: string): Promise<string> {
+  if (_sentimentCache.has(districtNumber)) return _sentimentCache.get(districtNumber)!;
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query: any = supabase
+      .from('projects')
+      .select(`
+        hearing:hearing_id(
+          public_sentiment(
+            speakers, for_project, against_project, neutral,
+            top_themes, notable_quotes
+          )
+        )
+      `)
+      .not('hearing_id', 'is', null)
+      .order('id', { ascending: false })
+      .limit(districtNumber === '0' ? 60 : 30);
+
+    if (districtNumber !== '0') {
+      query = query.eq('district', districtNumber);
+    }
+
+    const { data } = await query;
+    if (!data || data.length === 0) { _sentimentCache.set(districtNumber, ''); return ''; }
+
+    // Flatten all sentiment records (one per hearing)
+    const sentiments: SentimentRow[] = [];
+    for (const row of data as Array<{ hearing: { public_sentiment: SentimentRow[] } | null }>) {
+      const sent = row.hearing?.public_sentiment?.[0];
+      if (sent) sentiments.push(sent);
+    }
+    if (sentiments.length === 0) { _sentimentCache.set(districtNumber, ''); return ''; }
+
+    const totalSpeakers = sentiments.reduce((s, r) => s + (r.speakers ?? 0), 0);
+    const totalFor      = sentiments.reduce((s, r) => s + (r.for_project ?? 0), 0);
+    const totalAgainst  = sentiments.reduce((s, r) => s + (r.against_project ?? 0), 0);
+    const totalNeutral  = sentiments.reduce((s, r) => s + (r.neutral ?? 0), 0);
+    const totalVoiced   = totalFor + totalAgainst + totalNeutral || 1;
+
+    const pctFor     = Math.round((totalFor     / totalVoiced) * 100);
+    const pctAgainst = Math.round((totalAgainst / totalVoiced) * 100);
+    const pctNeutral = Math.round((totalNeutral / totalVoiced) * 100);
+
+    // Theme frequency count → top 5
+    const themeCounts = new Map<string, number>();
+    for (const row of sentiments) {
+      for (const t of row.top_themes ?? []) {
+        themeCounts.set(t, (themeCounts.get(t) ?? 0) + 1);
+      }
+    }
+    const topThemes = [...themeCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([t]) => t);
+
+    // Pick up to 3 notable quotes
+    const quotes = sentiments.flatMap(r => r.notable_quotes ?? []).filter(Boolean).slice(0, 3);
+
+    const scope = districtNumber === '0' ? 'across all SF districts' : `in District ${districtNumber}`;
+    const ctx = `
+PUBLIC COMMENT SUMMARY (from recent Planning Commission hearings ${scope}):
+Across ${sentiments.length} recent hearing${sentiments.length !== 1 ? 's' : ''}, ${totalSpeakers} speakers gave public comment. ${pctFor}% supported projects, ${pctAgainst}% opposed, ${pctNeutral}% were neutral.
+Most common themes raised: ${topThemes.length > 0 ? topThemes.join(', ') : 'none recorded'}.${quotes.length > 0 ? `\nNotable quotes: ${quotes.map(q => `"${q}"`).join(' | ')}` : ''}
+
+Use this sentiment data to add resident voice to your analysis. Reference specific themes or opposition patterns where relevant.
+`;
+
+    _sentimentCache.set(districtNumber, ctx);
+    return ctx;
+  } catch {
+    // Table may not exist yet — silently skip
+    _sentimentCache.set(districtNumber, '');
+    return '';
+  }
+}
+
 // ── Gov-page AI headlines ─────────────────────────────────────────────────────
 // One Haiku call per page; cached in sessionStorage with 1-hour TTL.
 
@@ -261,7 +363,8 @@ export async function generateGovHeadlines(
 // Switching between previously-visited combos is instant — no Claude call needed.
 const _briefingCache = new Map<string, string>();
 const _signalsCache  = new Map<string, { signals: Signal[]; generatedAt: string | null }>();
-const _outlookCache  = new Map<string, OutlookData>();
+const _outlookCache  = new Map<string, { outlook: OutlookData; generatedAt: string | null }>();
+const _concernsCache = new Map<string, { concerns: PublicConcern[]; generatedAt: string | null }>();
 
 // ── Supabase signal_cache helpers ─────────────────────────────────────────────
 // 24-hour TTL: stale signals are silently replaced on next generation.
@@ -310,6 +413,87 @@ async function writeSignalsToDB(
   }
 }
 
+// ── Supabase outlook_cache helpers ────────────────────────────────────────────
+// 24-hour TTL: stale outlook is silently replaced on next generation.
+const OUTLOOK_DB_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function readOutlookFromDB(
+  cacheKey: string,
+): Promise<{ outlook: OutlookData; generatedAt: string } | null> {
+  try {
+    const { data, error } = await supabase
+      .from('outlook_cache')
+      .select('outlook, generated_at')
+      .eq('cache_key', cacheKey)
+      .single();
+    if (error || !data) return null;
+    const age = Date.now() - new Date(data.generated_at as string).getTime();
+    if (age > OUTLOOK_DB_TTL_MS) return null;
+    return { outlook: data.outlook as OutlookData, generatedAt: data.generated_at as string };
+  } catch {
+    return null;
+  }
+}
+
+async function writeOutlookToDB(
+  cacheKey: string,
+  outlook: OutlookData,
+): Promise<string | null> {
+  try {
+    const generatedAt = new Date().toISOString();
+    const { error } = await supabase
+      .from('outlook_cache')
+      .upsert(
+        { cache_key: cacheKey, outlook, generated_at: generatedAt },
+        { onConflict: 'cache_key' },
+      );
+    if (error) return null;
+    return generatedAt;
+  } catch {
+    return null;
+  }
+}
+
+// ── Supabase concerns_cache helpers ───────────────────────────────────────────
+const CONCERNS_DB_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function readConcernsFromDB(
+  cacheKey: string,
+): Promise<{ concerns: PublicConcern[]; generatedAt: string } | null> {
+  try {
+    const { data, error } = await supabase
+      .from('concerns_cache')
+      .select('concerns, generated_at')
+      .eq('cache_key', cacheKey)
+      .single();
+    if (error || !data) return null;
+    const age = Date.now() - new Date(data.generated_at as string).getTime();
+    if (age > CONCERNS_DB_TTL_MS) return null;
+    return { concerns: data.concerns as PublicConcern[], generatedAt: data.generated_at as string };
+  } catch {
+    return null;
+  }
+}
+
+async function writeConcernsToDB(
+  cacheKey: string,
+  concerns: PublicConcern[],
+): Promise<string | null> {
+  try {
+    const generatedAt = new Date().toISOString();
+    const { error } = await supabase
+      .from('concerns_cache')
+      .upsert(
+        { cache_key: cacheKey, concerns, generated_at: generatedAt },
+        { onConflict: 'cache_key' },
+      );
+    if (error) return null;
+    return generatedAt;
+  } catch {
+    return null;
+  }
+}
+
 function contentCacheKey(
   district: DistrictConfig,
   focus?: { zip: string; name: string },
@@ -329,8 +513,16 @@ export function getCachedSignals(
 export function getCachedOutlook(
   district: DistrictConfig,
   focus?: { zip: string; name: string },
-): OutlookData | null {
+): { outlook: OutlookData; generatedAt: string | null } | null {
   return _outlookCache.get(contentCacheKey(district, focus)) ?? null;
+}
+
+/** Synchronous cache read for public concerns — use to skip loading flash. */
+export function getCachedConcerns(
+  district: DistrictConfig,
+  focus?: { zip: string; name: string },
+): { concerns: PublicConcern[]; generatedAt: string | null } | null {
+  return _concernsCache.get(contentCacheKey(district, focus)) ?? null;
 }
 
 const SYSTEM_PROMPT = `You are CityPulse, an urban intelligence analyst specializing in San Francisco's built environment. Your role is to synthesize permit activity, development pipeline data, and zoning context into clear, narrative-driven briefings for urban planners, developers, and municipal clients. Always produce exactly four sections with these exact headings: THE BRIEFING, THE SIGNAL, THE ZONING CONTEXT, THE OUTLOOK. Total length 450-600 words. Write in confident prose, no bullet points. Use specific numbers from the data.`;
@@ -505,12 +697,13 @@ export async function generateSignals(
     ? data.citywide_prompt_summary ?? []
     : forPrompt(analysisData);
 
-  const [mayorCtx, bosCtx, parksCtx] = await Promise.all([
+  const [mayorCtx, bosCtx, parksCtx, sentimentCtx] = await Promise.all([
     getMayorNewsContext(district.number),
     getBosContext(district.number),
     getParksContext(district.number),
+    getSentimentContext(district.number),
   ]);
-  const crossRefs = mayorCtx + bosCtx + parksCtx;
+  const crossRefs = mayorCtx + bosCtx + parksCtx + sentimentCtx;
 
   const userContent = `${JSON.stringify(promptData, null, 2)}${crossRefs}
 
@@ -609,10 +802,22 @@ export async function generateOutlook(
   data: DistrictData,
   district: DistrictConfig,
   focus?: { zip: string; name: string },
-): Promise<OutlookData> {
+): Promise<{ outlook: OutlookData; generatedAt: string | null }> {
   const key = contentCacheKey(district, focus);
-  const cached = _outlookCache.get(key);
-  if (cached) { console.log(`[outlook] cache hit ${key}`); return cached; }
+
+  // 1 — In-memory cache (instant, no async)
+  const memCached = _outlookCache.get(key);
+  if (memCached) { console.log(`[outlook] memory cache hit ${key}`); return memCached; }
+
+  // 2 — Supabase DB cache (survives page refresh; 24-hour TTL)
+  const dbCached = await readOutlookFromDB(key);
+  if (dbCached) {
+    console.log(`[outlook] DB cache hit ${key}`);
+    _outlookCache.set(key, dbCached);
+    return dbCached;
+  }
+
+  // 3 — Generate via Claude
   // Fetch shadow-flagged projects from Supabase in parallel with data prep.
   // Always district-wide — shadow impact is a D3-level concern regardless of
   // neighborhood filter, and project addresses rarely contain zip codes.
@@ -668,12 +873,13 @@ ${shadowProjects.map(p => `- ${p.address}: ${p.shadow_details ?? p.project_descr
     ? data.citywide_prompt_summary ?? []
     : forPrompt(analysisData);
 
-  const [mayorCtx, bosCtx, parksCtx] = await Promise.all([
+  const [mayorCtx, bosCtx, parksCtx, sentimentCtx] = await Promise.all([
     getMayorNewsContext(district.number),
     getBosContext(district.number),
     getParksContext(district.number),
+    getSentimentContext(district.number),
   ]);
-  const crossRefs = mayorCtx + bosCtx + parksCtx;
+  const crossRefs = mayorCtx + bosCtx + parksCtx + sentimentCtx;
 
   const userContent = `${JSON.stringify(promptData, null, 2)}
 ${shadowBlock}${crossRefs}
@@ -724,6 +930,108 @@ IMPORTANT: Include one risk about shadow impact (☀️ icon) and, if eviction_s
 
   const parsed = repairAndParseJSON<OutlookData>(block.text);
   console.log(`[generateOutlook] STEP 5 OK — events: ${parsed.events?.length}, risks: ${parsed.risks?.length}, engagement: ${parsed.engagement?.length}`);
-  _outlookCache.set(key, parsed);
-  return parsed;
+
+  // 4 — Persist to Supabase DB (fire-and-forget; failure is non-fatal)
+  const generatedAt = await writeOutlookToDB(key, parsed);
+
+  const result = { outlook: parsed, generatedAt };
+  _outlookCache.set(key, result);
+  return result;
+}
+
+function concernsSystemPrompt(districtLabel: string): string {
+  return `You are an urban planning analyst for San Francisco ${districtLabel}. Analyze permit and development data and identify key public concerns for residents. Always return valid JSON only — no markdown, no prose, no code fences.`;
+}
+
+/**
+ * Generate structured public concerns from already-fetched DistrictData.
+ * If `focus` is provided, scopes the analysis to that zip's permit data.
+ */
+export async function generatePublicConcerns(
+  data: DistrictData,
+  district: DistrictConfig,
+  focus?: { zip: string; name: string },
+): Promise<{ concerns: PublicConcern[]; generatedAt: string | null }> {
+  const key = contentCacheKey(district, focus);
+
+  // 1 — In-memory cache (instant, no async)
+  const memCached = _concernsCache.get(key);
+  if (memCached) { console.log(`[concerns] memory cache hit ${key}`); return memCached; }
+
+  // 2 — Supabase DB cache (survives page refresh; 24-hour TTL)
+  const dbCached = await readConcernsFromDB(key);
+  if (dbCached) {
+    console.log(`[concerns] DB cache hit ${key}`);
+    _concernsCache.set(key, dbCached);
+    return dbCached;
+  }
+
+  // 3 — Generate via Claude
+  let analysisData = data;
+  if (focus) {
+    const zipSummary = data.permit_summary.by_zip?.[focus.zip];
+    analysisData = {
+      ...data,
+      permit_summary: {
+        total:                    zipSummary?.total                    ?? 0,
+        by_type:                  zipSummary?.by_type                  ?? {},
+        by_status:                zipSummary?.by_status                ?? {},
+        cost_by_type:             zipSummary?.cost_by_type             ?? {},
+        total_estimated_cost_usd: zipSummary?.total_estimated_cost_usd ?? 0,
+        notable_permits:          [],
+        by_zip:                   {},
+      },
+    };
+  }
+
+  const locationLabel = focus ? focus.name : district.label;
+  const isCitywide = district.number === '0' && !focus;
+  const promptData = isCitywide ? data.citywide_prompt_summary ?? [] : forPrompt(analysisData);
+
+  const sentimentCtx = await getSentimentContext(district.number);
+
+  const userContent = `${JSON.stringify(promptData, null, 2)}${sentimentCtx}
+
+TASK: Based on the data above, identify 3–5 public concerns residents of ${locationLabel} should be aware of. Generate as many concerns as the data supports — never pad with generic items.
+
+Editorial rules:
+- Be balanced and factual — cite specific numbers (counts, dollar amounts, percentages)
+- No political opinions; describe what the data shows
+- Focus on resident impact: housing costs, displacement risk, construction disruption, affordability, infrastructure
+
+Severity guide:
+- "critical": immediate or significant displacement/affordability risk backed by strong data signals
+- "alert": notable trend that warrants monitoring and possible action
+- "watch": early-stage signal worth tracking but not yet urgent
+
+For each concern return an object with these exact keys:
+- "headline": short plain-language headline a resident would understand (max 12 words)
+- "severity": exactly one of "watch", "alert", or "critical"
+- "evidence": 1–2 sentences citing specific data points from the permit or eviction data
+- "affects": 1 sentence on which residents or neighborhoods are most impacted
+- "action": 1 sentence on what residents can do (attend a hearing, file a comment, contact their Supervisor, monitor permits)
+
+Return ONLY a JSON object in this exact shape (no other text):
+{"concerns": [{"headline":"...","severity":"...","evidence":"...","affects":"...","action":"..."}]}`;
+
+  const t0 = performance.now();
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 2048,
+    system: concernsSystemPrompt(district.label),
+    messages: [{ role: 'user', content: userContent }],
+  });
+  console.log(`[concerns] claude-haiku: ${(performance.now() - t0).toFixed(0)}ms`);
+
+  const block = message.content[0];
+  if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
+
+  const parsed = repairAndParseJSON<{ concerns: PublicConcern[] }>(block.text);
+
+  // 4 — Persist to Supabase DB (fire-and-forget; failure is non-fatal)
+  const generatedAt = await writeConcernsToDB(key, parsed.concerns);
+
+  const result = { concerns: parsed.concerns, generatedAt };
+  _concernsCache.set(key, result);
+  return result;
 }
