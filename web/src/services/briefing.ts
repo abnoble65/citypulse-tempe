@@ -309,6 +309,7 @@ Use this sentiment data to add resident voice to your analysis. Reference specif
 `;
 
     _sentimentCache.set(districtNumber, ctx);
+    console.log("[sentiment] context:", ctx);
     return ctx;
   } catch {
     // Table may not exist yet — silently skip
@@ -697,19 +698,34 @@ export async function generateSignals(
     ? data.citywide_prompt_summary ?? []
     : forPrompt(analysisData);
 
-  const [mayorCtx, bosCtx, parksCtx, sentimentCtx] = await Promise.all([
+  const [mayorCtx, bosCtx, parksCtx] = await Promise.all([
     getMayorNewsContext(district.number),
     getBosContext(district.number),
     getParksContext(district.number),
-    getSentimentContext(district.number),
   ]);
+  let sentimentCtx = '';
+  try {
+    const timeout = new Promise<string>((_, reject) =>
+      setTimeout(() => reject(new Error('sentiment timeout')), 5000),
+    );
+    sentimentCtx = await Promise.race([getSentimentContext(district.number), timeout]);
+  } catch (e) {
+    console.warn('[sentiment] failed or timed out, continuing without:', e);
+  }
   const crossRefs = mayorCtx + bosCtx + parksCtx + sentimentCtx;
 
+  try {
   const userContent = `${JSON.stringify(promptData, null, 2)}${crossRefs}
 
 TASK: ${citywideTask ?? `Identify 3–5 key signals or trends for ${locationLabel} based on the data above. Generate as many signals as the data supports — never pad with generic observations if the data is thin.`}
 
-Editorial rules:
+IMPORTANT EDITORIAL RULES:
+- Always include at least one positive development or trend if the data supports it. Look for: new affordable housing projects, declining violation rates, community investment, approved developments that add housing stock.
+- Lead with facts, not alarm. Present data and let residents draw conclusions.
+- Avoid advocacy language: do not use 'crisis', 'severe', 'accelerating', 'exacerbating'. Use neutral descriptors.
+- When adjacent addresses have large permits (like 758 and 772 Pacific Ave), identify them as likely one project and describe the combined scope.
+- Balance every concern with context. If evictions are elevated, also note if they've declined from peak.
+- Severity ratings should be based on data magnitude, not emotional framing.
 - Be balanced and factual — present optimistic signals first, then challenges
 - Cite specific numbers from the data (counts, dollar amounts, percentages)
 - No political opinions; describe what the data shows
@@ -746,6 +762,10 @@ Return ONLY a JSON object in this exact shape (no other text):
   const result = { signals: parsed.signals, generatedAt };
   _signalsCache.set(key, result);
   return result;
+  } catch (error) {
+    console.error('[signals] FAILED:', error);
+    throw error;
+  }
 }
 
 /**
@@ -873,13 +893,21 @@ ${shadowProjects.map(p => `- ${p.address}: ${p.shadow_details ?? p.project_descr
     ? data.citywide_prompt_summary ?? []
     : forPrompt(analysisData);
 
-  const [mayorCtx, bosCtx, parksCtx, sentimentCtx] = await Promise.all([
+  const [mayorCtx, bosCtx, parksCtx] = await Promise.all([
     getMayorNewsContext(district.number),
     getBosContext(district.number),
     getParksContext(district.number),
-    getSentimentContext(district.number),
   ]);
-  const crossRefs = mayorCtx + bosCtx + parksCtx + sentimentCtx;
+  let sentimentCtxOutlook = '';
+  try {
+    const timeout = new Promise<string>((_, reject) =>
+      setTimeout(() => reject(new Error('sentiment timeout')), 5000),
+    );
+    sentimentCtxOutlook = await Promise.race([getSentimentContext(district.number), timeout]);
+  } catch (e) {
+    console.warn('[sentiment] failed or timed out, continuing without:', e);
+  }
+  const crossRefs = mayorCtx + bosCtx + parksCtx + sentimentCtxOutlook;
 
   const userContent = `${JSON.stringify(promptData, null, 2)}
 ${shadowBlock}${crossRefs}
@@ -908,6 +936,14 @@ For each risk use these exact keys:
 For each engagement item use these exact keys:
 - "title": specific opportunity name (6–10 words)
 - "detail": 1 sentence on how residents can participate
+
+IMPORTANT EDITORIAL RULES:
+- Always include at least one positive development or opportunity if the data supports it. Look for: new affordable housing projects, declining violation rates, community investment, approved developments that add housing stock.
+- Lead with facts, not alarm. Present data and let residents draw conclusions.
+- Avoid advocacy language: do not use 'crisis', 'severe', 'accelerating', 'exacerbating'. Use neutral descriptors.
+- When adjacent addresses have large permits (like 758 and 772 Pacific Ave), identify them as likely one project and describe the combined scope.
+- Balance every risk with context. If evictions are elevated, also note if they've declined from peak.
+- Priority ratings should be based on data magnitude, not emotional framing.
 
 IMPORTANT: Include one risk about shadow impact (☀️ icon) and, if eviction_summary.total > 0, one displacement risk (🏘️ icon) citing eviction counts and types. If assessment_summary.yoy_change_pct is notable (> 5% or < −2%), mention property value trajectory in a risk or event. If the data shows the displacement trifecta — rising assessed values AND elevated evictions AND a low affordable_housing_summary.affordable_ratio or few active construction-phase affordable units — flag this as a critical combined risk (🚨 icon) citing all three signals together.`;
 
@@ -988,13 +1024,27 @@ export async function generatePublicConcerns(
   const isCitywide = district.number === '0' && !focus;
   const promptData = isCitywide ? data.citywide_prompt_summary ?? [] : forPrompt(analysisData);
 
-  const sentimentCtx = await getSentimentContext(district.number);
+  let sentimentCtx = '';
+  try {
+    const timeout = new Promise<string>((_, reject) =>
+      setTimeout(() => reject(new Error('sentiment timeout')), 5000),
+    );
+    sentimentCtx = await Promise.race([getSentimentContext(district.number), timeout]);
+  } catch (e) {
+    console.warn('[sentiment] failed or timed out, continuing without:', e);
+  }
 
   const userContent = `${JSON.stringify(promptData, null, 2)}${sentimentCtx}
 
 TASK: Based on the data above, identify 3–5 public concerns residents of ${locationLabel} should be aware of. Generate as many concerns as the data supports — never pad with generic items.
 
-Editorial rules:
+IMPORTANT EDITORIAL RULES:
+- Always include at least one positive development or trend if the data supports it. Look for: new affordable housing projects, declining violation rates, community investment, approved developments that add housing stock.
+- Lead with facts, not alarm. Present data and let residents draw conclusions.
+- Avoid advocacy language: do not use 'crisis', 'severe', 'accelerating', 'exacerbating'. Use neutral descriptors.
+- When adjacent addresses have large permits (like 758 and 772 Pacific Ave), identify them as likely one project and describe the combined scope.
+- Balance every concern with context. If evictions are elevated, also note if they've declined from peak.
+- Severity ratings should be based on data magnitude, not emotional framing.
 - Be balanced and factual — cite specific numbers (counts, dollar amounts, percentages)
 - No political opinions; describe what the data shows
 - Focus on resident impact: housing costs, displacement risk, construction disruption, affordability, infrastructure
