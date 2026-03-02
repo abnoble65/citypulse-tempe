@@ -328,8 +328,14 @@ export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
           </>
         )}
 
-        {/* Resident quotes — rendered only when public_sentiment data exists */}
-        {!isGenerating && <ResidentQuotes style={{ marginTop: 0 }} />}
+        {/* Resident quotes — district-filtered, one per hearing, most recent first */}
+        {!isGenerating && (
+          <ResidentQuotes
+            districtConfig={districtConfig}
+            priorityAddresses={(aggregatedData.permit_summary.notable_permits ?? []).slice(0, 5).map(p => p.address)}
+            style={{ marginTop: 0 }}
+          />
+        )}
       </div>
     </div>
   );

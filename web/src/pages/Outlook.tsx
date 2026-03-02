@@ -633,8 +633,12 @@ export function Outlook({ aggregatedData, districtConfig }: OutlookProps) {
           </>
         )}
 
-        {/* Resident quotes — rendered only when public_sentiment data exists */}
-        <ResidentQuotes style={{ marginBottom: 24 }} />
+        {/* Resident quotes — district-filtered, one per hearing, most recent first */}
+        <ResidentQuotes
+          districtConfig={districtConfig}
+          priorityAddresses={(aggregatedData?.permit_summary.notable_permits ?? []).slice(0, 5).map(p => p.address)}
+          style={{ marginBottom: 24 }}
+        />
 
         {/* Data freshness */}
         {lastUpdated && (
