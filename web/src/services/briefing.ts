@@ -548,6 +548,7 @@ export function parseBriefingSections(text: string): BriefingSections {
   const headings = ['THE BRIEFING', 'THE SIGNAL', 'THE ZONING CONTEXT', 'THE OUTLOOK'];
   const keys: (keyof BriefingSections)[] = ['briefing', 'signal', 'zoningContext', 'outlook'];
   const result: BriefingSections = { briefing: '', signal: '', zoningContext: '', outlook: '' };
+  if (!text) return result;
   const upperText = text.toUpperCase();
 
   for (let i = 0; i < headings.length; i++) {
