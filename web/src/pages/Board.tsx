@@ -335,28 +335,51 @@ export function Board({ districtConfig }: BoardProps) {
   const load = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
-    const { data, error } = await supabase
-      .from("bos_meetings")
-      .select("*, bos_items(*)")
-      .order("meeting_date", { ascending: false })
-      .limit(50);
+    try {
+      // Try with bos_items join first; fall back to meetings-only if the table doesn't exist.
+      let data: unknown[] | null = null;
+      let usedJoin = true;
+      const joined = await supabase
+        .from("bos_meetings")
+        .select("*, bos_items(*)")
+        .order("meeting_date", { ascending: false })
+        .limit(50);
 
-    if (error) {
-      setLoadError(error.message);
-    } else {
+      if (joined.error) {
+        // bos_items table may not exist yet — retry without the join
+        usedJoin = false;
+        const plain = await supabase
+          .from("bos_meetings")
+          .select("*")
+          .order("meeting_date", { ascending: false })
+          .limit(50);
+        if (plain.error) {
+          setLoadError(plain.error.message);
+          return;
+        }
+        data = plain.data ?? [];
+      } else {
+        data = joined.data ?? [];
+      }
+
       const rows = (data ?? []) as BosMeetingRow[];
       setMeetings(rows);
       // Auto-expand the most recent meeting
       if (rows.length > 0) setExpanded(new Set([rows[0].id]));
-      // Generate headlines from 2 most recent adopted/passed items
-      const topItems = rows
-        .flatMap(m => m.bos_items ?? [])
-        .filter(i => /adopted|passed/i.test(i.action ?? ""))
-        .slice(0, 2);
-      generateGovHeadlines(topItems, "citypulse_board_headlines")
-        .then(setGovHeadlines).catch(() => {});
+      // Generate headlines from 2 most recent adopted/passed items (only if join worked)
+      if (usedJoin) {
+        const topItems = rows
+          .flatMap(m => m.bos_items ?? [])
+          .filter(i => /adopted|passed/i.test(i.action ?? ""))
+          .slice(0, 2);
+        generateGovHeadlines(topItems, "citypulse_board_headlines")
+          .then(setGovHeadlines).catch(() => {});
+      }
+    } catch {
+      // Network error — fail silently, show empty state
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);

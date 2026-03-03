@@ -131,12 +131,13 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
       <>
         {/* Stat card skeletons */}
         <div style={{
-          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(140px, 100%), 1fr))",
           gap: 14, marginBottom: 44,
         }}>
           {bgColors.map((bg, i) => (
-            <div key={i} style={{ background: bg, borderRadius: 16, padding: "26px 22px" }}>
-              <div className="sk-lt" style={{ height: 38, width: "60%", marginBottom: 10 }} />
+            <div key={i} style={{ background: bg, borderRadius: 16, padding: "22px 18px" }}>
+              <div className="sk-lt" style={{ height: 34, width: "60%", marginBottom: 10 }} />
               <div className="sk-lt" style={{ height: 13, width: "72%" }} />
             </div>
           ))}
@@ -256,14 +257,16 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
         ) : (
           <>
             <div style={{
-              display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+              display: "grid",
+              // Mobile: 2 columns; desktop (≥540px): 3 columns
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(140px, 100%), 1fr))",
               gap: 14, marginBottom: 44,
             }}>
               {stats.map(s => (
-                <div key={s.label} style={{ background: s.bg, borderRadius: 16, padding: "26px 22px" }}>
+                <div key={s.label} style={{ background: s.bg, borderRadius: 16, padding: "22px 18px" }}>
                   <div style={{
                     fontFamily: "'Urbanist', sans-serif",
-                    fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 800, color: COLORS.charcoal,
+                    fontSize: "clamp(24px, 4vw, 38px)", fontWeight: 800, color: COLORS.charcoal,
                     letterSpacing: "-0.02em",
                   }}>{s.num}</div>
                   <div style={{ fontSize: 13, color: COLORS.midGray, marginTop: 6, fontFamily: FONTS.body, fontWeight: 500 }}>

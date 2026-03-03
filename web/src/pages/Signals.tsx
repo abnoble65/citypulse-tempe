@@ -292,9 +292,19 @@ export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
           </div>
         )}
 
-        {/* Signal cards */}
+        {/* Signal cards — with resident quotes injected after card index 1 */}
         {!isGenerating && signals && signals.map((signal, i) => (
-          <SignalCard key={i} signal={signal} />
+          <div key={i}>
+            <SignalCard signal={signal} />
+            {/* Inject "What Residents Said" after the 2nd signal (if ≥2 signals exist) */}
+            {i === 1 && signals.length >= 2 && (
+              <ResidentQuotes
+                districtConfig={districtConfig}
+                priorityAddresses={(aggregatedData.permit_summary.notable_permits ?? []).slice(0, 5).map(p => p.address)}
+                style={{ marginTop: 0 }}
+              />
+            )}
+          </div>
         ))}
 
         {/* Public Concerns — derived from signal data */}
@@ -328,8 +338,8 @@ export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
           </>
         )}
 
-        {/* Resident quotes — district-filtered, one per hearing, most recent first */}
-        {!isGenerating && (
+        {/* Resident quotes fallback — only shown when fewer than 2 signals */}
+        {!isGenerating && (!signals || signals.length < 2) && (
           <ResidentQuotes
             districtConfig={districtConfig}
             priorityAddresses={(aggregatedData.permit_summary.notable_permits ?? []).slice(0, 5).map(p => p.address)}

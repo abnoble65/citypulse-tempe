@@ -93,11 +93,15 @@ function TypingDots() {
 
 export interface CityPulseChatProps {
   currentDistrict?: string; // "0"–"11"
+  currentPage?: string;     // hide FAB on certain pages (e.g. "MorningGlance")
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-export function CityPulseChat({ currentDistrict }: CityPulseChatProps) {
+const FAB_HIDDEN_PAGES = new Set(["MorningGlance"]);
+
+export function CityPulseChat({ currentDistrict, currentPage }: CityPulseChatProps) {
+  if (currentPage && FAB_HIDDEN_PAGES.has(currentPage)) return null;
   const [isOpen,    setIsOpen]    = useState(false);
   const [messages,  setMessages]  = useState<ChatMessage[]>(loadHistory);
   const [input,     setInput]     = useState("");

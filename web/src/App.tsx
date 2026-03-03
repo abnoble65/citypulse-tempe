@@ -78,6 +78,7 @@ function LoadingOverlay({ loading }: { loading: boolean }) {
 }
 
 // Lazy-load all pages except Home (initial view) — each becomes its own JS chunk
+const MorningGlance = lazy(() => import("./pages/MorningGlance").then(m => ({ default: m.MorningGlance })));
 const Briefing   = lazy(() => import("./pages/Briefing").then(m => ({ default: m.Briefing })));
 const Charts     = lazy(() => import("./pages/Charts").then(m => ({ default: m.Charts })));
 const Signals    = lazy(() => import("./pages/Signals").then(m => ({ default: m.Signals })));
@@ -91,15 +92,21 @@ const SPLASH_KEY = "citypulse_splash_seen";
 
 // ── URL ↔ page name mapping ───────────────────────────────────────────────────
 const PATH_TO_PAGE: Record<string, string> = {
-  "":           "Home",
-  "briefing":   "Briefing",
-  "charts":     "Charts",
-  "signals":    "Signals",
-  "outlook":    "Outlook",
-  "commission": "Commission",
-  "board":      "Board",
-  "mayor":      "Mayor",
-  "parks":      "Parks",
+  "":             "Home",
+  "pulse":        "MorningGlance",
+  "briefing":     "Briefing",
+  "charts":       "Charts",
+  "signals":      "Signals",
+  "outlook":      "Outlook",
+  "commission":   "Commission",
+  "board":        "Board",
+  "mayor":        "Mayor",
+  "parks":        "Parks",
+};
+
+// Pages whose names don't map cleanly to lowercase paths
+const PAGE_TO_PATH: Record<string, string> = {
+  MorningGlance: "/pulse",
 };
 
 function pageFromPath(path: string): string {
@@ -108,7 +115,7 @@ function pageFromPath(path: string): string {
 }
 
 function pathFromPage(pageName: string): string {
-  return pageName === "Home" ? "/" : `/${pageName.toLowerCase()}`;
+  return PAGE_TO_PATH[pageName] ?? (pageName === "Home" ? "/" : `/${pageName.toLowerCase()}`);
 }
 
 export default function App() {
@@ -158,7 +165,7 @@ export default function App() {
   // Auto-load DataSF data when the user lands directly on a data-dependent page
   // (e.g. via bookmark or refresh). aggregatedData is in-memory-only so it's
   // always null on a fresh load — we fetch without triggering a Claude call.
-  const DATA_PAGES = new Set(["Briefing", "Charts", "Signals", "Outlook"]);
+  const DATA_PAGES = new Set(["Briefing", "Charts", "Signals", "Outlook", "MorningGlance"]);
   useEffect(() => {
     console.log("[CP] auto-load effect fired | page:", page, "| hasData:", !!aggregatedData);
     if (!DATA_PAGES.has(page) || aggregatedData) return;
@@ -198,6 +205,8 @@ export default function App() {
     switch (page) {
       case "Home":
         return <Home onNavigate={navigate} onGenerate={handleGenerate} loading={loading} error={error} />;
+      case "MorningGlance":
+        return <MorningGlance aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={navigate} />;
       case "Briefing":
         return <Briefing briefingText={briefingText} aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={navigate} />;
       case "Charts":
@@ -232,7 +241,7 @@ export default function App() {
         </Suspense>
       </ErrorBoundary>
       {/* Floating AI assistant — available on every page */}
-      <CityPulseChat currentDistrict={districtConfig.number} />
+      <CityPulseChat currentDistrict={districtConfig.number} currentPage={page} />
     </ErrorBoundary>
   );
 }

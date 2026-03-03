@@ -544,23 +544,54 @@ function cleanSection(text: string): string {
     .trim();
 }
 
+// Multiple accepted variants for each section heading (searched case-insensitively).
+// First match wins; variants ordered most-specific → least-specific.
+const HEADING_VARIANTS: string[][] = [
+  ['THE BRIEFING', 'BRIEFING'],
+  ['THE SIGNAL',   'SIGNAL'],
+  ['THE ZONING CONTEXT', 'ZONING CONTEXT', 'ZONING'],
+  ['THE OUTLOOK',  'OUTLOOK'],
+];
+const HEADING_KEYS: (keyof BriefingSections)[] = ['briefing', 'signal', 'zoningContext', 'outlook'];
+
+/** Find the earliest match for any variant, returning { index, matchLen } or null. */
+function findHeading(upperText: string, variants: string[], searchFrom = 0): { index: number; matchLen: number } | null {
+  let best: { index: number; matchLen: number } | null = null;
+  for (const v of variants) {
+    const idx = upperText.indexOf(v, searchFrom);
+    if (idx !== -1 && (best === null || idx < best.index)) {
+      best = { index: idx, matchLen: v.length };
+    }
+  }
+  return best;
+}
+
 export function parseBriefingSections(text: string): BriefingSections {
-  const headings = ['THE BRIEFING', 'THE SIGNAL', 'THE ZONING CONTEXT', 'THE OUTLOOK'];
-  const keys: (keyof BriefingSections)[] = ['briefing', 'signal', 'zoningContext', 'outlook'];
   const result: BriefingSections = { briefing: '', signal: '', zoningContext: '', outlook: '' };
   if (!text) return result;
   const upperText = text.toUpperCase();
 
-  for (let i = 0; i < headings.length; i++) {
-    const startIdx = upperText.indexOf(headings[i]);
-    if (startIdx === -1) continue;
+  // Build an ordered list of found sections
+  const found: Array<{ key: keyof BriefingSections; contentStart: number }> = [];
 
-    const contentStart = startIdx + headings[i].length;
-    const nextIdx =
-      i < headings.length - 1 ? upperText.indexOf(headings[i + 1], contentStart) : -1;
-    const contentEnd = nextIdx === -1 ? text.length : nextIdx;
+  for (let i = 0; i < HEADING_VARIANTS.length; i++) {
+    const match = findHeading(upperText, HEADING_VARIANTS[i]);
+    if (match) {
+      found.push({ key: HEADING_KEYS[i], contentStart: match.index + match.matchLen });
+    }
+  }
 
-    result[keys[i]] = cleanSection(text.slice(contentStart, contentEnd));
+  // Sort by position in text (handles out-of-order responses gracefully)
+  found.sort((a, b) => a.contentStart - b.contentStart);
+
+  for (let i = 0; i < found.length; i++) {
+    const contentEnd = i < found.length - 1 ? found[i + 1].contentStart - HEADING_VARIANTS[0][0].length : text.length;
+    result[found[i].key] = cleanSection(text.slice(found[i].contentStart, Math.max(found[i].contentStart, contentEnd)));
+  }
+
+  // Fallback: if nothing was parsed at all, put the full text in `briefing`
+  if (found.length === 0) {
+    result.briefing = cleanSection(text);
   }
 
   return result;
