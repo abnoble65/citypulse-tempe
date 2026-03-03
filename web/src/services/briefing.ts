@@ -548,14 +548,15 @@ export function parseBriefingSections(text: string): BriefingSections {
   const headings = ['THE BRIEFING', 'THE SIGNAL', 'THE ZONING CONTEXT', 'THE OUTLOOK'];
   const keys: (keyof BriefingSections)[] = ['briefing', 'signal', 'zoningContext', 'outlook'];
   const result: BriefingSections = { briefing: '', signal: '', zoningContext: '', outlook: '' };
+  const upperText = text.toUpperCase();
 
   for (let i = 0; i < headings.length; i++) {
-    const startIdx = text.indexOf(headings[i]);
+    const startIdx = upperText.indexOf(headings[i]);
     if (startIdx === -1) continue;
 
     const contentStart = startIdx + headings[i].length;
     const nextIdx =
-      i < headings.length - 1 ? text.indexOf(headings[i + 1], contentStart) : -1;
+      i < headings.length - 1 ? upperText.indexOf(headings[i + 1], contentStart) : -1;
     const contentEnd = nextIdx === -1 ? text.length : nextIdx;
 
     result[keys[i]] = cleanSection(text.slice(contentStart, contentEnd));
@@ -631,6 +632,7 @@ export async function generateBriefingFromData(
 
   const block = message.content[0];
   if (block.type !== 'text') throw new Error(`Unexpected response block type: ${block.type}`);
+  console.log('[briefing] raw response:', block.text);
   _briefingCache.set(key, block.text);
   return block.text;
 }

@@ -16,11 +16,13 @@ export function FilterBar({ districtConfig, selected, onSelect }: FilterBarProps
 
   return (
     <div className="cp-filter" style={{
-      display: "flex", gap: 8, padding: "14px 32px 14px 16px",
+      display: "flex", gap: 8, padding: "10px 16px",
       background: COLORS.white,
       borderBottom: `1px solid ${COLORS.lightBorder}`,
       overflowX: "auto",
+      WebkitOverflowScrolling: "touch",
       flexWrap: "nowrap",
+      scrollbarWidth: "none" as const,
     }}>
       {pills.map(({ name, Icon }) => {
         const active = selected === name;
@@ -35,6 +37,10 @@ export function FilterBar({ districtConfig, selected, onSelect }: FilterBarProps
               cursor: "pointer", transition: "all 0.2s",
               fontFamily: FONTS.body,
               whiteSpace: "nowrap",
+              flexShrink: 0,
+              flexGrow: 0,
+              minWidth: "max-content", /* key: size to content, defeats all width constraints */
+              overflow: "visible",     /* prevent any clipping on WebKit */
               display: "flex", alignItems: "center", gap: 7,
             }}
           >

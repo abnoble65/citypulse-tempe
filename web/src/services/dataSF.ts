@@ -59,9 +59,18 @@ export interface BuildingPermit {
   data_as_of?: string;
 }
 
-export async function fetchBuildingPermits(district: string, limit = 1000): Promise<BuildingPermit[]> {
+export async function fetchBuildingPermits(district: string, limit = 5000): Promise<BuildingPermit[]> {
+  const year = new Date().getFullYear();
+  const startDate = `${year}-01-01T00:00:00.000`;
   const params = new URLSearchParams({
-    $where: `supervisor_district='${district}'`,
+    $select: [
+      'permit_number', 'permit_type', 'permit_type_definition',
+      'status', 'status_date', 'filed_date',
+      'street_number', 'street_name', 'street_suffix',
+      'zipcode', 'estimated_cost', 'revised_cost',
+      'description', 'supervisor_district', 'location',
+    ].join(','),
+    $where: `supervisor_district='${district}' AND filed_date >= '${startDate}'`,
     $limit: String(limit),
     $order: 'filed_date DESC',
   });

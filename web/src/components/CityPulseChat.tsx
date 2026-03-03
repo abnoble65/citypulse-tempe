@@ -189,25 +189,30 @@ export function CityPulseChat({ currentDistrict }: CityPulseChatProps) {
         aria-label={isOpen ? "Close AI assistant" : "Open CityPulse AI assistant"}
         style={{
           position: "fixed",
-          // Mobile: sit above the bottom tab bar (44px tray + 56px tabs + safe area + 12px gap)
+          // Mobile: sit above the fixed bottom group tab bar (56px + safe area + 16px gap)
           bottom: isMobile
-            ? "calc(112px + env(safe-area-inset-bottom, 0px))"
+            ? "calc(72px + env(safe-area-inset-bottom, 0px))"
             : 24,
-          right: isMobile ? 16 : 24,
+          right: isMobile ? 14 : 24,
           zIndex: 1100,
-          width: isMobile ? 48 : 56,
-          height: isMobile ? 48 : 56,
+          // Mobile: 40px — smaller footprint; inline min-w/h override global 44px tap rule
+          width:     isMobile ? 40 : 56,
+          height:    isMobile ? 40 : 56,
+          minWidth:  isMobile ? 40 : 56,
+          minHeight: isMobile ? 40 : 56,
           borderRadius: "50%",
           background: COLORS.orange, border: "none",
-          boxShadow: "0 4px 20px rgba(212,100,59,0.38)",
+          boxShadow: "0 3px 14px rgba(212,100,59,0.32)",
           cursor: "pointer",
+          // Reduce visual weight when idle on mobile
+          opacity: isMobile && !isOpen ? 0.82 : 1,
           // Hide FAB on mobile while panel is open — panel has its own close button
           display: isMobile && isOpen ? "none" : "flex",
           alignItems: "center", justifyContent: "center",
-          transition: "transform 0.18s, box-shadow 0.18s",
+          transition: "transform 0.18s, box-shadow 0.18s, opacity 0.18s",
         }}
       >
-        {isOpen ? <CloseIcon /> : <ChatIcon size={isMobile ? 20 : 24} />}
+        {isOpen ? <CloseIcon /> : <ChatIcon size={isMobile ? 18 : 24} />}
       </button>
 
       {/* ── Chat panel ──────────────────────────────────────────────────────── */}
@@ -218,8 +223,8 @@ export function CityPulseChat({ currentDistrict }: CityPulseChatProps) {
           position: "fixed",
           // Mobile: fill the usable viewport between top nav (48px) and bottom chrome
           ...(isMobile ? {
-            top:    48,
-            bottom: "calc(100px + env(safe-area-inset-bottom, 0px))",
+            top:    92,   // below sticky nav (48px logo + 44px sub-tabs)
+            bottom: "calc(56px + env(safe-area-inset-bottom, 0px))",
             left:   0,
             right:  0,
             width:  "100%",

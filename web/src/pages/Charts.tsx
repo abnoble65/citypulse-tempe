@@ -994,10 +994,13 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
       color: TYPE_COLORS[i % TYPE_COLORS.length],
     }));
 
-  // Notable permits — from active data
-  const notable = activeFullData.permit_summary.notable_permits
-    .sort((a, b) => b.estimated_cost_usd - a.estimated_cost_usd)
-    .slice(0, 10);
+  // Notable permits — filter by zip when a neighborhood is selected in district mode
+  const allNotable = activeFullData.permit_summary.notable_permits
+    .sort((a, b) => b.estimated_cost_usd - a.estimated_cost_usd);
+  const notable = (!isCitywide && selectedZip
+    ? allNotable.filter(p => p.zipcode === selectedZip)
+    : allNotable
+  ).slice(0, 10);
   const maxVal = notable[0]?.estimated_cost_usd ?? 1;
 
   return (

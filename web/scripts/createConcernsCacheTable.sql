@@ -1,0 +1,17 @@
+-- CityPulse — concerns_cache table
+-- Run this in the Supabase SQL editor before using the Outlook page.
+-- Stores AI-generated public concerns so repeat visits load instantly
+-- without re-calling the Claude API.
+
+CREATE TABLE IF NOT EXISTS concerns_cache (
+  cache_key    text PRIMARY KEY,            -- "districtNumber:zip" e.g. "3:94133" or "3:all"
+  concerns     jsonb        NOT NULL,        -- PublicConcern[] array
+  generated_at timestamptz  DEFAULT now()
+);
+
+-- Index for time-ordered lookups (used when pruning old rows)
+CREATE INDEX IF NOT EXISTS concerns_cache_generated_at_idx
+  ON concerns_cache (generated_at DESC);
+
+-- Optional: auto-delete rows older than 7 days via pg_cron or a scheduled function.
+-- For now, the client enforces a 24-hour TTL and overwrites stale rows on upsert.

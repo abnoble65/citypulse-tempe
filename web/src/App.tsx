@@ -119,8 +119,18 @@ export default function App() {
     setSplashDone(true);
   }
 
+  // ── DEBUG LOGGING ──────────────────────────────────────────────────────────
+  console.log("[CP] RENDER", {
+    pathname: window.location.pathname,
+    initialPage: pageFromPath(window.location.pathname),
+  });
+
   // Initialise from URL so a refresh lands on the correct page
-  const [page, setPage]                       = useState(() => pageFromPath(window.location.pathname));
+  const [page, setPage] = useState(() => {
+    const initial = pageFromPath(window.location.pathname);
+    console.log("[CP] INIT useState page =", initial, "| pathname:", window.location.pathname);
+    return initial;
+  });
   const [briefingText, setBriefingText]       = useState("");
   const [aggregatedData, setAggregatedData]   = useState<DistrictData | null>(null);
   const [districtConfig, setDistrictConfig]   = useState<DistrictConfig>(DEFAULT_DISTRICT);
@@ -129,6 +139,7 @@ export default function App() {
 
   // Keep URL in sync with page state
   function navigate(newPage: string) {
+    console.log("[CP] PAGE_CHANGE (navigate)", { from: page, to: newPage });
     history.pushState(null, "", pathFromPage(newPage));
     setPage(newPage);
   }
@@ -136,7 +147,9 @@ export default function App() {
   // Handle browser back/forward buttons
   useEffect(() => {
     function onPop() {
-      setPage(pageFromPath(window.location.pathname));
+      const newPage = pageFromPath(window.location.pathname);
+      console.log("[CP] PAGE_CHANGE (popstate)", { pathname: window.location.pathname, newPage });
+      setPage(newPage);
     }
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -147,8 +160,9 @@ export default function App() {
   // always null on a fresh load — we fetch without triggering a Claude call.
   const DATA_PAGES = new Set(["Briefing", "Charts", "Signals", "Outlook"]);
   useEffect(() => {
+    console.log("[CP] auto-load effect fired | page:", page, "| hasData:", !!aggregatedData);
     if (!DATA_PAGES.has(page) || aggregatedData) return;
-    console.log(`[app] direct URL load — auto-fetching data for /${page.toLowerCase()}`);
+    console.log(`[CP] auto-fetching data for /${page.toLowerCase()}`);
     setLoading(true);
     const load = districtConfig.number === "0"
       ? aggregateCitywideData()

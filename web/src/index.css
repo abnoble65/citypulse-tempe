@@ -180,18 +180,12 @@ input:focus {
 
 /* ── Mobile overrides ───────────────────────────────────── */
 @media (max-width: 639px) {
-  /* Sticky bars: NavBar is 48px on mobile */
+  /* Sticky bars: mobile NavBar = 48px logo + 44px sub-tabs = 92px total */
   .cp-sticky-bar {
-    top: 48px;
+    top: 92px;
   }
   .cp-filter {
-    top: 48px;
-    padding: 10px 12px !important;
-  }
-
-  /* NavBar outer padding */
-  nav {
-    padding: 0 14px !important;
+    top: 92px;
   }
 
   /* NeighborhoodHero: allow icon+name and stats to stack */

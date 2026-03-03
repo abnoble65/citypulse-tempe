@@ -46,6 +46,7 @@ export interface NotablePermit {
   description: string;
   estimated_cost_usd: number;
   status: string;
+  zipcode?: string;
 }
 
 /** Lightweight permit record used exclusively for map rendering. */
@@ -238,6 +239,7 @@ function buildPermitSummary(permits: BuildingPermit[]): PermitSummary {
       description: p.description,
       estimated_cost_usd: parseCost(p.revised_cost ?? p.estimated_cost),
       status: p.status,
+      zipcode: p.zipcode?.trim(),
     }));
 
   // Bucket permits by zip code for client-side filtering

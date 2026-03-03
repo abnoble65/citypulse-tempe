@@ -151,54 +151,54 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
   }
 
   /* ── Mobile ──────────────────────────────────────────────────────────── */
+  // Sticky top = 48px (logo row) + 44px (sub-page tabs) = 92px
+  // Fixed bottom = 56px (group tabs) + safe-area
   return (
     <>
-      {/* Push content above fixed bottom chrome (44px tray + 56px tabs + safe area) */}
-      <style>{`body { padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }`}</style>
+      {/* Body padding clears the fixed bottom group tab bar */}
+      <style>{`body { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }`}</style>
 
-      {/* Sticky top bar */}
+      {/* ── Sticky top nav (92px total) ── */}
       <nav style={{
         position: "sticky", top: 0, zIndex: 100,
         background: COLORS.white,
         borderBottom: `1px solid ${COLORS.lightBorder}`,
-        height: 48,
-        display: "flex", alignItems: "center",
-        padding: "0 16px",
-        justifyContent: "space-between",
       }}>
-        <div
-          onClick={() => onNavigate("Home")}
-          style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer" }}
-        >
-          <CityPulseLogo size={24} />
-          <span style={{
-            color: COLORS.charcoal, fontSize: 16, fontWeight: 700,
-            letterSpacing: "-0.02em", fontFamily: FONTS.heading,
-          }}>CityPulse</span>
-        </div>
-        <span style={{
-          background: COLORS.cream, color: COLORS.charcoal,
-          padding: "4px 10px", borderRadius: 20,
-          fontSize: 10, fontWeight: 600, fontFamily: FONTS.body,
-          border: `1px solid ${COLORS.lightBorder}`,
-        }}>
-          {districtBadge}
-        </span>
-      </nav>
-
-      {/* Fixed bottom chrome */}
-      <div style={{
-        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
-        paddingBottom: "env(safe-area-inset-bottom, 0px)",
-      }}>
-        {/* Sub-page tray — always shows active group's pages */}
+        {/* Row 1 — Logo + district badge (48px) */}
         <div style={{
-          background: COLORS.cream,
-          borderTop: `1px solid ${COLORS.lightBorder}`,
-          height: 44,
-          display: "flex", alignItems: "center",
+          height: 48, display: "flex", alignItems: "center",
+          padding: "0 16px", justifyContent: "space-between",
+        }}>
+          <div
+            onClick={() => onNavigate("Home")}
+            style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer" }}
+          >
+            <CityPulseLogo size={24} />
+            <span style={{
+              color: COLORS.charcoal, fontSize: 16, fontWeight: 700,
+              letterSpacing: "-0.02em", fontFamily: FONTS.heading,
+            }}>CityPulse</span>
+          </div>
+          <span style={{
+            background: COLORS.cream, color: COLORS.charcoal,
+            padding: "4px 10px", borderRadius: 20,
+            fontSize: 10, fontWeight: 600, fontFamily: FONTS.body,
+            border: `1px solid ${COLORS.lightBorder}`,
+            whiteSpace: "nowrap",
+          }}>
+            {districtBadge}
+          </span>
+        </div>
+
+        {/* Row 2 — Sub-page tabs (44px), above the content area */}
+        <div style={{
+          height: 44, display: "flex", alignItems: "center",
           padding: "0 12px", gap: 6,
-          overflowX: "auto", scrollbarWidth: "none",
+          overflowX: "auto",
+          WebkitOverflowScrolling: "touch",
+          scrollbarWidth: "none" as const,
+          borderTop: `1px solid ${COLORS.lightBorder}`,
+          background: COLORS.cream,
         }}>
           {activeGroup.pages.map(p => (
             <button key={p} onClick={() => onNavigate(p)}
@@ -210,21 +210,23 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
                 padding: "5px 14px", fontSize: 12, fontWeight: 700,
                 cursor: "pointer", transition: "all 0.15s",
                 fontFamily: FONTS.body, whiteSpace: "nowrap", flexShrink: 0,
+                minHeight: 32,
               }}>
               {p}
             </button>
           ))}
-          {/* Spacer: prevents last pill clipping on iOS overflow:auto */}
           <div style={{ flexShrink: 0, width: 12 }} aria-hidden="true" />
         </div>
+      </nav>
 
-        {/* Group tab bar */}
-        <div style={{
-          background: COLORS.white,
-          borderTop: `1px solid ${COLORS.lightBorder}`,
-          height: 56,
-          display: "flex",
-        }}>
+      {/* ── Fixed bottom: group tab bar only (56px + safe area) ── */}
+      <div style={{
+        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
+        background: COLORS.white,
+        borderTop: `1px solid ${COLORS.lightBorder}`,
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      }}>
+        <div style={{ height: 56, display: "flex" }}>
           {NAV_GROUPS.map(group => {
             const Icon          = GROUP_ICONS[group.id];
             const isActiveGroup = group.id === activeGroup.id;
