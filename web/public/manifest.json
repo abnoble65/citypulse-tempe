@@ -1,0 +1,26 @@
+{
+  "name": "CityPulse SF",
+  "short_name": "CityPulse",
+  "description": "Live San Francisco urban intelligence — permits, planning, and city decisions.",
+  "start_url": "/signals",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F5F0EB",
+  "theme_color": "#E8652D",
+  "icons": [
+    {
+      "src": "/CityPulse_Logo1_Fun.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/CityPulse_Logo1_Fun.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["news", "government", "utilities"],
+  "lang": "en-US"
+}

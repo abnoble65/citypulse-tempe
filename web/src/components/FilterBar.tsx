@@ -43,6 +43,8 @@ export function FilterBar({ districtConfig, selected, onSelect }: FilterBarProps
           </button>
         );
       })}
+      {/* Trailing spacer — prevents last pill clipping on iOS overflow:auto */}
+      <div style={{ flexShrink: 0, width: 16 }} aria-hidden="true" />
     </div>
   );
 }

@@ -103,6 +103,16 @@ export function CityPulseChat({ currentDistrict }: CityPulseChatProps) {
   const [input,     setInput]     = useState("");
   const [loading,   setLoading]   = useState(false);
   const [cooldown,  setCooldown]  = useState(false);
+  const [isMobile,  setIsMobile]  = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 640,
+  );
+
+  useEffect(() => {
+    const mq      = window.matchMedia("(max-width: 639px)");
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLTextAreaElement>(null);
@@ -173,20 +183,31 @@ export function CityPulseChat({ currentDistrict }: CityPulseChatProps) {
       `}</style>
 
       {/* ── Floating button ─────────────────────────────────────────────────── */}
+      {/* On mobile: hide the FAB when the panel is open (close button lives in panel header) */}
       <button
         onClick={() => setIsOpen(o => !o)}
         aria-label={isOpen ? "Close AI assistant" : "Open CityPulse AI assistant"}
         style={{
-          position: "fixed", bottom: 24, right: 24, zIndex: 1100,
-          width: 56, height: 56, borderRadius: "50%",
+          position: "fixed",
+          // Mobile: sit above the bottom tab bar (44px tray + 56px tabs + safe area + 12px gap)
+          bottom: isMobile
+            ? "calc(112px + env(safe-area-inset-bottom, 0px))"
+            : 24,
+          right: isMobile ? 16 : 24,
+          zIndex: 1100,
+          width: isMobile ? 48 : 56,
+          height: isMobile ? 48 : 56,
+          borderRadius: "50%",
           background: COLORS.orange, border: "none",
           boxShadow: "0 4px 20px rgba(212,100,59,0.38)",
           cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center",
+          // Hide FAB on mobile while panel is open — panel has its own close button
+          display: isMobile && isOpen ? "none" : "flex",
+          alignItems: "center", justifyContent: "center",
           transition: "transform 0.18s, box-shadow 0.18s",
         }}
       >
-        {isOpen ? <CloseIcon /> : <ChatIcon size={24} />}
+        {isOpen ? <CloseIcon /> : <ChatIcon size={isMobile ? 20 : 24} />}
       </button>
 
       {/* ── Chat panel ──────────────────────────────────────────────────────── */}
@@ -194,14 +215,25 @@ export function CityPulseChat({ currentDistrict }: CityPulseChatProps) {
         role="dialog"
         aria-label="CityPulse AI assistant"
         style={{
-          position:    "fixed",
-          bottom:      90,
-          right:       24,
+          position: "fixed",
+          // Mobile: fill the usable viewport between top nav (48px) and bottom chrome
+          ...(isMobile ? {
+            top:    48,
+            bottom: "calc(100px + env(safe-area-inset-bottom, 0px))",
+            left:   0,
+            right:  0,
+            width:  "100%",
+            height: "auto",
+            borderRadius: "0",
+          } : {
+            bottom: 90,
+            right:  24,
+            width:  "min(400px, calc(100vw - 48px))",
+            height: "min(520px, calc(100vh - 116px))",
+            borderRadius: 16,
+          }),
           zIndex:      1099,
-          width:       "min(400px, calc(100vw - 48px))",
-          height:      "min(520px, calc(100vh - 116px))",
           background:  COLORS.white,
-          borderRadius: 16,
           border:      `1px solid ${COLORS.lightBorder}`,
           boxShadow:   "0 10px 48px rgba(0,0,0,0.13), 0 2px 8px rgba(0,0,0,0.07)",
           display:     "flex",
@@ -209,7 +241,9 @@ export function CityPulseChat({ currentDistrict }: CityPulseChatProps) {
           overflow:    "hidden",
           // Animated open/close
           opacity:     isOpen ? 1 : 0,
-          transform:   isOpen ? "translateY(0) scale(1)" : "translateY(14px) scale(0.96)",
+          transform:   isOpen
+            ? "translateY(0) scale(1)"
+            : isMobile ? "translateY(24px)" : "translateY(14px) scale(0.96)",
           pointerEvents: isOpen ? "auto" : "none",
           transition:  "opacity 0.2s ease, transform 0.2s ease",
         }}

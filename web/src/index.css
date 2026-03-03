@@ -169,6 +169,15 @@ input:focus {
   }
 }
 
+/* ── Mobile tap targets ─────────────────────────────────── */
+/* WCAG 2.5.5: interactive controls ≥ 44×44 CSS px on touch  */
+@media (hover: none) and (pointer: coarse) {
+  button, [role="button"], a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
 /* ── Mobile overrides ───────────────────────────────────── */
 @media (max-width: 639px) {
   /* Sticky bars: NavBar is 48px on mobile */

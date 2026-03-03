@@ -153,8 +153,8 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
   /* ── Mobile ──────────────────────────────────────────────────────────── */
   return (
     <>
-      {/* Push content above fixed bottom chrome */}
-      <style>{`body { padding-bottom: 104px; }`}</style>
+      {/* Push content above fixed bottom chrome (44px tray + 56px tabs + safe area) */}
+      <style>{`body { padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }`}</style>
 
       {/* Sticky top bar */}
       <nav style={{
@@ -214,6 +214,8 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
               {p}
             </button>
           ))}
+          {/* Spacer: prevents last pill clipping on iOS overflow:auto */}
+          <div style={{ flexShrink: 0, width: 12 }} aria-hidden="true" />
         </div>
 
         {/* Group tab bar */}
