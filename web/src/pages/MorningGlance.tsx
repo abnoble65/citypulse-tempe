@@ -1,14 +1,13 @@
 /**
  * MorningGlance.tsx — Daily digest page, route /pulse
  *
- * PWA launch screen. Reads AI caches for instant display, then auto-generates
- * any missing content in parallel when aggregatedData is available.
- * Stats from aggregatedData (auto-loaded by App.tsx when landing on /pulse).
+ * Apple News+ inspired card-stack layout with scroll-snap on mobile.
+ * Each section is a full-screen card; flicking scrolls to the next card.
+ * Data flow is unchanged — same caches, same auto-generation.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { COLORS, FONTS } from "../theme";
-import { SectionLabel } from "../components/SectionLabel";
 import { CityPulseLogo } from "../components/Icons";
 import { supabase } from "../services/supabase";
 import {
@@ -22,7 +21,7 @@ import {
 import type { DistrictData, Signal, PublicConcern } from "../services/briefing";
 import type { DistrictConfig } from "../districts";
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+// ── Types ───────────────────────────────────────────────────────────────────────
 
 interface MorningGlanceProps {
   aggregatedData: DistrictData | null;
@@ -30,23 +29,20 @@ interface MorningGlanceProps {
   onNavigate:     (page: string) => void;
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Constants ───────────────────────────────────────────────────────────────────
 
-/** Return the first `n` sentences of `text` (splits on ". " / "! " / "? "). */
+const BOOKMARK_KEY = "citypulse_mg_bookmarks";
+
+// ── Helpers ─────────────────────────────────────────────────────────────────────
+
 function firstSentences(text: string, n: number): string {
   const re = /(?<=[.!?])\s+/g;
   let count = 0;
-  let lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = re.exec(text)) !== null) {
     count++;
-    if (count >= n) {
-      return text.slice(0, match.index + 1).trim();
-    }
-    lastIndex = match.index;
+    if (count >= n) return text.slice(0, match.index + 1).trim();
   }
-  // Fewer than n sentences — return whole text
-  void lastIndex;
   return text.trim();
 }
 
@@ -71,7 +67,15 @@ function formatDate(iso: string): string {
   });
 }
 
-// ── Severity badge ─────────────────────────────────────────────────────────────
+function loadBookmarks(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(BOOKMARK_KEY) ?? "[]") as string[]);
+  } catch {
+    return new Set();
+  }
+}
+
+// ── Severity badge ──────────────────────────────────────────────────────────────
 
 const SEV: Record<string, { bg: string; text: string }> = {
   high:     { bg: "#FDE8E8", text: "#C0392B" },
@@ -87,35 +91,133 @@ function SeverityBadge({ level }: { level: string }) {
   return (
     <span style={{
       background: s.bg, color: s.text,
-      padding: "3px 9px", borderRadius: 12,
-      fontSize: 10, fontWeight: 700,
-      letterSpacing: "0.09em", textTransform: "uppercase" as const,
-      fontFamily: FONTS.body,
+      padding: "4px 10px", borderRadius: 12,
+      fontSize: 11, fontWeight: 700,
+      letterSpacing: "0.08em", textTransform: "uppercase" as const,
+      fontFamily: FONTS.body, display: "inline-block",
     }}>
       {level}
     </span>
   );
 }
 
-// ── Stat card ──────────────────────────────────────────────────────────────────
+// ── Icons ───────────────────────────────────────────────────────────────────────
+
+function ShareIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M12 3v11M8.5 6.5L12 3l3.5 3.5" stroke="currentColor" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M7 10H5a1 1 0 00-1 1v9a1 1 0 001 1h14a1 1 0 001-1v-9a1 1 0 00-1-1h-2"
+        stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function BookmarkIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 3h14a1 1 0 011 1v17l-7-4.5L5 21V4a1 1 0 011-1z"/>
+    </svg>
+  );
+}
+
+// ── Card wrapper ────────────────────────────────────────────────────────────────
+
+function Card({ children, isMobile, style }: {
+  children: React.ReactNode;
+  isMobile: boolean;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div style={{
+      background: COLORS.white,
+      borderRadius: 20,
+      padding: isMobile ? "28px 22px 22px" : "32px 28px",
+      boxShadow: "0 2px 20px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04)",
+      display: "flex",
+      flexDirection: "column",
+      ...(isMobile ? {
+        scrollSnapAlign: "start" as const,
+        scrollSnapStop: "always" as const,
+        // height fills visible area (nav=92px, tab=56px+safe-area) minus 52px peek of next card
+        minHeight: "calc(100dvh - 92px - 56px - env(safe-area-inset-bottom, 0px) - 52px)",
+        marginBottom: 12,
+        flexShrink: 0,
+      } : {
+        marginBottom: 16,
+      }),
+      ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+// ── Card skeleton ───────────────────────────────────────────────────────────────
+
+function CardSkeleton({ isMobile }: { isMobile: boolean }) {
+  return (
+    <div style={{
+      background: COLORS.white, borderRadius: 20,
+      padding: isMobile ? "28px 22px 22px" : "32px 28px",
+      boxShadow: "0 2px 20px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04)",
+      display: "flex", flexDirection: "column", gap: 12,
+      ...(isMobile ? {
+        scrollSnapAlign: "start" as const,
+        scrollSnapStop: "always" as const,
+        minHeight: "calc(100dvh - 92px - 56px - env(safe-area-inset-bottom, 0px) - 52px)",
+        marginBottom: 12, flexShrink: 0,
+      } : { marginBottom: 16 }),
+    }}>
+      <div className="sk" style={{ height: 10, width: "28%", borderRadius: 6 }} />
+      <div className="sk" style={{ height: 12, width: "42%", borderRadius: 6, marginTop: 4 }} />
+      <div style={{ height: 20 }} />
+      {[1, 0.92, 0.84, 0.96, 0.72].map((w, i) => (
+        <div key={i} className="sk" style={{
+          height: 14, width: `${w * 100}%`, borderRadius: 6,
+          animationDelay: `${i * 0.07}s`,
+        }} />
+      ))}
+    </div>
+  );
+}
+
+// ── Card eyebrow ────────────────────────────────────────────────────────────────
+
+function Eyebrow({ text }: { text: string }) {
+  return (
+    <p style={{
+      fontFamily: FONTS.body, fontSize: 10, fontWeight: 700,
+      color: COLORS.orange, letterSpacing: "0.12em",
+      textTransform: "uppercase", margin: "0 0 16px",
+    }}>
+      {text}
+    </p>
+  );
+}
+
+// ── Stat card ───────────────────────────────────────────────────────────────────
 
 function StatCard({ num, label, bg }: { num: string | null; label: string; bg: string }) {
   return (
     <div style={{
-      background: bg, borderRadius: 14,
-      padding: "15px 14px 13px",
-      display: "flex", flexDirection: "column", gap: 5,
+      background: bg, borderRadius: 16,
+      padding: "18px 16px 14px",
+      display: "flex", flexDirection: "column", gap: 6,
     }}>
       {num != null ? (
         <div style={{
           fontFamily: "'Urbanist', sans-serif",
-          fontSize: "clamp(22px, 5.5vw, 28px)", fontWeight: 800,
+          fontSize: "clamp(22px, 5.5vw, 30px)", fontWeight: 800,
           color: COLORS.charcoal, letterSpacing: "-0.02em", lineHeight: 1,
         }}>
           {num}
         </div>
       ) : (
-        <div className="sk" style={{ height: 28, width: "58%", borderRadius: 6 }} />
+        <div className="sk" style={{ height: 30, width: "55%", borderRadius: 6 }} />
       )}
       <div style={{
         fontFamily: FONTS.body, fontSize: 11, fontWeight: 600,
@@ -127,65 +229,99 @@ function StatCard({ num, label, bg }: { num: string | null; label: string; bg: s
   );
 }
 
-// ── Empty-cache prompt ─────────────────────────────────────────────────────────
+// ── Nav link button ─────────────────────────────────────────────────────────────
 
-function EmptyAI({ message, cta, page, onNavigate }: {
-  message: string; cta: string; page: string; onNavigate: (p: string) => void;
+function NavLink({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} style={{
+      background: "none", border: "none", padding: 0,
+      fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
+      color: COLORS.orange, cursor: "pointer",
+      minWidth: 0, minHeight: 0,
+    }}>
+      {label} →
+    </button>
+  );
+}
+
+// ── Action row (share + bookmark) ───────────────────────────────────────────────
+
+function ActionRow({ cardId, shareTitle, shareText, sharePath, bookmarks,
+  onToggleBookmark, navLabel, navPage, onNavigate }: {
+  cardId: string;
+  shareTitle: string;
+  shareText: string;
+  sharePath: string;
+  bookmarks: Set<string>;
+  onToggleBookmark: (id: string) => void;
+  navLabel: string;
+  navPage: string;
+  onNavigate: (page: string) => void;
 }) {
+  const [copied, setCopied] = useState(false);
+  const isBookmarked = bookmarks.has(cardId);
+
+  const handleShare = useCallback(async () => {
+    const url = `${window.location.origin}${sharePath}`;
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share({ title: `CityPulse: ${shareTitle}`, text: shareText, url });
+        return;
+      }
+    } catch { /* user cancelled */ }
+    try {
+      await navigator.clipboard.writeText(`CityPulse: ${shareTitle} — ${shareText}\n${url}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard denied */ }
+  }, [shareTitle, shareText, sharePath]);
+
+  const btnStyle: React.CSSProperties = {
+    display: "flex", alignItems: "center", gap: 5,
+    background: "none", border: "none",
+    fontFamily: FONTS.body, fontSize: 12, fontWeight: 600,
+    cursor: "pointer", padding: "6px 8px", borderRadius: 8,
+    minWidth: 0, minHeight: 0, transition: "opacity 0.1s",
+  };
+
   return (
     <div style={{
-      background: COLORS.cream, borderRadius: 14,
-      border: `1.5px dashed ${COLORS.lightBorder}`,
-      padding: "16px 18px",
-      display: "flex", alignItems: "center",
-      justifyContent: "space-between", gap: 12,
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      borderTop: `1px solid ${COLORS.lightBorder}`,
+      paddingTop: 14, marginTop: "auto",
     }}>
-      <p style={{
-        fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,
-        margin: 0, lineHeight: 1.5,
-      }}>
-        {message}
-      </p>
-      <button
-        onClick={() => onNavigate(page)}
-        style={{
-          background: COLORS.orange, color: COLORS.white, border: "none",
-          borderRadius: 20, padding: "7px 14px",
-          fontSize: 12, fontWeight: 700, cursor: "pointer",
-          fontFamily: FONTS.body, whiteSpace: "nowrap", flexShrink: 0,
-          minWidth: 0, minHeight: 0,
-        }}
-      >
-        {cta} →
-      </button>
+      <div style={{ display: "flex", gap: 2 }}>
+        <button onClick={handleShare} style={{ ...btnStyle, color: COLORS.midGray }}>
+          <ShareIcon />
+          {copied ? "Copied!" : "Share"}
+        </button>
+        <button onClick={() => onToggleBookmark(cardId)}
+          style={{ ...btnStyle, color: isBookmarked ? COLORS.orange : COLORS.midGray }}>
+          <BookmarkIcon filled={isBookmarked} />
+          {isBookmarked ? "Saved" : "Save"}
+        </button>
+      </div>
+      <NavLink label={navLabel} onClick={() => onNavigate(navPage)} />
     </div>
   );
 }
 
-// ── Component ──────────────────────────────────────────────────────────────────
-
-// ── Skeleton for AI-generated sections ────────────────────────────────────────
-
-function AISkeleton() {
-  return (
-    <div style={{
-      background: COLORS.white, borderRadius: 16,
-      padding: "16px 18px",
-      border: `1px solid ${COLORS.lightBorder}`,
-      display: "flex", flexDirection: "column", gap: 9,
-    }}>
-      <div className="sk" style={{ height: 12, width: "35%", borderRadius: 6 }} />
-      <div className="sk" style={{ height: 15, width: "88%", borderRadius: 6, animationDelay: "0.05s" }} />
-      <div className="sk" style={{ height: 13, width: "96%", borderRadius: 6, animationDelay: "0.1s" }} />
-      <div className="sk" style={{ height: 13, width: "72%", borderRadius: 6, animationDelay: "0.15s" }} />
-    </div>
-  );
-}
-
-// ── Component ──────────────────────────────────────────────────────────────────
+// ── Component ───────────────────────────────────────────────────────────────────
 
 export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: MorningGlanceProps) {
-  // Lazy initializers — instant display if caches already populated
+
+  // ── Mobile detection ──────────────────────────────────────────────────────────
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 640,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  // ── AI data ───────────────────────────────────────────────────────────────────
   const [overview,   setOverview]   = useState<string | null>(
     () => getCachedBriefingOverview(districtConfig)?.overview ?? null,
   );
@@ -199,10 +335,8 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
   const [signalsLoading,   setSignalsLoading]   = useState(false);
   const [concernsLoading,  setConcernsLoading]  = useState(false);
 
-  // Auto-generate any missing AI content in parallel when data is ready
   useEffect(() => {
     if (!aggregatedData) return;
-
     if (!overview) {
       setOverviewLoading(true);
       generateBriefingOverview(aggregatedData, districtConfig)
@@ -210,7 +344,6 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
         .catch(() => {})
         .finally(() => setOverviewLoading(false));
     }
-
     if (!topSignal) {
       setSignalsLoading(true);
       generateSignals(aggregatedData, districtConfig)
@@ -218,7 +351,6 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
         .catch(() => {})
         .finally(() => setSignalsLoading(false));
     }
-
     if (!topConcern) {
       setConcernsLoading(true);
       generatePublicConcerns(aggregatedData, districtConfig)
@@ -227,14 +359,13 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
         .finally(() => setConcernsLoading(false));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aggregatedData]); // only re-run if aggregatedData reference changes
+  }, [aggregatedData]);
 
-  // Single resident quote from Supabase
+  // ── Resident quote ────────────────────────────────────────────────────────────
   const [quote, setQuote]           = useState<string | null>(null);
   const [quoteAttrib, setQuoteAttrib] = useState<string | null>(null);
 
   useEffect(() => {
-    // Supabase FK joins return arrays — hearing is { hearing_date }[] | null
     type QuoteRow = { notable_quotes: string[] | null; hearing: { hearing_date: string | null }[] | null };
     (async () => {
       try {
@@ -252,11 +383,24 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
             return;
           }
         }
-      } catch { /* no quotes — render nothing */ }
+      } catch { /* no quotes */ }
     })();
   }, [districtConfig.number]);
 
-  // Stats from aggregatedData
+  // ── Bookmarks ─────────────────────────────────────────────────────────────────
+  const [bookmarks, setBookmarks] = useState<Set<string>>(loadBookmarks);
+
+  const toggleBookmark = useCallback((id: string) => {
+    setBookmarks(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try { localStorage.setItem(BOOKMARK_KEY, JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  }, []);
+
+  // ── Stats ─────────────────────────────────────────────────────────────────────
   const ps  = aggregatedData?.permit_summary;
   const pip = aggregatedData?.pipeline_summary;
   const ev  = aggregatedData?.eviction_summary;
@@ -268,252 +412,251 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
     { label: "Commission",    page: "Commission", emoji: "🏛️" },
   ];
 
+  // ── Container styles ──────────────────────────────────────────────────────────
+  // Mobile: fixed-height snap container sitting below the sticky nav (92px) and
+  // above the fixed bottom tab (56px + safe-area). Body scroll is disabled on /pulse.
+  // Desktop: normal centred scroll with max-width.
+  const stackStyle: React.CSSProperties = isMobile
+    ? {
+        height: "calc(100dvh - 92px)",
+        overflowY: "scroll",
+        scrollSnapType: "y mandatory",
+        WebkitOverflowScrolling: "touch",
+        scrollbarWidth: "none",
+        padding: "12px 12px 0",
+        // Ensure last card can scroll fully above the fixed bottom tab
+        paddingBottom: "calc(56px + env(safe-area-inset-bottom, 0px) + 12px)",
+        boxSizing: "border-box",
+        background: COLORS.cream,
+      }
+    : {
+        maxWidth: 600,
+        margin: "0 auto",
+        padding: "24px 16px 56px",
+        background: COLORS.cream,
+        minHeight: "100vh",
+      };
+
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
-      {/* Line-clamp utility — used on signal/concern body text */}
-      <style>{`.mg-clamp2 {
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-      }`}</style>
+    <div style={{ background: COLORS.cream }}>
+      <style>{`
+        /* Hide scrollbar in WebKit */
+        .mg-stack::-webkit-scrollbar { display: none; }
+      `}</style>
 
-      <div style={{
-        maxWidth: 600, margin: "0 auto",
-        padding: "clamp(20px, 5vw, 36px) 16px 36px",
-      }}>
+      <div className="mg-stack" style={stackStyle}>
 
-        {/* ── 1. HEADER ─────────────────────────────────────────────────────── */}
-        <div style={{
-          display: "flex", alignItems: "flex-start",
-          justifyContent: "space-between", marginBottom: 20,
-        }}>
-          <div>
-            <p style={{
-              fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
-              color: COLORS.orange, letterSpacing: "0.1em",
-              textTransform: "uppercase", marginBottom: 5,
-            }}>
-              {todayFormatted()}
-            </p>
-            <h1 style={{
-              fontFamily: "'Urbanist', sans-serif",
-              fontSize: "clamp(24px, 7vw, 32px)", fontWeight: 800,
-              color: COLORS.charcoal, lineHeight: 1.15,
-              letterSpacing: "-0.02em", margin: 0,
-            }}>
-              {getGreeting()},<br />{districtConfig.label}.
-            </h1>
-          </div>
-          <CityPulseLogo size={32} />
-        </div>
-
-        {/* ── 2. TODAY'S BRIEFING ────────────────────────────────────────────── */}
-        <div style={{ marginBottom: 20 }}>
-          <SectionLabel text="This Morning" />
-          {overview ? (
+        {/* ── CARD 1: MORNING OVERVIEW ─────────────────────────────────────── */}
+        {overviewLoading && !overview ? (
+          <CardSkeleton isMobile={isMobile} />
+        ) : (
+          <Card isMobile={isMobile}>
+            {/* Header */}
             <div style={{
-              background: COLORS.orangePale, borderRadius: 16,
-              padding: "16px 18px",
-              border: `1px solid rgba(212,100,59,0.14)`,
+              display: "flex", alignItems: "flex-start",
+              justifyContent: "space-between", marginBottom: 28,
             }}>
-              <p style={{
-                fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.75,
-                color: COLORS.charcoal, margin: "0 0 10px",
-              }}>
-                {firstSentences(overview, 3)}
-              </p>
-              <button
-                onClick={() => onNavigate("Briefing")}
-                style={{
-                  background: "none", border: "none", padding: 0,
-                  fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
-                  color: COLORS.orange, cursor: "pointer",
-                  minWidth: 0, minHeight: 0,
-                }}
-              >
-                See full briefing →
-              </button>
-            </div>
-          ) : overviewLoading ? (
-            <div style={{
-              background: COLORS.orangePale, borderRadius: 16,
-              padding: "16px 18px",
-              border: `1px solid rgba(212,100,59,0.14)`,
-              display: "flex", flexDirection: "column", gap: 9,
-            }}>
-              {[1, 0.85, 0.65].map((w, i) => (
-                <div key={i} className="sk" style={{
-                  height: 14, width: `${w * 100}%`, borderRadius: 6,
-                  animationDelay: `${i * 0.1}s`,
-                }} />
-              ))}
-            </div>
-          ) : (
-            <EmptyAI
-              message="No data available yet — generate a briefing from the home page."
-              cta="Home"
-              page="Home"
-              onNavigate={onNavigate}
-            />
-          )}
-        </div>
-
-        {/* ── 3. KEY NUMBERS ─────────────────────────────────────────────────── */}
-        <div style={{ marginBottom: 20 }}>
-          <SectionLabel text="Key Numbers" />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <StatCard
-              num={ps ? ps.total.toLocaleString() : null}
-              label="Active Permits"
-              bg={COLORS.orangePale}
-            />
-            <StatCard
-              num={pip ? pip.net_pipeline_units.toLocaleString() : null}
-              label="Pipeline Units"
-              bg={COLORS.softAmber}
-            />
-            <StatCard
-              num={ev ? ev.total.toLocaleString() : null}
-              label="Eviction Notices"
-              bg={COLORS.softBlue}
-            />
-            <StatCard
-              num={aff ? `${Math.round(aff.affordable_ratio * 100)}%` : null}
-              label="Affordable Ratio"
-              bg={COLORS.softGreen}
-            />
-          </div>
-        </div>
-
-        {/* ── 4. TOP SIGNAL ──────────────────────────────────────────────────── */}
-        <div style={{ marginBottom: 20 }}>
-          <SectionLabel text="Top Signal" />
-          {signalsLoading ? (
-            <AISkeleton />
-          ) : topSignal ? (
-            <button
-              onClick={() => onNavigate("Signals")}
-              style={{
-                display: "block", width: "100%", textAlign: "left",
-                background: COLORS.white, borderRadius: 16,
-                padding: "16px 18px",
-                border: `1px solid ${COLORS.lightBorder}`,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-                cursor: "pointer", minWidth: 0, minHeight: 0,
-              }}
-            >
-              <div style={{ marginBottom: 8 }}>
-                <SeverityBadge level={topSignal.severity} />
-              </div>
-              <div style={{
-                fontFamily: "'Urbanist', sans-serif",
-                fontSize: 15, fontWeight: 800,
-                color: COLORS.charcoal, lineHeight: 1.3, marginBottom: 7,
-              }}>
-                {topSignal.title}
-              </div>
-              <p className="mg-clamp2" style={{
-                fontFamily: FONTS.body, fontSize: 13, color: COLORS.midGray,
-                lineHeight: 1.6, margin: 0,
-              }}>
-                {topSignal.body}
-              </p>
-              <p style={{
-                fontFamily: FONTS.body, fontSize: 12, color: COLORS.orange,
-                fontWeight: 700, margin: "10px 0 0",
-              }}>
-                See all signals →
-              </p>
-            </button>
-          ) : (
-            <EmptyAI
-              message="No signals available — go to Signals to generate."
-              cta="Signals"
-              page="Signals"
-              onNavigate={onNavigate}
-            />
-          )}
-        </div>
-
-        {/* ── 5. TOP CONCERN ─────────────────────────────────────────────────── */}
-        <div style={{ marginBottom: 20 }}>
-          <SectionLabel text="Top Concern" />
-          {concernsLoading ? (
-            <AISkeleton />
-          ) : topConcern ? (
-            <button
-              onClick={() => onNavigate("Outlook")}
-              style={{
-                display: "block", width: "100%", textAlign: "left",
-                background: COLORS.white, borderRadius: 16,
-                padding: "16px 18px",
-                border: `1px solid ${COLORS.lightBorder}`,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-                cursor: "pointer", minWidth: 0, minHeight: 0,
-              }}
-            >
-              <div style={{ marginBottom: 8 }}>
-                <SeverityBadge level={topConcern.severity} />
-              </div>
-              <div style={{
-                fontFamily: "'Urbanist', sans-serif",
-                fontSize: 15, fontWeight: 800,
-                color: COLORS.charcoal, lineHeight: 1.3, marginBottom: 7,
-              }}>
-                {topConcern.headline}
-              </div>
-              <p className="mg-clamp2" style={{
-                fontFamily: FONTS.body, fontSize: 13, color: COLORS.midGray,
-                lineHeight: 1.6, margin: 0,
-              }}>
-                {topConcern.evidence}
-              </p>
-              <p style={{
-                fontFamily: FONTS.body, fontSize: 12, color: COLORS.orange,
-                fontWeight: 700, margin: "10px 0 0",
-              }}>
-                See full outlook →
-              </p>
-            </button>
-          ) : (
-            <EmptyAI
-              message="No concerns available — go to Outlook to generate."
-              cta="Outlook"
-              page="Outlook"
-              onNavigate={onNavigate}
-            />
-          )}
-        </div>
-
-        {/* ── 6. RESIDENT QUOTE ──────────────────────────────────────────────── */}
-        {quote && (
-          <div style={{ marginBottom: 20 }}>
-            <SectionLabel text="From the Public Record" />
-            <div style={{
-              background: COLORS.white, borderRadius: 16,
-              padding: "18px 18px 16px",
-              border: `1px solid ${COLORS.lightBorder}`,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-              display: "flex", gap: 12, alignItems: "flex-start",
-            }}>
-              <span style={{
-                fontFamily: "'Playfair Display', serif",
-                fontSize: 40, lineHeight: 1, color: COLORS.orange,
-                flexShrink: 0, marginTop: -3, userSelect: "none",
-              }}>
-                "
-              </span>
               <div>
                 <p style={{
-                  fontFamily: FONTS.body, fontSize: 13.5, lineHeight: 1.7,
-                  color: COLORS.charcoal, fontStyle: "italic", margin: "0 0 7px",
+                  fontFamily: FONTS.body, fontSize: 10, fontWeight: 700,
+                  color: COLORS.orange, letterSpacing: "0.12em",
+                  textTransform: "uppercase", margin: "0 0 8px",
+                }}>
+                  {todayFormatted()}
+                </p>
+                <h1 style={{
+                  fontFamily: "'Urbanist', sans-serif",
+                  fontSize: "clamp(26px, 7vw, 36px)", fontWeight: 800,
+                  color: COLORS.charcoal, lineHeight: 1.1,
+                  letterSpacing: "-0.02em", margin: 0,
+                }}>
+                  {getGreeting()},<br />{districtConfig.label}.
+                </h1>
+              </div>
+              <CityPulseLogo size={34} />
+            </div>
+
+            {/* Overview body */}
+            <div style={{
+              background: COLORS.cream, borderRadius: 16,
+              padding: "18px 20px",
+              border: "1px solid rgba(212,100,59,0.12)",
+              flex: 1,
+            }}>
+              {overview ? (
+                <>
+                  <p style={{
+                    fontFamily: FONTS.body, fontSize: 15, lineHeight: 1.78,
+                    color: COLORS.charcoal, margin: "0 0 14px",
+                  }}>
+                    {firstSentences(overview, 3)}
+                  </p>
+                  <NavLink label="See full briefing" onClick={() => onNavigate("Briefing")} />
+                </>
+              ) : (
+                <p style={{
+                  fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray,
+                  lineHeight: 1.65, margin: 0, fontStyle: "italic",
+                }}>
+                  Generate a briefing from the home page to see today's overview.
+                </p>
+              )}
+            </div>
+
+            {/* Scroll hint */}
+            {isMobile && (
+              <p style={{
+                fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray,
+                textAlign: "center", margin: "14px 0 0", opacity: 0.55,
+                letterSpacing: "0.04em",
+              }}>
+                Swipe for more ↓
+              </p>
+            )}
+          </Card>
+        )}
+
+        {/* ── CARD 2: KEY NUMBERS ──────────────────────────────────────────── */}
+        <Card isMobile={isMobile}>
+          <Eyebrow text="Key Numbers" />
+          <h2 style={{
+            fontFamily: "'Urbanist', sans-serif",
+            fontSize: "clamp(22px, 5vw, 30px)", fontWeight: 800,
+            color: COLORS.charcoal, lineHeight: 1.15,
+            letterSpacing: "-0.02em", margin: "0 0 20px",
+          }}>
+            {districtConfig.label} at a glance.
+          </h2>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <StatCard num={ps ? ps.total.toLocaleString() : null}
+              label="Active Permits" bg={COLORS.orangePale} />
+            <StatCard num={pip ? pip.net_pipeline_units.toLocaleString() : null}
+              label="Pipeline Units" bg={COLORS.softAmber} />
+            <StatCard num={ev ? ev.total.toLocaleString() : null}
+              label="Eviction Notices" bg={COLORS.softBlue} />
+            <StatCard num={aff ? `${Math.round(aff.affordable_ratio * 100)}%` : null}
+              label="Affordable Ratio" bg={COLORS.softGreen} />
+          </div>
+          <div style={{ flex: 1 }} />
+          <div style={{
+            borderTop: `1px solid ${COLORS.lightBorder}`,
+            paddingTop: 14, marginTop: 16,
+          }}>
+            <NavLink label="See all charts" onClick={() => onNavigate("Charts")} />
+          </div>
+        </Card>
+
+        {/* ── CARD 3: TOP SIGNAL ───────────────────────────────────────────── */}
+        {signalsLoading && !topSignal ? (
+          <CardSkeleton isMobile={isMobile} />
+        ) : topSignal ? (
+          <Card isMobile={isMobile}>
+            <Eyebrow text="Top Signal" />
+            <SeverityBadge level={topSignal.severity} />
+            <h2 style={{
+              fontFamily: "'Urbanist', sans-serif",
+              fontSize: "clamp(20px, 4.5vw, 27px)", fontWeight: 800,
+              color: COLORS.charcoal, lineHeight: 1.2,
+              letterSpacing: "-0.01em", margin: "12px 0 12px",
+            }}>
+              {topSignal.title}
+            </h2>
+            <p style={{
+              fontFamily: FONTS.body, fontSize: 14.5, lineHeight: 1.75,
+              color: COLORS.midGray, margin: 0, flex: 1,
+            }}>
+              {topSignal.body}
+            </p>
+            {topSignal.concern && (
+              <div style={{
+                background: COLORS.cream, borderRadius: 12,
+                padding: "14px 16px", marginTop: 16,
+                display: "flex", gap: 10, alignItems: "flex-start",
+              }}>
+                <span style={{ fontSize: 15, flexShrink: 0 }}>⚡</span>
+                <p style={{
+                  fontFamily: FONTS.body, fontSize: 13, lineHeight: 1.65,
+                  color: COLORS.charcoal, fontWeight: 500, margin: 0,
+                }}>
+                  {topSignal.concern}
+                </p>
+              </div>
+            )}
+            <ActionRow
+              cardId={`signal:${topSignal.title.slice(0, 32)}`}
+              shareTitle={topSignal.title}
+              shareText={`${topSignal.body.slice(0, 140)}...`}
+              sharePath="/signals"
+              bookmarks={bookmarks}
+              onToggleBookmark={toggleBookmark}
+              navLabel="See all signals"
+              navPage="Signals"
+              onNavigate={onNavigate}
+            />
+          </Card>
+        ) : null}
+
+        {/* ── CARD 4: TOP CONCERN ──────────────────────────────────────────── */}
+        {concernsLoading && !topConcern ? (
+          <CardSkeleton isMobile={isMobile} />
+        ) : topConcern ? (
+          <Card isMobile={isMobile}>
+            <Eyebrow text="Top Concern" />
+            <SeverityBadge level={topConcern.severity} />
+            <h2 style={{
+              fontFamily: "'Urbanist', sans-serif",
+              fontSize: "clamp(20px, 4.5vw, 27px)", fontWeight: 800,
+              color: COLORS.charcoal, lineHeight: 1.2,
+              letterSpacing: "-0.01em", margin: "12px 0 12px",
+            }}>
+              {topConcern.headline}
+            </h2>
+            <p style={{
+              fontFamily: FONTS.body, fontSize: 14.5, lineHeight: 1.75,
+              color: COLORS.midGray, margin: 0, flex: 1,
+            }}>
+              {topConcern.evidence}
+            </p>
+            <ActionRow
+              cardId={`concern:${topConcern.headline.slice(0, 32)}`}
+              shareTitle={topConcern.headline}
+              shareText={`${topConcern.evidence.slice(0, 140)}...`}
+              sharePath="/outlook"
+              bookmarks={bookmarks}
+              onToggleBookmark={toggleBookmark}
+              navLabel="See full outlook"
+              navPage="Outlook"
+              onNavigate={onNavigate}
+            />
+          </Card>
+        ) : null}
+
+        {/* ── CARD 5: RESIDENT QUOTE ───────────────────────────────────────── */}
+        {quote && (
+          <Card isMobile={isMobile}>
+            <Eyebrow text="From the Public Record" />
+            <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
+              <div style={{ width: "100%" }}>
+                <span style={{
+                  display: "block",
+                  fontFamily: "'Georgia', serif",
+                  fontSize: 80, lineHeight: 0.75,
+                  color: COLORS.orange, marginBottom: 20,
+                  userSelect: "none",
+                }}>
+                  "
+                </span>
+                <p style={{
+                  fontFamily: FONTS.body, fontSize: 17, lineHeight: 1.75,
+                  color: COLORS.charcoal, fontStyle: "italic",
+                  margin: "0 0 16px",
                 }}>
                   {quote}
                 </p>
                 {quoteAttrib && (
                   <p style={{
-                    fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray,
+                    fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray,
                     margin: 0,
                   }}>
                     — {quoteAttrib}
@@ -521,35 +664,67 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
                 )}
               </div>
             </div>
-          </div>
+          </Card>
         )}
 
-        {/* ── 7. QUICK LINKS ─────────────────────────────────────────────────── */}
-        <div>
-          <SectionLabel text="Explore" />
-          <div style={{ display: "flex", gap: 10 }}>
+        {/* ── CARD 6: YOU'RE CAUGHT UP ─────────────────────────────────────── */}
+        <Card isMobile={isMobile}>
+          <div style={{
+            flex: 1,
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            textAlign: "center", gap: 6,
+          }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: "50%",
+              background: COLORS.softGreen,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              marginBottom: 8,
+            }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M5 12L10 17L19 7"
+                  stroke={COLORS.green} strokeWidth="2.5"
+                  strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h2 style={{
+              fontFamily: "'Urbanist', sans-serif",
+              fontSize: "clamp(24px, 6vw, 32px)", fontWeight: 800,
+              color: COLORS.charcoal, margin: 0, letterSpacing: "-0.02em",
+            }}>
+              You're caught up.
+            </h2>
+            <p style={{
+              fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray,
+              margin: "4px 0 0", lineHeight: 1.5,
+            }}>
+              Here's what to explore next.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
             {QUICK_LINKS.map(({ label, page, emoji }) => (
               <button
                 key={page}
                 onClick={() => onNavigate(page)}
                 style={{
-                  flex: 1, background: COLORS.white, color: COLORS.charcoal,
+                  flex: 1, background: COLORS.cream, color: COLORS.charcoal,
                   border: `1px solid ${COLORS.lightBorder}`,
-                  borderRadius: 14, padding: "13px 8px",
+                  borderRadius: 16, padding: "14px 8px",
                   cursor: "pointer", fontFamily: FONTS.body,
                   fontSize: 11, fontWeight: 700, lineHeight: 1.3,
                   display: "flex", flexDirection: "column",
-                  alignItems: "center", gap: 5,
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                  alignItems: "center", gap: 6,
                   minWidth: 0, minHeight: 0,
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
                 }}
               >
-                <span style={{ fontSize: 20 }}>{emoji}</span>
+                <span style={{ fontSize: 22 }}>{emoji}</span>
                 {label}
               </button>
             ))}
           </div>
-        </div>
+        </Card>
 
       </div>
     </div>
