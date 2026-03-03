@@ -10,6 +10,11 @@ import type { CommissionMarker } from "../components/CommissionMap";
 import { fetchSFSupervisorBoundary } from "../services/neighborhoodBoundaries";
 import type { GeoFeature } from "../services/neighborhoodBoundaries";
 import type { DistrictConfig } from "../districts";
+import {
+  loadNeighborhoodBoundaries,
+  isPointInNeighborhoodSync,
+  type BoundaryMap,
+} from "../utils/geoFilter";
 
 const CommissionMapLazy = lazy(() =>
   import("../components/CommissionMap").then(m => ({ default: m.CommissionMap }))
@@ -58,6 +63,8 @@ interface LiveProject {
   shadow_flag: boolean;
   shadow_details: string | null;
   case_number: string | null;
+  lat: number | null;
+  lng: number | null;
   hearing: { id: string; hearing_date: string; public_sentiment: Sentiment[] } | null;
   votes: Vote[];
   commissioner_comments: Comment[];
@@ -474,7 +481,7 @@ interface CommissionProps {
 // Reusable select string for both the district load and search queries
 const PROJECT_SELECT = `
   id, address, district, action, project_description,
-  shadow_flag, shadow_details, case_number,
+  shadow_flag, shadow_details, case_number, lat, lng,
   hearing:hearing_id(
     id, hearing_date,
     public_sentiment(
@@ -500,6 +507,7 @@ export function Commission({ districtConfig }: CommissionProps) {
   const [error, setError]                 = useState<string | null>(null);
   const [coords, setCoords]               = useState<Map<string, LatLng>>(new Map());
   const [districtBoundary, setDistrictBoundary] = useState<GeoFeature | null>(null);
+  const [boundaries, setBoundaries]       = useState<BoundaryMap | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -574,6 +582,11 @@ export function Commission({ districtConfig }: CommissionProps) {
     setDistrictBoundary(null);
     fetchSFSupervisorBoundary(districtConfig.number).then(setDistrictBoundary);
   }, [districtConfig.number]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load neighborhood polygon boundaries once per session for polygon-based filtering.
+  useEffect(() => {
+    loadNeighborhoodBoundaries().then(setBoundaries);
+  }, []);
 
   const handleShowAll = useCallback(() => {
     setExpandedId(null);
@@ -651,12 +664,20 @@ export function Commission({ districtConfig }: CommissionProps) {
             const distLabel = selectedNeighborhood.name.toLowerCase(); // "district 3"
             if (!dist.includes(distLabel) && !addr.includes(distLabel) && !desc.includes(distLabel)) return false;
           } else {
-            const name = selectedNeighborhood.name.toLowerCase();
-            const zip  = selectedNeighborhood.zip;
-            const matches =
-              addr.includes(zip) || addr.includes(name) ||
-              dist.includes(name) || desc.includes(name);
-            if (!matches) return false;
+            const geoName = selectedNeighborhood.geoName;
+            // Primary: polygon containment test (requires lat/lng + loaded boundaries)
+            if (geoName && boundaries && p.lat != null && p.lng != null) {
+              if (!isPointInNeighborhoodSync(p.lat, p.lng, geoName, boundaries)) return false;
+            } else {
+              // Fallback for ungeocoded projects or unavailable boundaries:
+              // match on zip or name in address/district/description
+              const name = selectedNeighborhood.name.toLowerCase();
+              const zip  = selectedNeighborhood.zip;
+              const matches =
+                addr.includes(zip) || addr.includes(name) ||
+                dist.includes(name) || desc.includes(name);
+              if (!matches) return false;
+            }
           }
         }
         return true;

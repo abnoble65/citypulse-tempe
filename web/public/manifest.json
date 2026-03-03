@@ -2,7 +2,7 @@
   "name": "CityPulse SF",
   "short_name": "CityPulse",
   "description": "Live San Francisco urban intelligence — permits, planning, and city decisions.",
-  "start_url": "/signals",
+  "start_url": "/pulse",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#F5F0EB",

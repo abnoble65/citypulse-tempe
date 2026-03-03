@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -7,7 +8,21 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
-    plugins: [react()],
+    plugins: [
+      react(),
+      // Copy @arcgis/core assets into dist so the SDK can load workers/fonts/images.
+      viteStaticCopy({
+        targets: [{
+          src: 'node_modules/@arcgis/core/assets',
+          dest: 'arcgis',
+        }],
+      }),
+    ],
+    optimizeDeps: {
+      // @arcgis/core uses dynamic imports internally — exclude from pre-bundling
+      // to avoid CommonJS interop issues.
+      exclude: ['@arcgis/core'],
+    },
     build: {
       rollupOptions: {
         output: {

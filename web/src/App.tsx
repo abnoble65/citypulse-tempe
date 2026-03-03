@@ -84,6 +84,7 @@ const Charts     = lazy(() => import("./pages/Charts").then(m => ({ default: m.C
 const Signals    = lazy(() => import("./pages/Signals").then(m => ({ default: m.Signals })));
 const Outlook    = lazy(() => import("./pages/Outlook").then(m => ({ default: m.Outlook })));
 const Commission = lazy(() => import("./pages/Commission").then(m => ({ default: m.Commission })));
+const EsriMap    = lazy(() => import("./pages/EsriMap").then(m => ({ default: m.EsriMap })));
 const Board      = lazy(() => import("./pages/Board").then(m => ({ default: m.Board })));
 const Mayor      = lazy(() => import("./pages/Mayor").then(m => ({ default: m.Mayor })));
 const Parks      = lazy(() => import("./pages/Parks").then(m => ({ default: m.Parks })));
@@ -99,6 +100,7 @@ const PATH_TO_PAGE: Record<string, string> = {
   "signals":      "Signals",
   "outlook":      "Outlook",
   "commission":   "Commission",
+  "map":          "EsriMap",
   "board":        "Board",
   "mayor":        "Mayor",
   "parks":        "Parks",
@@ -107,6 +109,7 @@ const PATH_TO_PAGE: Record<string, string> = {
 // Pages whose names don't map cleanly to lowercase paths
 const PAGE_TO_PATH: Record<string, string> = {
   MorningGlance: "/pulse",
+  EsriMap:       "/map",
 };
 
 function pageFromPath(path: string): string {
@@ -217,6 +220,8 @@ export default function App() {
         return <Outlook aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={navigate} />;
       case "Commission":
         return <Commission districtConfig={districtConfig} />;
+      case "EsriMap":
+        return <EsriMap districtConfig={districtConfig} onNavigate={navigate} />;
       case "Board":
         return <Board districtConfig={districtConfig} />;
       case "Mayor":

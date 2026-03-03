@@ -39,7 +39,11 @@
       "WebFetch(domain:sanfrancisco.granicus.com)",
       "Bash(identify:*)",
       "Bash(echo:*)",
-      "Bash(Commission, '...'\"\\). Clears need for cache tables to be refreshed.:*)"
+      "Bash(Commission, '...'\"\\). Clears need for cache tables to be refreshed.:*)",
+      "Bash(npm run dev:*)",
+      "Bash(ls:*)",
+      "Bash(npm install:*)",
+      "Bash(1 ls /c/Users/AdamNoble/Desktop/citypulse/web/node_modules/@arcgis/core/assets/esri/themes/light/)"
     ]
   }
 }

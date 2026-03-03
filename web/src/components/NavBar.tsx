@@ -10,12 +10,29 @@ interface NavBarProps {
 }
 
 const NAV_GROUPS = [
+  { id: "pulse",        label: "Pulse",        shortLabel: "PULSE",  pages: ["MorningGlance"] },
   { id: "intelligence", label: "Intelligence", shortLabel: "INTEL",  pages: ["Briefing", "Signals", "Outlook"] },
-  { id: "data",         label: "Data",         shortLabel: "DATA",   pages: ["Charts", "Commission"] },
+  { id: "data",         label: "Data",         shortLabel: "DATA",   pages: ["Charts", "Commission", "EsriMap"] },
   { id: "government",   label: "Government",   shortLabel: "GOV",    pages: ["Mayor", "Board", "Parks"] },
 ];
 
+// Display label overrides for pages whose name differs from their nav label
+const PAGE_LABELS: Record<string, string> = { MorningGlance: "Pulse", EsriMap: "Map" };
+function pageLabel(p: string): string { return PAGE_LABELS[p] ?? p; }
+
 /* ── Inline SVG icons for mobile tab bar ─────────────────────────────────── */
+
+function PulseIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 18 18" fill="none" aria-hidden>
+      <polyline
+        points="1,9 4,9 6,4 8,14 10,6 12,11 14,9 17,9"
+        stroke="currentColor" strokeWidth="1.5"
+        strokeLinejoin="round" strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 function IntelIcon({ size = 18 }: { size?: number }) {
   return (
@@ -49,6 +66,7 @@ function GovIcon({ size = 18 }: { size?: number }) {
 }
 
 const GROUP_ICONS: Record<string, (props: { size?: number }) => React.ReactElement> = {
+  pulse:        PulseIcon,
   intelligence: IntelIcon,
   data:         DataIcon,
   government:   GovIcon,
@@ -128,7 +146,7 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
                     cursor: "pointer", transition: "all 0.15s",
                     fontFamily: FONTS.body, whiteSpace: "nowrap",
                   }}>
-                  {p}
+                  {pageLabel(p)}
                 </button>
               ))}
             </div>
@@ -212,7 +230,7 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
                 fontFamily: FONTS.body, whiteSpace: "nowrap", flexShrink: 0,
                 minHeight: 32,
               }}>
-              {p}
+              {pageLabel(p)}
             </button>
           ))}
           <div style={{ flexShrink: 0, width: 12 }} aria-hidden="true" />
