@@ -43,7 +43,16 @@
       "Bash(npm run dev:*)",
       "Bash(ls:*)",
       "Bash(npm install:*)",
-      "Bash(1 ls /c/Users/AdamNoble/Desktop/citypulse/web/node_modules/@arcgis/core/assets/esri/themes/light/)"
+      "Bash(1 ls /c/Users/AdamNoble/Desktop/citypulse/web/node_modules/@arcgis/core/assets/esri/themes/light/)",
+      "Bash(taskkill:*)",
+      "Bash(cmd /c \"taskkill /PID 29616 /F\")",
+      "Bash(cmd /c:*)",
+      "Bash(netstat:*)",
+      "Bash(powershell -Command \"Stop-Process -Id 29616 -Force -ErrorAction SilentlyContinue; Start-Sleep 1; \\(Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue\\).OwningProcess\")",
+      "Bash(npm ls:*)",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess | Sort-Object -Unique | ForEach-Object { Stop-Process -Id $_-Force -ErrorAction SilentlyContinue }\")",
+      "Bash(powershell -Command:*)",
+      "Bash(npm uninstall:*)"
     ]
   }
 }

@@ -42,10 +42,22 @@ export class ErrorBoundary extends Component<Props, State> {
             </h2>
             <p style={{
               fontFamily: FONTS.body, fontSize: 15, color: COLORS.midGray,
-              lineHeight: 1.65, marginBottom: 32,
+              lineHeight: 1.65, marginBottom: this.state.error ? 12 : 32,
             }}>
               Something went wrong loading this section. Try refreshing.
             </p>
+            {this.state.error && (
+              <pre style={{
+                fontFamily: "monospace", fontSize: 12, color: "#c0392b",
+                background: "#fdf0ef", border: "1px solid #f0c8c8",
+                borderRadius: 8, padding: "12px 16px",
+                textAlign: "left", overflowX: "auto",
+                maxWidth: "100%", marginBottom: 32,
+                whiteSpace: "pre-wrap", wordBreak: "break-all",
+              }}>
+                {this.state.error.message}
+              </pre>
+            )}
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
               <button
                 onClick={this.reset}

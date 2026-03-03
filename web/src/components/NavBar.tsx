@@ -12,12 +12,12 @@ interface NavBarProps {
 const NAV_GROUPS = [
   { id: "pulse",        label: "Pulse",        shortLabel: "PULSE",  pages: ["MorningGlance"] },
   { id: "intelligence", label: "Intelligence", shortLabel: "INTEL",  pages: ["Briefing", "Signals", "Outlook"] },
-  { id: "data",         label: "Data",         shortLabel: "DATA",   pages: ["Charts", "Commission", "EsriMap"] },
+  { id: "data",         label: "Data",         shortLabel: "DATA",   pages: ["Charts", "Commission", "MapPage"] },
   { id: "government",   label: "Government",   shortLabel: "GOV",    pages: ["Mayor", "Board", "Parks"] },
 ];
 
 // Display label overrides for pages whose name differs from their nav label
-const PAGE_LABELS: Record<string, string> = { MorningGlance: "Pulse", EsriMap: "Map" };
+const PAGE_LABELS: Record<string, string> = { MorningGlance: "Pulse", MapPage: "Map" };
 function pageLabel(p: string): string { return PAGE_LABELS[p] ?? p; }
 
 /* ── Inline SVG icons for mobile tab bar ─────────────────────────────────── */
