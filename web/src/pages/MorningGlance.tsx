@@ -142,8 +142,9 @@ function Card({ children, isMobile, style }: {
       ...(isMobile ? {
         scrollSnapAlign: "start" as const,
         scrollSnapStop: "always" as const,
-        // height fills visible area (nav=92px, tab=56px+safe-area) minus 52px peek of next card
-        minHeight: "calc(100dvh - 92px - 56px - env(safe-area-inset-bottom, 0px) - 52px)",
+        // Container height = 100dvh - 92 - 56 - safe-area.
+        // Card fills that minus 24px so the next card peeks by (24px - 12px margin) = 12px.
+        minHeight: "calc(100dvh - 92px - 56px - env(safe-area-inset-bottom, 0px) - 24px)",
         marginBottom: 12,
         flexShrink: 0,
       } : {
@@ -168,7 +169,7 @@ function CardSkeleton({ isMobile }: { isMobile: boolean }) {
       ...(isMobile ? {
         scrollSnapAlign: "start" as const,
         scrollSnapStop: "always" as const,
-        minHeight: "calc(100dvh - 92px - 56px - env(safe-area-inset-bottom, 0px) - 52px)",
+        minHeight: "calc(100dvh - 92px - 56px - env(safe-area-inset-bottom, 0px) - 24px)",
         marginBottom: 12, flexShrink: 0,
       } : { marginBottom: 16 }),
     }}>
@@ -321,6 +322,20 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
     return () => mq.removeEventListener("change", handler);
   }, []);
 
+  // Lock body scroll on mobile so the snap container — not the body — receives scroll events.
+  // Also zero out the NavBar-injected padding-bottom which would otherwise make body scrollable.
+  useEffect(() => {
+    if (!isMobile) return;
+    const prevOverflow      = document.body.style.overflow;
+    const prevPaddingBottom = document.body.style.paddingBottom;
+    document.body.style.overflow      = "hidden";
+    document.body.style.paddingBottom = "0";
+    return () => {
+      document.body.style.overflow      = prevOverflow;
+      document.body.style.paddingBottom = prevPaddingBottom;
+    };
+  }, [isMobile]);
+
   // ── AI data ───────────────────────────────────────────────────────────────────
   const [overview,   setOverview]   = useState<string | null>(
     () => getCachedBriefingOverview(districtConfig)?.overview ?? null,
@@ -418,15 +433,16 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
   // Desktop: normal centred scroll with max-width.
   const stackStyle: React.CSSProperties = isMobile
     ? {
-        height: "calc(100dvh - 92px)",
+        // Exact visible area: viewport minus top nav (92px) and fixed bottom tab (56px + safe-area).
+        // With body overflow:hidden this div is the ONLY scroll container — snap works correctly.
+        height: "calc(100dvh - 92px - 56px - env(safe-area-inset-bottom, 0px))",
         overflowY: "scroll",
+        overflowX: "hidden",
         scrollSnapType: "y mandatory",
         WebkitOverflowScrolling: "touch",
         scrollbarWidth: "none",
-        padding: "12px 12px 0",
-        // Ensure last card can scroll fully above the fixed bottom tab
-        paddingBottom: "calc(56px + env(safe-area-inset-bottom, 0px) + 12px)",
-        boxSizing: "border-box",
+        // Horizontal padding only — vertical padding would shift snap math.
+        padding: "0 12px",
         background: COLORS.cream,
       }
     : {
