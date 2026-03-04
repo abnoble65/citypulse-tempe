@@ -247,6 +247,7 @@ export default function App() {
 
   return (
     <ErrorBoundary label="App">
+      <div style={{ background: 'red', color: 'white', padding: '20px', textAlign: 'center', fontSize: '24px', fontWeight: 'bold' }}>BUILD 2026-03-04-v2</div>
       {!splashDone && <SplashScreen onComplete={handleSplashComplete} />}
       <LoadingOverlay loading={loading} />
       {page !== "Home" && <NavBar activePage={page} onNavigate={navigate} districtConfig={districtConfig} />}
