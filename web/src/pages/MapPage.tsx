@@ -525,16 +525,33 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
   useEffect(() => {
     fetch(`${DATASF}/jwn9-ihcz.geojson?$limit=200`)
       .then(r => r.json())
-      .then((geojson: GeoJSON.FeatureCollection) => setNhGeoJSON(geojson))
+      .then((geojson: unknown) => {
+        const g = geojson as { type?: string; features?: unknown[]; error?: boolean };
+        if (g.error || g.type !== "FeatureCollection" || !Array.isArray(g.features)) {
+          console.warn("[MapPage] neighborhoods: invalid GeoJSON", g);
+          return;
+        }
+        setNhGeoJSON(geojson as GeoJSON.FeatureCollection);
+      })
       .catch(err => console.warn("[MapPage] neighborhoods fetch failed:", err));
   }, []);
 
   // ── Fetch supervisor district boundary (for "All District X" outline) ────
   useEffect(() => {
     if (districtConfig.number === "0") { setDistrictGeoJSON(null); return; }
-    fetch(`${DATASF}/mbd2-a7qz.geojson?$where=sup_dist_num='${districtConfig.number}'&$limit=1`)
+    const url = `${DATASF}/f2zs-jevy.geojson?$where=sup_dist_num='${districtConfig.number}'&$limit=1`;
+    fetch(url)
       .then(r => r.json())
-      .then((geojson: GeoJSON.FeatureCollection) => setDistrictGeoJSON(geojson))
+      .then((geojson: unknown) => {
+        // Validate: must be a FeatureCollection with at least one feature
+        const g = geojson as { type?: string; features?: unknown[]; error?: boolean };
+        if (g.error || g.type !== "FeatureCollection" || !Array.isArray(g.features) || g.features.length === 0) {
+          console.warn("[MapPage] district boundary: invalid GeoJSON or no features", g);
+          setDistrictGeoJSON(null);
+          return;
+        }
+        setDistrictGeoJSON(geojson as GeoJSON.FeatureCollection);
+      })
       .catch(err => { console.warn("[MapPage] district boundary fetch failed:", err); setDistrictGeoJSON(null); });
   }, [districtConfig]);
 
