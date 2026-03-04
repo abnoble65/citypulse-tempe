@@ -266,9 +266,10 @@ export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
           </p>
         )}
 
-        {/* Loading skeletons */}
-        {isGenerating && (
+        {/* Loading skeletons — visible during generation AND when no signals yet */}
+        {(isGenerating || !signals) && (
           <>
+            {console.log("Signals skeleton visible")}
             {[0, 1, 2, 3].map(i => (
               <div key={i} style={{
                 background: COLORS.white, borderRadius: 20,

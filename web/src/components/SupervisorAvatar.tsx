@@ -83,6 +83,8 @@ export function SupervisorAvatar({
             src={imgPath}
             alt={info.name}
             loading="lazy"
+            width={size}
+            height={size}
             style={{
               width: "100%", height: "100%",
               objectFit: "cover",

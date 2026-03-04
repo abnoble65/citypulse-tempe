@@ -17,12 +17,13 @@ const ANTI_HALLUCINATION_RULES = `
 DATA INTEGRITY — MANDATORY:
 - NEVER invent specific numbers. Every number you cite must come directly from the data provided.
 - If a data point is not in the context, do not reference it. Do not estimate, extrapolate, or fabricate statistics.
-- Specifically: do NOT reference shadow studies, Section 295, or shadow analysis counts unless shadow_study data is explicitly provided in the data context.
+- NEVER reference shadow studies, Section 295, shadow analysis, CEQA findings, or environmental review counts. This data is not in your context and must not be fabricated.
 - Do NOT cite specific ordinance numbers, meeting dates, or vote counts unless they appear verbatim in the data.
+- When shadow-flagged project data IS provided (in SHADOW-FLAGGED PROJECTS block), you may mention it — but cite ONLY the exact count and addresses from that block. Do not round, estimate, or add projects not listed.
 `;
 
 // Blocklist terms that must only appear if matching input data was provided
-const HALLUCINATION_BLOCKLIST = ['shadow stud', 'section 295', 'shadow analysis', 'shadow review'];
+const HALLUCINATION_BLOCKLIST = ['shadow stud', 'section 295', 'shadow analysis', 'shadow review', 'ceqa', 'environmental review'];
 
 /** Check AI output for blocklisted terms that weren't in the input data. */
 function warnIfHallucinated(output: string, inputData: string, label: string): void {
@@ -958,7 +959,7 @@ export async function generateOutlook(
   const locationLabel = focus ? focus.name : district.label;
 
   const shadowBlock = shadowTotal > 0
-    ? `\nSHADOW-FLAGGED PROJECTS — ${district.label.toUpperCase()} (${shadowTotal} projects flagged for Section 295 shadow-impact review; ${shadowProjects.length} shown below):
+    ? `\nSHADOW-FLAGGED PROJECTS — ${district.label.toUpperCase()} (exactly ${shadowTotal} projects flagged for shadow review; ${shadowProjects.length} shown below). IMPORTANT: cite ONLY this exact count (${shadowTotal}). Do NOT round up, estimate, or say "fifty" or any other number not equal to ${shadowTotal}:
 ${shadowProjects.map(p => `- ${p.address}: ${p.shadow_details ?? p.project_description ?? '(no detail)'}`).join('\n')}\n`
     : '';
 
