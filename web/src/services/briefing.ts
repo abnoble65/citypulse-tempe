@@ -594,13 +594,25 @@ const HEADING_VARIANTS: string[][] = [
 ];
 const HEADING_KEYS: (keyof BriefingSections)[] = ['briefing', 'signal', 'zoningContext', 'outlook'];
 
-/** Find the earliest match for any variant, returning { index, matchLen } or null. */
+/**
+ * Find the earliest match for any variant that appears as a heading
+ * (at the start of the text or after a newline, with optional ## prefix).
+ * This avoids false positives when "briefing" or "signal" appear mid-sentence.
+ */
 function findHeading(upperText: string, variants: string[], searchFrom = 0): { index: number; matchLen: number } | null {
   let best: { index: number; matchLen: number } | null = null;
   for (const v of variants) {
-    const idx = upperText.indexOf(v, searchFrom);
-    if (idx !== -1 && (best === null || idx < best.index)) {
-      best = { index: idx, matchLen: v.length };
+    let pos = searchFrom;
+    while (pos < upperText.length) {
+      const idx = upperText.indexOf(v, pos);
+      if (idx === -1) break;
+      // Accept only if at start of text or preceded by newline (with optional ##, whitespace, ---)
+      const lineStart = idx === 0 || /\n[#\-\s]*$/.test(upperText.slice(Math.max(0, idx - 20), idx));
+      if (lineStart && (best === null || idx < best.index)) {
+        best = { index: idx, matchLen: v.length };
+        break;
+      }
+      pos = idx + 1;
     }
   }
   return best;
@@ -629,8 +641,9 @@ export function parseBriefingSections(text: string): BriefingSections {
     result[found[i].key] = cleanSection(text.slice(found[i].contentStart, Math.max(found[i].contentStart, contentEnd)));
   }
 
-  // Fallback: if nothing was parsed at all, put the full text in `briefing`
-  if (found.length === 0) {
+  // Fallback: if nothing was parsed, or if parsing left `briefing` empty,
+  // use the full text so we never show "content unavailable" when text exists.
+  if (!result.briefing.trim() && text.trim()) {
     result.briefing = cleanSection(text);
   }
 
@@ -1035,7 +1048,7 @@ PRIORITY RATINGS must match data magnitude:
 
 When public comment data is available, include at least one item that reflects what residents said. Reference specific themes from the public record.
 
-IMPORTANT: Include one risk about shadow impact (☀️ icon) and, if eviction_summary.total > 0, one displacement risk (🏘️ icon) citing eviction counts and types. If assessment_summary.yoy_change_pct is notable (> 5% or < −2%), mention property value trajectory in a risk or event. If the data shows the displacement trifecta — rising assessed values AND elevated evictions AND a low affordable_housing_summary.affordable_ratio or few active construction-phase affordable units — flag this as a critical combined risk (🚨 icon) citing all three signals together.`;
+IMPORTANT: ${shadowTotal > 0 ? `Include one risk about shadow impact (☀️ icon), citing ONLY the exact count (${shadowTotal}) and addresses from the SHADOW-FLAGGED PROJECTS block above. Do NOT fabricate shadow data.` : 'Do NOT mention shadow studies, shadow impact, shadow analysis, or Section 295 — no shadow data was provided.'} If eviction_summary.total > 0, include one displacement risk (🏘️ icon) citing eviction counts and types. If assessment_summary.yoy_change_pct is notable (> 5% or < −2%), mention property value trajectory in a risk or event. If the data shows the displacement trifecta — rising assessed values AND elevated evictions AND a low affordable_housing_summary.affordable_ratio or few active construction-phase affordable units — flag this as a critical combined risk (🚨 icon) citing all three signals together.`;
 
   console.log(`[generateOutlook] STEP 2: calling Claude Haiku — prompt length: ${userContent.length} chars`);
 

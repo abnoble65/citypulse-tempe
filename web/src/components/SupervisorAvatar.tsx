@@ -90,8 +90,6 @@ export function SupervisorAvatar({
               objectFit: "cover",
               objectPosition: "center top",
               display: "block",
-              transform: "scale(1.05)",
-              imageRendering: "auto",
             }}
           />
         ) : (
