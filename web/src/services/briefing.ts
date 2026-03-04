@@ -930,17 +930,19 @@ export async function generateOutlook(
   }
 
   // 3 — Generate via Claude
-  // Fetch shadow-flagged projects from Supabase in parallel with data prep.
-  // Always district-wide — shadow impact is a D3-level concern regardless of
-  // neighborhood filter, and project addresses rarely contain zip codes.
-  console.log('[generateOutlook] STEP 1: starting Supabase shadow query');
+  // Fetch shadow-flagged projects from Supabase, scoped to the selected district.
+  console.log(`[generateOutlook] STEP 1: starting Supabase shadow query for district ${district.number}`);
 
-  const shadowPromise = supabase
+  let shadowQuery = supabase
     .from('projects')
     .select('address, project_description, shadow_details', { count: 'exact' })
     .eq('shadow_flag', true)
     .not('shadow_details', 'is', null)
-    .not('address', 'is', null)
+    .not('address', 'is', null);
+  if (district.number !== '0') {
+    shadowQuery = shadowQuery.eq('district', district.label);
+  }
+  const shadowPromise = shadowQuery
     .limit(8)
     .then(({ data: rows, count, error }) => {
       if (error) {
