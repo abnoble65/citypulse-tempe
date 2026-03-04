@@ -68,7 +68,7 @@ function classifyPermit(def: string | null): PermitType {
 const PERMIT_COLOR: Record<PermitType, string> = {
   new:        "#B44040",
   alteration: "#4A7FD0",
-  demolition: "#D4643B",
+  demolition: "#F59E0B",
   other:      "#8b8b8b",
 };
 
@@ -574,6 +574,32 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
     return boundsFromCoords((feat.geometry as any).coordinates);
   }, [selectedGeoName, nhGeoJSON]);
 
+  // Pre-filter marker data by bounds so React sees different arrays (not nulls inside .map)
+  const filteredPermits = useMemo(() => {
+    const valid = permits.filter(r => {
+      if (!r.location?.coordinates) return false;
+      const [lng, lat] = r.location.coordinates;
+      if (isNaN(lat) || isNaN(lng)) return false;
+      if (selectedBounds && !selectedBounds.contains(L.latLng(lat, lng))) return false;
+      return true;
+    });
+    return valid;
+  }, [permits, selectedBounds]);
+
+  const filteredEvictions = useMemo(() => {
+    return evictions.filter(r => {
+      if (!r.shape?.coordinates) return false;
+      const [lng, lat] = r.shape.coordinates;
+      if (isNaN(lat) || isNaN(lng)) return false;
+      if (selectedBounds && !selectedBounds.contains(L.latLng(lat, lng))) return false;
+      return true;
+    });
+  }, [evictions, selectedBounds]);
+
+  const filteredAffordable = useMemo(() => {
+    return ahMarkers.filter(m => !selectedBounds || selectedBounds.contains(L.latLng(m.lat, m.lng)));
+  }, [ahMarkers, selectedBounds]);
+
   // GeoJSON key must change when data OR selection changes to force re-render
   const nhKey = useMemo(
     () => `nh-${nhGeoJSON ? nhGeoJSON.features.length : 0}-${selectedGeoName ?? "all"}`,
@@ -640,11 +666,8 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
           )}
 
           {/* Building Permits */}
-          {layers.permits && permits.map((r, i) => {
-            if (!r.location?.coordinates) return null;
-            const [lng, lat] = r.location.coordinates;
-            if (isNaN(lat) || isNaN(lng)) return null;
-            if (selectedBounds && !selectedBounds.contains(L.latLng(lat, lng))) return null;
+          {layers.permits && filteredPermits.map((r) => {
+            const [lng, lat] = r.location!.coordinates;
             const cost  = r.estimated_cost != null ? parseFloat(String(r.estimated_cost)) : null;
             const ptype = classifyPermit(r.permit_type_definition ?? null);
             const color = PERMIT_COLOR[ptype];
@@ -652,7 +675,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
 
             return (
               <CircleMarker
-                key={`p-${i}`}
+                key={`p-${r.permit_number ?? `${lat},${lng}`}`}
                 center={[lat, lng]}
                 radius={permitRadius(cost)}
                 pathOptions={{
@@ -688,11 +711,8 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
           })}
 
           {/* Eviction Notices — diamond markers */}
-          {layers.evictions && evictions.map((r, i) => {
-            if (!r.shape?.coordinates) return null;
-            const [lng, lat] = r.shape.coordinates;
-            if (isNaN(lat) || isNaN(lng)) return null;
-            if (selectedBounds && !selectedBounds.contains(L.latLng(lat, lng))) return null;
+          {layers.evictions && filteredEvictions.map((r) => {
+            const [lng, lat] = r.shape!.coordinates;
 
             const fmtBool = (v: boolean | undefined) => v === true ? "Yes" : v === false ? "No" : "—";
             const fmtDate = (d?: string) => {
@@ -716,7 +736,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
 
             return (
               <Marker
-                key={`e-${i}`}
+                key={`e-${r.address ?? ''}-${lat},${lng}`}
                 position={[lat, lng]}
                 icon={icon}
               >
@@ -744,11 +764,9 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
           })}
 
           {/* Affordable Housing */}
-          {layers.affordable && ahMarkers.filter(m =>
-            !selectedBounds || selectedBounds.contains(L.latLng(m.lat, m.lng))
-          ).map((m, i) => (
+          {layers.affordable && filteredAffordable.map((m) => (
             <CircleMarker
-              key={`ah-${i}`}
+              key={`ah-${m.address}-${m.lat},${m.lng}`}
               center={[m.lat, m.lng]}
               radius={10}
               pathOptions={{
