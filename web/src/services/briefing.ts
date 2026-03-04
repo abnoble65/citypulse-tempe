@@ -11,6 +11,30 @@ import { supabase } from './supabase';
 import type { DistrictConfig } from '../districts';
 import { getSupervisorName } from '../components/SupervisorAvatar';
 
+// ── Anti-hallucination rules (appended to every AI prompt) ──────────────────
+const ANTI_HALLUCINATION_RULES = `
+
+DATA INTEGRITY — MANDATORY:
+- NEVER invent specific numbers. Every number you cite must come directly from the data provided.
+- If a data point is not in the context, do not reference it. Do not estimate, extrapolate, or fabricate statistics.
+- Specifically: do NOT reference shadow studies, Section 295, or shadow analysis counts unless shadow_study data is explicitly provided in the data context.
+- Do NOT cite specific ordinance numbers, meeting dates, or vote counts unless they appear verbatim in the data.
+`;
+
+// Blocklist terms that must only appear if matching input data was provided
+const HALLUCINATION_BLOCKLIST = ['shadow stud', 'section 295', 'shadow analysis', 'shadow review'];
+
+/** Check AI output for blocklisted terms that weren't in the input data. */
+function warnIfHallucinated(output: string, inputData: string, label: string): void {
+  const lower = output.toLowerCase();
+  const inputLower = inputData.toLowerCase();
+  for (const term of HALLUCINATION_BLOCKLIST) {
+    if (lower.includes(term) && !inputLower.includes(term)) {
+      console.warn(`[${label}] ⚠️ HALLUCINATION WARNING: output contains "${term}" but input data does not.`);
+    }
+  }
+}
+
 interface ShadowProject {
   address: string | null;
   project_description: string | null;
@@ -525,7 +549,7 @@ function briefingSystemPrompt(district: DistrictConfig): string {
   const locale = district.number === '0'
     ? 'all of San Francisco'
     : `San Francisco ${district.label}${sup ? ` (Supervisor ${sup})` : ''}`;
-  return `You are CityPulse, an urban intelligence analyst specializing in ${locale}. Your role is to synthesize permit activity, development pipeline data, and zoning context into clear, narrative-driven briefings for urban planners, developers, and municipal clients. Always produce exactly four sections with these exact headings: THE BRIEFING, THE SIGNAL, THE ZONING CONTEXT, THE OUTLOOK. Total length 450-600 words. Write in confident prose, no bullet points. Use specific numbers from the data.`;
+  return `You are CityPulse, an urban intelligence analyst specializing in ${locale}. Your role is to synthesize permit activity, development pipeline data, and zoning context into clear, narrative-driven briefings for urban planners, developers, and municipal clients. Always produce exactly four sections with these exact headings: THE BRIEFING, THE SIGNAL, THE ZONING CONTEXT, THE OUTLOOK. Total length 450-600 words. Write in confident prose, no bullet points. Use specific numbers from the data.${ANTI_HALLUCINATION_RULES}`;
 }
 
 function signalsSystemPrompt(district: DistrictConfig): string {
@@ -533,7 +557,7 @@ function signalsSystemPrompt(district: DistrictConfig): string {
   const locale = district.number === '0'
     ? 'all of San Francisco'
     : `San Francisco ${district.label}${sup ? ` (Supervisor ${sup})` : ''}`;
-  return `You are an urban planning analyst for ${locale}. Analyze permit and development data and identify key signals and trends. Always return valid JSON only — no markdown, no prose, no code fences.`;
+  return `You are an urban planning analyst for ${locale}. Analyze permit and development data and identify key signals and trends. Always return valid JSON only — no markdown, no prose, no code fences.${ANTI_HALLUCINATION_RULES}`;
 }
 
 function outlookSystemPrompt(district: DistrictConfig): string {
@@ -541,7 +565,7 @@ function outlookSystemPrompt(district: DistrictConfig): string {
   const locale = district.number === '0'
     ? 'all of San Francisco'
     : `San Francisco ${district.label}${sup ? ` (Supervisor ${sup})` : ''}`;
-  return `You are an urban planning analyst for ${locale}. Analyze permit and development data and produce a forward-looking outlook. Always return valid JSON only — no markdown, no prose, no code fences.`;
+  return `You are an urban planning analyst for ${locale}. Analyze permit and development data and produce a forward-looking outlook. Always return valid JSON only — no markdown, no prose, no code fences.${ANTI_HALLUCINATION_RULES}`;
 }
 
 export interface BriefingSections {
@@ -680,6 +704,7 @@ export async function generateBriefingFromData(
   const block = message.content[0];
   if (block.type !== 'text') throw new Error(`Unexpected response block type: ${block.type}`);
   console.log('[briefing] raw response:', block.text);
+  warnIfHallucinated(block.text, userContent, 'briefing');
   _briefingCache.set(key, block.text);
   return block.text;
 }
@@ -807,6 +832,7 @@ Return ONLY a JSON object in this exact shape (no other text):
   if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
 
   const parsed = repairAndParseJSON<{ signals: Signal[] }>(block.text);
+  warnIfHallucinated(block.text, userContent, 'signals');
 
   // 4 — Persist to Supabase DB (fire-and-forget; failure is non-fatal)
   const generatedAt = await writeSignalsToDB(key, parsed.signals);
@@ -1029,6 +1055,7 @@ IMPORTANT: Include one risk about shadow impact (☀️ icon) and, if eviction_s
 
   const parsed = repairAndParseJSON<OutlookData>(block.text);
   console.log(`[generateOutlook] STEP 5 OK — events: ${parsed.events?.length}, risks: ${parsed.risks?.length}, engagement: ${parsed.engagement?.length}`);
+  warnIfHallucinated(block.text, userContent, 'outlook');
 
   // 4 — Persist to Supabase DB (fire-and-forget; failure is non-fatal)
   const generatedAt = await writeOutlookToDB(key, parsed);
@@ -1043,7 +1070,7 @@ function concernsSystemPrompt(district: DistrictConfig): string {
   const locale = district.number === '0'
     ? 'all of San Francisco'
     : `San Francisco ${district.label}${sup ? ` (Supervisor ${sup})` : ''}`;
-  return `You are an urban planning analyst for ${locale}. Analyze permit and development data and identify key public concerns for residents. Always return valid JSON only — no markdown, no prose, no code fences.`;
+  return `You are an urban planning analyst for ${locale}. Analyze permit and development data and identify key public concerns for residents. Always return valid JSON only — no markdown, no prose, no code fences.${ANTI_HALLUCINATION_RULES}`;
 }
 
 /**
@@ -1147,6 +1174,7 @@ Return ONLY a JSON object in this exact shape (no other text):
   if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
 
   const parsed = repairAndParseJSON<{ concerns: PublicConcern[] }>(block.text);
+  warnIfHallucinated(block.text, userContent, 'concerns');
 
   // 4 — Persist to Supabase DB (fire-and-forget; failure is non-fatal)
   const generatedAt = await writeConcernsToDB(key, parsed.concerns);
@@ -1296,16 +1324,29 @@ export async function generateBriefingOverview(
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 300,
+    max_tokens: 2000,
     messages: [{
       role: 'user',
-      content: `${ctx}\n\nWrite a 3–4 sentence morning news briefing overview for ${locationLabel}. Open with the most significant positive development or largest investment. Be specific: use real numbers, real addresses, real neighborhoods. If there are resident quotes, weave in one briefly. Close with one thing residents should watch. Tone: trusted local journalist, not activist. No advocacy language (no "crisis", "severe", "alarming"). No markdown, no bullet points. Plain prose only.`,
+      content: `${ctx}\n\nWrite a morning news briefing overview for ${locationLabel}.
+
+Structure your briefing in 3–4 short paragraphs separated by blank lines:
+
+Paragraph 1: Lead with the headline number and the single most important development.
+
+Paragraph 2: Permit activity breakdown — types, costs, notable addresses. Keep it concise.
+
+Paragraph 3: Community context — evictions, affordable housing pipeline, any hearing activity. If there are resident quotes, weave in one briefly.
+
+Paragraph 4 (optional): One forward-looking observation residents should watch.
+
+Each paragraph should be 2–3 sentences max. Write for a busy reader scanning on their phone. Be specific: use real numbers, real addresses, real neighborhoods. Tone: trusted local journalist, not activist. No advocacy language (no "crisis", "severe", "alarming"). No markdown formatting, no bullet points. Plain prose only, with blank lines between paragraphs.${ANTI_HALLUCINATION_RULES}`,
     }],
   });
 
   const block = message.content[0];
   if (block.type !== 'text') throw new Error('Unexpected response type');
   const overview = block.text.trim();
+  warnIfHallucinated(overview, ctx, 'overview');
 
   const generatedAt = await writeOverviewToDB(key, overview);
   const result = { overview, generatedAt };

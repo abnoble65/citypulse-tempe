@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
+import { renderInlineMarkdown } from "../components/MarkdownText";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
@@ -57,7 +58,7 @@ function SignalCard({ signal, payload }: { signal: Signal; payload: CC3DPayload 
       <p style={{
         fontFamily: FONTS.body, fontSize: 15, lineHeight: 1.75,
         color: COLORS.midGray, margin: 0,
-      }}>{signal.body}</p>
+      }}>{renderInlineMarkdown(signal.body)}</p>
 
       {!!signal.concern && (
         <div style={{
@@ -69,7 +70,7 @@ function SignalCard({ signal, payload }: { signal: Signal; payload: CC3DPayload 
           <p style={{
             fontFamily: FONTS.body, fontSize: 13.5, lineHeight: 1.65,
             color: COLORS.charcoal, fontWeight: 500, margin: 0,
-          }}>{signal.concern}</p>
+          }}>{renderInlineMarkdown(signal.concern)}</p>
         </div>
       )}
       <ViewIn3DButton payload={payload} />
@@ -115,7 +116,7 @@ function ConcernItem({ level, title, detail, payload }: {
         <p style={{
           fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.7,
           color: COLORS.midGray, margin: 0,
-        }}>{detail}</p>
+        }}>{renderInlineMarkdown(detail)}</p>
         <ViewIn3DButton payload={payload} />
       </div>
     </div>

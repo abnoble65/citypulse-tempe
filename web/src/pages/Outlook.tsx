@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
+import { renderInlineMarkdown } from "../components/MarkdownText";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
@@ -70,7 +71,7 @@ function WatchItem({ event }: { event: OutlookEvent }) {
       <p style={{
         fontFamily: FONTS.body, fontSize: 14.5, lineHeight: 1.75,
         color: COLORS.midGray, marginBottom: 10,
-      }}>{event.detail}</p>
+      }}>{renderInlineMarkdown(event.detail)}</p>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
         <span style={{
           fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
@@ -80,7 +81,7 @@ function WatchItem({ event }: { event: OutlookEvent }) {
         <p style={{
           fontFamily: FONTS.body, fontSize: 13, lineHeight: 1.6,
           color: COLORS.charcoal, fontWeight: 500, margin: 0,
-        }}>{event.impact}</p>
+        }}>{renderInlineMarkdown(event.impact)}</p>
       </div>
     </div>
   );
@@ -107,7 +108,7 @@ function RiskCard({ risk }: { risk: OutlookRisk }) {
       <p style={{
         fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.7,
         color: COLORS.midGray, margin: 0,
-      }}>{risk.detail}</p>
+      }}>{renderInlineMarkdown(risk.detail)}</p>
     </div>
   );
 }
@@ -135,7 +136,7 @@ function EngagementCard({ item }: { item: OutlookEngagement }) {
         <p style={{
           fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.65,
           color: COLORS.midGray, margin: 0,
-        }}>{item.detail}</p>
+        }}>{renderInlineMarkdown(item.detail)}</p>
       </div>
     </div>
   );
@@ -173,18 +174,18 @@ function ConcernCard({ concern }: { concern: PublicConcern }) {
         <p style={{
           fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.7,
           color: COLORS.midGray, margin: 0, marginBottom: 6,
-        }}>{concern.evidence}</p>
+        }}>{renderInlineMarkdown(concern.evidence)}</p>
         <p style={{
           fontFamily: FONTS.body, fontSize: 13, lineHeight: 1.65,
           color: COLORS.charcoal, fontWeight: 500, margin: 0, marginBottom: 4,
         }}>
-          <strong>Affects: </strong>{concern.affects}
+          <strong>Affects: </strong>{renderInlineMarkdown(concern.affects)}
         </p>
         <p style={{
           fontFamily: FONTS.body, fontSize: 13, lineHeight: 1.65,
           color: COLORS.charcoal, fontWeight: 500, margin: 0,
         }}>
-          <strong>Action: </strong>{concern.action}
+          <strong>Action: </strong>{renderInlineMarkdown(concern.action)}
         </p>
       </div>
     </div>

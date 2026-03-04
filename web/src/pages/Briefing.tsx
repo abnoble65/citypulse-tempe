@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
+import { renderMarkdownBlock } from "../components/MarkdownText";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { parseBriefingSections, generateBriefingFromData, generateBriefingOverview, getCachedBriefingOverview } from "../services/briefing";
@@ -292,12 +293,12 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
                   </>
                 ) : (
                   <>
-                    <p style={{
-                      fontFamily: FONTS.body, fontSize: 15.5, lineHeight: 1.8,
-                      color: COLORS.charcoal, margin: 0,
+                    <div style={{
+                      fontFamily: FONTS.body, fontSize: 15.5,
+                      color: COLORS.charcoal,
                     }}>
-                      {overview}
-                    </p>
+                      {renderMarkdownBlock(overview!)}
+                    </div>
                     {overviewGeneratedAt && (
                       <p style={{
                         fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray,
@@ -321,9 +322,9 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
               boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
             }}>
               {sections.briefing ? (
-                <p style={{ whiteSpace: "pre-wrap" }}>
-                  {sections.briefing}
-                </p>
+                <div>
+                  {renderMarkdownBlock(sections.briefing)}
+                </div>
               ) : (
                 <p style={{ color: COLORS.warmGray, fontStyle: "italic" }}>
                   Briefing content unavailable — the AI response may not have followed the expected format.

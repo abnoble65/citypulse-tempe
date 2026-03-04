@@ -171,7 +171,7 @@ const LAYER_META: { key: keyof LayerState; label: string; color: string }[] = [
   { key: "permits",       label: "Building Permits",        color: "#4A7FD0" },
   { key: "affordable",    label: "Affordable Housing",      color: AFFORDABLE_COLOR },
   { key: "evictions",     label: "Eviction Notices",        color: EVICTION_COLOR },
-  { key: "neighborhoods", label: "Neighborhood Boundaries", color: "#4A6FA5" },
+  { key: "neighborhoods", label: "Neighborhood Boundaries", color: "#94a3b8" },
 ];
 
 function LayerPanel({
@@ -415,6 +415,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
   const [evictions, setEvictions]   = useState<EvictionRow[]>([]);
   const [ahMarkers, setAhMarkers]  = useState<AHMarker[]>([]);
   const [nhGeoJSON, setNhGeoJSON]  = useState<GeoJSON.FeatureCollection | null>(null);
+  const [districtGeoJSON, setDistrictGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
 
   const center = DISTRICT_CENTERS[districtConfig.number] ?? DISTRICT_CENTERS["3"];
   const zoom   = DISTRICT_ZOOM[districtConfig.number]   ?? 14;
@@ -528,6 +529,15 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
       .catch(err => console.warn("[MapPage] neighborhoods fetch failed:", err));
   }, []);
 
+  // ── Fetch supervisor district boundary (for "All District X" outline) ────
+  useEffect(() => {
+    if (districtConfig.number === "0") { setDistrictGeoJSON(null); return; }
+    fetch(`${DATASF}/mbd2-a7qz.geojson?$where=sup_dist_num='${districtConfig.number}'&$limit=1`)
+      .then(r => r.json())
+      .then((geojson: GeoJSON.FeatureCollection) => setDistrictGeoJSON(geojson))
+      .catch(err => { console.warn("[MapPage] district boundary fetch failed:", err); setDistrictGeoJSON(null); });
+  }, [districtConfig]);
+
   // ── Layer toggle ──────────────────────────────────────────────────────────
   const toggleLayer = useCallback((key: keyof LayerState, val: boolean) => {
     setLayers(prev => ({ ...prev, [key]: val }));
@@ -539,6 +549,14 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
     return nh?.geoName ?? null;
   }, [districtConfig, filter]);
 
+  // Compute bounding box of selected neighborhood for marker filtering
+  const selectedBounds = useMemo(() => {
+    if (!selectedGeoName || !nhGeoJSON) return null;
+    const feat = nhGeoJSON.features.find(f => f.properties?.name === selectedGeoName);
+    if (!feat) return null;
+    return boundsFromCoords((feat.geometry as any).coordinates);
+  }, [selectedGeoName, nhGeoJSON]);
+
   // GeoJSON key must change when data OR selection changes to force re-render
   const nhKey = useMemo(
     () => `nh-${nhGeoJSON ? nhGeoJSON.features.length : 0}-${selectedGeoName ?? "all"}`,
@@ -549,9 +567,10 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
     if (!feature) return {};
     const name = feature.properties?.name;
     const isSelected = selectedGeoName && name === selectedGeoName;
-    return isSelected
+    const base = isSelected
       ? { color: "#E8652D", weight: 3, fillColor: "#E8652D", fillOpacity: 0.08 }
       : { color: "#94a3b8", weight: 1, fillColor: "transparent", fillOpacity: 0 };
+    return { ...base, interactive: false };
   }, [selectedGeoName]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -578,6 +597,19 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
 
           <MapController districtConfig={districtConfig} filter={filter} />
 
+          {/* District boundary outline (shown when "All District X" is selected) */}
+          {!selectedGeoName && districtGeoJSON && layers.neighborhoods && (
+            <GeoJSON
+              key={`dist-${districtConfig.number}`}
+              data={districtGeoJSON}
+              style={() => ({
+                color: "#E8652D", weight: 3,
+                fillColor: "#E8652D", fillOpacity: 0.04,
+                interactive: false,
+              })}
+            />
+          )}
+
           {/* Neighborhood Boundaries */}
           {layers.neighborhoods && nhGeoJSON && (
             <>
@@ -595,6 +627,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
             if (!r.location?.coordinates) return null;
             const [lng, lat] = r.location.coordinates;
             if (isNaN(lat) || isNaN(lng)) return null;
+            if (selectedBounds && !selectedBounds.contains(L.latLng(lat, lng))) return null;
             const cost  = r.estimated_cost != null ? parseFloat(String(r.estimated_cost)) : null;
             const ptype = classifyPermit(r.permit_type_definition ?? null);
             const color = PERMIT_COLOR[ptype];
@@ -642,6 +675,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
             if (!r.shape?.coordinates) return null;
             const [lng, lat] = r.shape.coordinates;
             if (isNaN(lat) || isNaN(lng)) return null;
+            if (selectedBounds && !selectedBounds.contains(L.latLng(lat, lng))) return null;
 
             const fmtBool = (v: boolean | undefined) => v === true ? "Yes" : v === false ? "No" : "—";
             const fmtDate = (d?: string) => {
@@ -693,7 +727,9 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
           })}
 
           {/* Affordable Housing */}
-          {layers.affordable && ahMarkers.map((m, i) => (
+          {layers.affordable && ahMarkers.filter(m =>
+            !selectedBounds || selectedBounds.contains(L.latLng(m.lat, m.lng))
+          ).map((m, i) => (
             <CircleMarker
               key={`ah-${i}`}
               center={[m.lat, m.lng]}

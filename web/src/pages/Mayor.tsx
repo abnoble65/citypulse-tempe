@@ -162,19 +162,26 @@ function NewsCard({ item }: { item: MayorNewsItem }) {
 
       {/* Footer: districts + source link */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-        {districts.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {districts.map(d => (
-              <span key={d} style={{
-                fontFamily: FONTS.body, fontSize: 11, fontWeight: 600,
-                color: COLORS.orange, background: COLORS.orangePale,
-                borderRadius: 6, padding: "3px 8px",
-              }}>
-                {d === "citywide" ? "🌁 Citywide" : `D${d}`}
-              </span>
-            ))}
-          </div>
-        )}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {districts.length > 0 ? districts.map(d => (
+            <span key={d} style={{
+              fontFamily: FONTS.body, fontSize: 11, fontWeight: 600,
+              color: COLORS.orange, background: COLORS.orangePale,
+              borderRadius: 6, padding: "3px 8px",
+            }}>
+              {d === "citywide" ? "Citywide" : `D${d}`}
+            </span>
+          )) : (
+            <span style={{
+              fontFamily: FONTS.body, fontSize: 11, fontWeight: 600,
+              color: COLORS.warmGray, background: COLORS.cream,
+              border: `1px solid ${COLORS.lightBorder}`,
+              borderRadius: 6, padding: "3px 8px",
+            }}>
+              Citywide
+            </span>
+          )}
+        </div>
         {item.url && (
           <a
             href={item.url}
@@ -257,6 +264,14 @@ export function Mayor({ districtConfig }: MayorProps) {
     }
 
     return true;
+  }).sort((a, b) => {
+    // When a district is selected, show district-specific items first
+    if (distFilter !== "all") {
+      const aSpecific = (a.districts ?? []).includes(distFilter) ? 0 : 1;
+      const bSpecific = (b.districts ?? []).includes(distFilter) ? 0 : 1;
+      if (aSpecific !== bSpecific) return aSpecific - bSpecific;
+    }
+    return 0; // preserve date order within each group
   });
 
   // ── Render ────────────────────────────────────────────────────────────────────

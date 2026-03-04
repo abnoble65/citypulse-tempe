@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { COLORS, FONTS } from "../theme";
+import { renderInlineMarkdown } from "../components/MarkdownText";
 import { CityPulseLogo } from "../components/Icons";
 import { supabase } from "../services/supabase";
 import {
@@ -520,7 +521,7 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
                     fontFamily: FONTS.body, fontSize: 15, lineHeight: 1.78,
                     color: COLORS.charcoal, margin: "0 0 14px",
                   }}>
-                    {firstSentences(overview, 3)}
+                    {renderInlineMarkdown(firstSentences(overview, 3))}
                   </p>
                   <NavLink label="See full briefing" onClick={() => onNavigate("Briefing")} />
                 </>
@@ -596,7 +597,7 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
               fontFamily: FONTS.body, fontSize: 14.5, lineHeight: 1.75,
               color: COLORS.midGray, margin: 0, flex: 1,
             }}>
-              {topSignal.body}
+              {renderInlineMarkdown(topSignal.body)}
             </p>
             {topSignal.concern && (
               <div style={{
@@ -609,7 +610,7 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
                   fontFamily: FONTS.body, fontSize: 13, lineHeight: 1.65,
                   color: COLORS.charcoal, fontWeight: 500, margin: 0,
                 }}>
-                  {topSignal.concern}
+                  {renderInlineMarkdown(topSignal.concern)}
                 </p>
               </div>
             )}
@@ -647,7 +648,7 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
               fontFamily: FONTS.body, fontSize: 14.5, lineHeight: 1.75,
               color: COLORS.midGray, margin: 0, flex: 1,
             }}>
-              {topConcern.evidence}
+              {renderInlineMarkdown(topConcern.evidence)}
             </p>
             <ViewIn3DButton payload={cc3dPayload} />
             <ActionRow

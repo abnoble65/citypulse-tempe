@@ -82,12 +82,14 @@ export function SupervisorAvatar({
           <img
             src={imgPath}
             alt={info.name}
+            loading="lazy"
             style={{
               width: "100%", height: "100%",
               objectFit: "cover",
               objectPosition: "center top",
               display: "block",
               transform: "scale(1.05)",
+              imageRendering: "auto",
             }}
           />
         ) : (
