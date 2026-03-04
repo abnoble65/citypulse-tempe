@@ -266,16 +266,31 @@ export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
           </p>
         )}
 
-        {/* Loading skeletons — visible during generation AND when no signals yet */}
+        {/* Loading spinner + skeletons — visible during generation AND when no signals yet */}
         {(isGenerating || !signals) && (
           <>
-            {console.log("Signals skeleton visible")}
+            <style>{`@keyframes cp-spin { to { transform: rotate(360deg); } }`}</style>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 28 }}>
+              <div style={{
+                width: 20, height: 20, flexShrink: 0,
+                border: "2.5px solid #EDE8E3", borderTopColor: COLORS.orange,
+                borderRadius: "50%", animation: "cp-spin 0.75s linear infinite",
+              }} />
+              <p style={{
+                fontFamily: FONTS.body, fontSize: 14, fontWeight: 500,
+                color: COLORS.warmGray, margin: 0,
+              }}>
+                Generating insights for {locationLabel}…
+              </p>
+            </div>
+
             {[0, 1, 2, 3].map(i => (
               <div key={i} style={{
                 background: COLORS.white, borderRadius: 20,
                 padding: "clamp(20px, 4vw, 32px) clamp(16px, 4vw, 36px)",
                 marginBottom: 20,
                 border: `1px solid ${COLORS.lightBorder}`,
+                boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
                   <div className="sk" style={{ height: 22, flex: 1, marginRight: 16 }} />
