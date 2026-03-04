@@ -15,6 +15,7 @@ import {
   isPointInNeighborhoodSync,
   type BoundaryMap,
 } from "../utils/geoFilter";
+import { ViewIn3DButton } from "../components/ViewIn3D";
 
 const CommissionMapLazy = lazy(() =>
   import("../components/CommissionMap").then(m => ({ default: m.CommissionMap }))
@@ -306,6 +307,16 @@ function ProjectDetailCard({ project }: { project: LiveProject }) {
           )}
         </div>
       )}
+
+      {/* View in 3D */}
+      <ViewIn3DButton payload={{
+        address: project.address,
+        lat: project.lat ?? null,
+        lng: project.lng ?? null,
+        parcel_apn: null,
+        district: project.district ?? "Unknown",
+        active_layers: ["commission"],
+      }} />
     </div>
   );
 }

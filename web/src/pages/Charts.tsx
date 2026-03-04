@@ -1136,7 +1136,7 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
                       display: "flex", justifyContent: "space-between",
-                      alignItems: "baseline", marginBottom: 6,
+                      alignItems: "baseline", marginBottom: 2,
                     }}>
                       <span style={{
                         fontSize: 14, fontWeight: 600, color: COLORS.charcoal,
@@ -1149,6 +1149,20 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
                         fontFamily: "'Urbanist', sans-serif",
                       }}>${(p.estimated_cost_usd / 1_000_000).toFixed(1)}M</span>
                     </div>
+                    {(p.permit_count > 1 || p.related_address) && (
+                      <div style={{
+                        fontSize: 11, color: COLORS.warmGray, fontFamily: FONTS.body,
+                        marginBottom: 4, lineHeight: 1.4,
+                      }}>
+                        {p.permit_count > 1 && (
+                          <span>{p.permit_count} permits combined</span>
+                        )}
+                        {p.permit_count > 1 && p.related_address && <span> · </span>}
+                        {p.related_address && (
+                          <span style={{ fontStyle: "italic" }}>May be related to {p.related_address}</span>
+                        )}
+                      </div>
+                    )}
                     <div style={{ height: 6, background: COLORS.cream, borderRadius: 3, overflow: "hidden" }}>
                       <div style={{
                         width: `${(p.estimated_cost_usd / maxVal) * 100}%`,

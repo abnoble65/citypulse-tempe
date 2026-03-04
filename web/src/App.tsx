@@ -6,7 +6,7 @@ import { Home } from "./pages/Home";
 import { generateBriefing } from "./services/briefing";
 import type { DistrictData } from "./services/briefing";
 import { aggregateDistrictData, aggregateCitywideData } from "./services/aggregator";
-import { DEFAULT_DISTRICT } from "./districts";
+import { DEFAULT_DISTRICT, DISTRICTS, CITYWIDE_DISTRICT } from "./districts";
 import type { DistrictConfig } from "./districts";
 import { CityPulseLogo } from "./components/Icons";
 import { CityPulseChat } from "./components/CityPulseChat";
@@ -143,9 +143,21 @@ export default function App() {
   });
   const [briefingText, setBriefingText]       = useState("");
   const [aggregatedData, setAggregatedData]   = useState<DistrictData | null>(null);
-  const [districtConfig, setDistrictConfig]   = useState<DistrictConfig>(DEFAULT_DISTRICT);
+  const [districtConfig, setDistrictConfig]   = useState<DistrictConfig>(() => {
+    try {
+      const saved = localStorage.getItem("citypulse_district");
+      if (saved === "0") return CITYWIDE_DISTRICT;
+      if (saved && DISTRICTS[saved]) return DISTRICTS[saved];
+    } catch { /* ignore */ }
+    return DEFAULT_DISTRICT;
+  });
   const [loading, setLoading]                 = useState(false);
   const [error, setError]                     = useState<string | null>(null);
+
+  // Persist district selection to localStorage
+  useEffect(() => {
+    try { localStorage.setItem("citypulse_district", districtConfig.number); } catch { /* ignore */ }
+  }, [districtConfig.number]);
 
   // Keep URL in sync with page state
   function navigate(newPage: string) {

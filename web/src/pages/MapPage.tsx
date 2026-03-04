@@ -29,6 +29,8 @@ import { FilterBar } from "../components/FilterBar";
 import { geocodeAddresses } from "../services/geocoder";
 import type { DistrictConfig } from "../districts";
 import { loadNeighborhoodBoundaries } from "../utils/geoFilter";
+import { ViewIn3DButton } from "../components/ViewIn3D";
+import { cleanPermitLabel } from "../services/aggregator";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -615,7 +617,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
                     <strong>{addr}</strong>
                     <table style={{ marginTop: 6, fontSize: 12, borderCollapse: "collapse" }}>
                       <tbody>
-                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Type</td><td>{(r.permit_type_definition ?? "Permit").replace(/\b\w/g, c => c.toUpperCase())}</td></tr>
+                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Type</td><td>{cleanPermitLabel(r.permit_type_definition ?? "Permit")}</td></tr>
                         <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Status</td><td>{(r.status ?? "—").replace(/\b\w/g, c => c.toUpperCase())}</td></tr>
                         <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Est. Cost</td><td>{fmtCost(cost)}</td></tr>
                         <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Permit #</td><td>{r.permit_number ?? ""}</td></tr>
@@ -624,6 +626,11 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
                     {r.description && (
                       <p style={{ margin: "8px 0 4px", fontSize: 12, color: COLORS.midGray }}>{(r.description).slice(0, 160)}</p>
                     )}
+                    <ViewIn3DButton compact payload={{
+                      address: addr, lat, lng, parcel_apn: null,
+                      district: districtConfig.label,
+                      active_layers: ["permits"],
+                    }} />
                   </div>
                 </Popup>
               </CircleMarker>
@@ -674,6 +681,11 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
                         <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Breach</td><td>{fmtBool(r.breach)}</td></tr>
                       </tbody>
                     </table>
+                    <ViewIn3DButton compact payload={{
+                      address: r.address ?? null, lat, lng, parcel_apn: null,
+                      district: districtConfig.label,
+                      active_layers: ["evictions"],
+                    }} />
                   </div>
                 </Popup>
               </Marker>
@@ -705,6 +717,11 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
                       <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Est. Completion</td><td>{m.completion}</td></tr>
                     </tbody>
                   </table>
+                  <ViewIn3DButton compact payload={{
+                    address: m.address, lat: m.lat, lng: m.lng, parcel_apn: null,
+                    district: districtConfig.label,
+                    active_layers: ["affordable"],
+                  }} />
                 </div>
               </Popup>
             </CircleMarker>

@@ -9,6 +9,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { aggregateDistrictData, aggregateCitywideData, type DistrictData } from './aggregator';
 import { supabase } from './supabase';
 import type { DistrictConfig } from '../districts';
+import { getSupervisorName } from '../components/SupervisorAvatar';
 
 interface ShadowProject {
   address: string | null;
@@ -492,7 +493,7 @@ function contentCacheKey(
   district: DistrictConfig,
   focus?: { zip: string; name: string },
 ): string {
-  return `${district.number}:${focus?.zip ?? 'all'}`;
+  return `D${district.number}:${focus?.zip ?? 'all'}`;
 }
 
 /** Synchronous cache read — use in lazy useState initialisers to skip loading flash. */
@@ -519,14 +520,28 @@ export function getCachedConcerns(
   return _concernsCache.get(contentCacheKey(district, focus)) ?? null;
 }
 
-const SYSTEM_PROMPT = `You are CityPulse, an urban intelligence analyst specializing in San Francisco's built environment. Your role is to synthesize permit activity, development pipeline data, and zoning context into clear, narrative-driven briefings for urban planners, developers, and municipal clients. Always produce exactly four sections with these exact headings: THE BRIEFING, THE SIGNAL, THE ZONING CONTEXT, THE OUTLOOK. Total length 450-600 words. Write in confident prose, no bullet points. Use specific numbers from the data.`;
-
-function signalsSystemPrompt(districtLabel: string): string {
-  return `You are an urban planning analyst for San Francisco ${districtLabel}. Analyze permit and development data and identify key signals and trends. Always return valid JSON only — no markdown, no prose, no code fences.`;
+function briefingSystemPrompt(district: DistrictConfig): string {
+  const sup = getSupervisorName(district.number);
+  const locale = district.number === '0'
+    ? 'all of San Francisco'
+    : `San Francisco ${district.label}${sup ? ` (Supervisor ${sup})` : ''}`;
+  return `You are CityPulse, an urban intelligence analyst specializing in ${locale}. Your role is to synthesize permit activity, development pipeline data, and zoning context into clear, narrative-driven briefings for urban planners, developers, and municipal clients. Always produce exactly four sections with these exact headings: THE BRIEFING, THE SIGNAL, THE ZONING CONTEXT, THE OUTLOOK. Total length 450-600 words. Write in confident prose, no bullet points. Use specific numbers from the data.`;
 }
 
-function outlookSystemPrompt(districtLabel: string): string {
-  return `You are an urban planning analyst for San Francisco ${districtLabel}. Analyze permit and development data and produce a forward-looking outlook. Always return valid JSON only — no markdown, no prose, no code fences.`;
+function signalsSystemPrompt(district: DistrictConfig): string {
+  const sup = getSupervisorName(district.number);
+  const locale = district.number === '0'
+    ? 'all of San Francisco'
+    : `San Francisco ${district.label}${sup ? ` (Supervisor ${sup})` : ''}`;
+  return `You are an urban planning analyst for ${locale}. Analyze permit and development data and identify key signals and trends. Always return valid JSON only — no markdown, no prose, no code fences.`;
+}
+
+function outlookSystemPrompt(district: DistrictConfig): string {
+  const sup = getSupervisorName(district.number);
+  const locale = district.number === '0'
+    ? 'all of San Francisco'
+    : `San Francisco ${district.label}${sup ? ` (Supervisor ${sup})` : ''}`;
+  return `You are an urban planning analyst for ${locale}. Analyze permit and development data and produce a forward-looking outlook. Always return valid JSON only — no markdown, no prose, no code fences.`;
 }
 
 export interface BriefingSections {
@@ -657,7 +672,7 @@ export async function generateBriefingFromData(
   const message = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
-    system: SYSTEM_PROMPT,
+    system: briefingSystemPrompt(district),
     messages: [{ role: 'user', content: userContent }],
   });
   console.log(`[briefing] claude-sonnet-4-6: ${(performance.now() - t0).toFixed(0)}ms`);
@@ -783,7 +798,7 @@ Return ONLY a JSON object in this exact shape (no other text):
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
-    system: signalsSystemPrompt(district.label),
+    system: signalsSystemPrompt(district),
     messages: [{ role: 'user', content: userContent }],
   });
   console.log(`[signals] claude-haiku: ${(performance.now() - t0).toFixed(0)}ms`);
@@ -917,7 +932,7 @@ export async function generateOutlook(
   const locationLabel = focus ? focus.name : district.label;
 
   const shadowBlock = shadowTotal > 0
-    ? `\nSHADOW-FLAGGED PROJECTS — DISTRICT 3 (${shadowTotal} projects flagged for Section 295 shadow-impact review; ${shadowProjects.length} shown below):
+    ? `\nSHADOW-FLAGGED PROJECTS — ${district.label.toUpperCase()} (${shadowTotal} projects flagged for Section 295 shadow-impact review; ${shadowProjects.length} shown below):
 ${shadowProjects.map(p => `- ${p.address}: ${p.shadow_details ?? p.project_description ?? '(no detail)'}`).join('\n')}\n`
     : '';
 
@@ -1001,7 +1016,7 @@ IMPORTANT: Include one risk about shadow impact (☀️ icon) and, if eviction_s
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
-    system: outlookSystemPrompt(district.label),
+    system: outlookSystemPrompt(district),
     messages: [{ role: 'user', content: userContent }],
   });
 
@@ -1023,8 +1038,12 @@ IMPORTANT: Include one risk about shadow impact (☀️ icon) and, if eviction_s
   return result;
 }
 
-function concernsSystemPrompt(districtLabel: string): string {
-  return `You are an urban planning analyst for San Francisco ${districtLabel}. Analyze permit and development data and identify key public concerns for residents. Always return valid JSON only — no markdown, no prose, no code fences.`;
+function concernsSystemPrompt(district: DistrictConfig): string {
+  const sup = getSupervisorName(district.number);
+  const locale = district.number === '0'
+    ? 'all of San Francisco'
+    : `San Francisco ${district.label}${sup ? ` (Supervisor ${sup})` : ''}`;
+  return `You are an urban planning analyst for ${locale}. Analyze permit and development data and identify key public concerns for residents. Always return valid JSON only — no markdown, no prose, no code fences.`;
 }
 
 /**
@@ -1119,7 +1138,7 @@ Return ONLY a JSON object in this exact shape (no other text):
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
-    system: concernsSystemPrompt(district.label),
+    system: concernsSystemPrompt(district),
     messages: [{ role: 'user', content: userContent }],
   });
   console.log(`[concerns] claude-haiku: ${(performance.now() - t0).toFixed(0)}ms`);
@@ -1262,8 +1281,9 @@ export async function generateBriefingOverview(
   }
 
   const locationLabel = focus ? focus.name : district.label;
+  const sup = getSupervisorName(district.number);
   const ctx = [
-    `Location: ${locationLabel}`,
+    `Location: ${locationLabel}${sup ? ` (Supervisor ${sup})` : ''}`,
     `Total active permits: ${ps.total.toLocaleString()}`,
     topPermit
       ? `Largest permit: $${(topPermit.estimated_cost_usd / 1_000_000).toFixed(1)}M at ${topPermit.address}`

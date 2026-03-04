@@ -20,6 +20,9 @@ import {
 } from "../services/briefing";
 import type { DistrictData, Signal, PublicConcern } from "../services/briefing";
 import type { DistrictConfig } from "../districts";
+import { getSupervisorName } from "../components/SupervisorAvatar";
+import { ViewIn3DButton } from "../components/ViewIn3D";
+import type { CC3DPayload } from "../components/ViewIn3D";
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 
@@ -415,6 +418,13 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
     });
   }, []);
 
+  // ── CC3D payload ──────────────────────────────────────────────────────────────
+  const cc3dPayload: CC3DPayload = {
+    address: null, lat: null, lng: null, parcel_apn: null,
+    district: districtConfig.label,
+    active_layers: ["pulse"],
+  };
+
   // ── Stats ─────────────────────────────────────────────────────────────────────
   const ps  = aggregatedData?.permit_summary;
   const pip = aggregatedData?.pipeline_summary;
@@ -487,7 +497,11 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
                   color: COLORS.charcoal, lineHeight: 1.1,
                   letterSpacing: "-0.02em", margin: 0,
                 }}>
-                  {getGreeting()},<br />{districtConfig.label}.
+                  {getGreeting()},<br />{districtConfig.label}.{getSupervisorName(districtConfig.number) && (
+                    <span style={{ display: "block", fontSize: "clamp(14px, 3.5vw, 17px)", fontWeight: 500, color: COLORS.warmGray, marginTop: 4 }}>
+                      Sup. {getSupervisorName(districtConfig.number)}
+                    </span>
+                  )}
                 </h1>
               </div>
               <CityPulseLogo size={34} />
@@ -599,6 +613,7 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
                 </p>
               </div>
             )}
+            <ViewIn3DButton payload={cc3dPayload} />
             <ActionRow
               cardId={`signal:${topSignal.title.slice(0, 32)}`}
               shareTitle={topSignal.title}
@@ -634,6 +649,7 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
             }}>
               {topConcern.evidence}
             </p>
+            <ViewIn3DButton payload={cc3dPayload} />
             <ActionRow
               cardId={`concern:${topConcern.headline.slice(0, 32)}`}
               shareTitle={topConcern.headline}

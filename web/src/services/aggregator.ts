@@ -47,6 +47,12 @@ export interface NotablePermit {
   estimated_cost_usd: number;
   status: string;
   zipcode?: string;
+  /** Number of permits grouped at this address (1 = single permit). */
+  permit_count: number;
+  /** All permit numbers when grouped (for expand/detail). */
+  permit_numbers: string[];
+  /** Flag: nearby address that may be part of the same project. */
+  related_address?: string;
 }
 
 /** Lightweight permit record used exclusively for map rendering. */
@@ -196,6 +202,97 @@ export interface DistrictData {
   citywide_prompt_summary?: CitywideDistrictSummary[];
 }
 
+// ── Permit label cleanup ─────────────────────────────────────────────────────
+
+const PERMIT_LABEL_MAP: Record<string, string> = {
+  'otc alterations permit':         'Interior Renovation',
+  'additions alterations or repairs': 'Addition / Renovation',
+  'sign - erect':                   'Sign Installation',
+  'demolitions':                    'Demolition',
+  'new construction':               'New Construction',
+  'new construction wood frame':    'New Construction (Wood Frame)',
+};
+
+/** Clean a raw DataSF permit_type_definition into a human-friendly label. */
+export function cleanPermitLabel(raw: string): string {
+  const key = raw.toLowerCase().trim();
+  if (PERMIT_LABEL_MAP[key]) return PERMIT_LABEL_MAP[key];
+  // Fallback: title-case the raw value
+  return raw.replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// ── Address normalization & dedup ─────────────────────────────────────────────
+
+/** Strip unit/suite/apt/# suffixes and normalize for grouping. */
+function normalizeAddress(addr: string): string {
+  return addr
+    .trim()
+    .toLowerCase()
+    .replace(/\s+(unit|suite|ste|apt|#|fl|floor|rm|room)\s*.*/i, '')
+    .replace(/\s+/g, ' ');
+}
+
+/** Parse street number and street name from an address. */
+function parseStreetParts(addr: string): { num: number; street: string } | null {
+  const m = addr.match(/^(\d+)\s+(.+)/);
+  if (!m) return null;
+  return { num: parseInt(m[1], 10), street: m[2].toLowerCase().trim() };
+}
+
+/** Group notable permits by normalized address, combining costs. */
+function deduplicateNotablePermits(permits: NotablePermit[]): NotablePermit[] {
+  // Step 1: Group by normalized address
+  const groups = new Map<string, NotablePermit[]>();
+  for (const p of permits) {
+    const key = normalizeAddress(p.address);
+    const arr = groups.get(key) ?? [];
+    arr.push(p);
+    groups.set(key, arr);
+  }
+
+  // Step 2: Merge each group into a single entry
+  const merged: NotablePermit[] = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      merged.push({ ...group[0], permit_count: 1, permit_numbers: [group[0].permit_number] });
+      continue;
+    }
+    // Pick the highest-cost permit for display fields
+    group.sort((a, b) => b.estimated_cost_usd - a.estimated_cost_usd);
+    const best = group[0];
+    merged.push({
+      permit_number: best.permit_number,
+      address: best.address,
+      description: best.description,
+      estimated_cost_usd: group.reduce((sum, p) => sum + p.estimated_cost_usd, 0),
+      status: best.status,
+      zipcode: best.zipcode,
+      permit_count: group.length,
+      permit_numbers: group.map(p => p.permit_number),
+    });
+  }
+
+  // Step 3: Sort by combined cost descending
+  merged.sort((a, b) => b.estimated_cost_usd - a.estimated_cost_usd);
+
+  // Step 4: Flag adjacent addresses that may be the same project
+  for (let i = 0; i < merged.length; i++) {
+    const pi = parseStreetParts(normalizeAddress(merged[i].address));
+    if (!pi) continue;
+    for (let j = i + 1; j < merged.length; j++) {
+      const pj = parseStreetParts(normalizeAddress(merged[j].address));
+      if (!pj) continue;
+      if (pi.street !== pj.street) continue;
+      if (Math.abs(pi.num - pj.num) > 20) continue;
+      // Same street, within 20 numbers — flag both
+      if (!merged[i].related_address) merged[i].related_address = merged[j].address;
+      if (!merged[j].related_address) merged[j].related_address = merged[i].address;
+    }
+  }
+
+  return merged;
+}
+
 function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {
   const result: Record<string, number> = {};
   for (const item of items) {
@@ -215,13 +312,13 @@ function isoDate(d: Date): string {
 }
 
 function buildZipSummary(permits: BuildingPermit[]): ZipPermitSummary {
-  const by_type = countBy(permits, (p) => p.permit_type_definition ?? p.permit_type);
+  const by_type = countBy(permits, (p) => cleanPermitLabel(p.permit_type_definition ?? p.permit_type));
   const by_status = countBy(permits, (p) => p.status);
   const cost_by_type: Record<string, number> = {};
   let total_estimated_cost_usd = 0;
   for (const p of permits) {
     const cost = parseCost(p.revised_cost ?? p.estimated_cost);
-    const type = p.permit_type_definition ?? p.permit_type;
+    const type = cleanPermitLabel(p.permit_type_definition ?? p.permit_type);
     cost_by_type[type] = (cost_by_type[type] ?? 0) + cost;
     total_estimated_cost_usd += cost;
   }
@@ -231,7 +328,7 @@ function buildZipSummary(permits: BuildingPermit[]): ZipPermitSummary {
 function buildPermitSummary(permits: BuildingPermit[]): PermitSummary {
   const base = buildZipSummary(permits);
 
-  const notable_permits: NotablePermit[] = permits
+  const rawNotable: NotablePermit[] = permits
     .filter((p) => parseCost(p.revised_cost ?? p.estimated_cost) > 1_000_000)
     .map((p) => ({
       permit_number: p.permit_number,
@@ -240,7 +337,10 @@ function buildPermitSummary(permits: BuildingPermit[]): PermitSummary {
       estimated_cost_usd: parseCost(p.revised_cost ?? p.estimated_cost),
       status: p.status,
       zipcode: p.zipcode?.trim(),
+      permit_count: 1,
+      permit_numbers: [p.permit_number],
     }));
+  const notable_permits = deduplicateNotablePermits(rawNotable);
 
   // Bucket permits by zip code for client-side filtering
   const byZipMap: Record<string, BuildingPermit[]> = {};
@@ -616,7 +716,7 @@ export async function aggregateDistrictData(district: DistrictConfig): Promise<D
     .map(p => ({
       permit_number: p.permit_number,
       address: [p.street_number, p.street_name, p.street_suffix].filter(Boolean).join(' '),
-      permit_type_definition: p.permit_type_definition ?? p.permit_type,
+      permit_type_definition: cleanPermitLabel(p.permit_type_definition ?? p.permit_type),
       status: p.status,
       filed_date: (p.filed_date ?? '').split('T')[0],
       lat: p.location!.coordinates[1],

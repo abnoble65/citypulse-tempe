@@ -9,6 +9,8 @@ import { generateSignals, getCachedSignals } from "../services/briefing";
 import type { Signal } from "../services/briefing";
 import type { DistrictData } from "../services/aggregator";
 import type { DistrictConfig } from "../districts";
+import { ViewIn3DButton } from "../components/ViewIn3D";
+import type { CC3DPayload } from "../components/ViewIn3D";
 
 interface SignalsProps {
   aggregatedData: DistrictData | null;
@@ -24,7 +26,7 @@ const SEVERITY_CFG = {
   low:    { label: "LOW",    bg: COLORS.softBlue, text: "#4A6FA5", border: "#C8D8E8" },
 } as const;
 
-function SignalCard({ signal }: { signal: Signal }) {
+function SignalCard({ signal, payload }: { signal: Signal; payload: CC3DPayload }) {
   const cfg = SEVERITY_CFG[signal.severity] ?? SEVERITY_CFG.low;
 
   return (
@@ -70,6 +72,7 @@ function SignalCard({ signal }: { signal: Signal }) {
           }}>{signal.concern}</p>
         </div>
       )}
+      <ViewIn3DButton payload={payload} />
     </div>
   );
 }
@@ -78,10 +81,11 @@ function SignalCard({ signal }: { signal: Signal }) {
 
 type ConcernLevel = "high" | "medium" | "watch";
 
-function ConcernItem({ level, title, detail }: {
+function ConcernItem({ level, title, detail, payload }: {
   level: ConcernLevel;
   title: string;
   detail: string;
+  payload: CC3DPayload;
 }) {
   const cfg = {
     high:   { label: "HIGH",   bg: "#FDEEEE", text: "#B44040", border: "#F0C8C8" },
@@ -112,6 +116,7 @@ function ConcernItem({ level, title, detail }: {
           fontFamily: FONTS.body, fontSize: 14, lineHeight: 1.7,
           color: COLORS.midGray, margin: 0,
         }}>{detail}</p>
+        <ViewIn3DButton payload={payload} />
       </div>
     </div>
   );
@@ -209,6 +214,15 @@ export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
   const activeNeighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
   const locationLabel = activeNeighborhood ? activeNeighborhood.name : districtConfig.label;
 
+  const cc3dPayload: CC3DPayload = {
+    address: null,
+    lat: null,
+    lng: null,
+    parcel_apn: null,
+    district: districtConfig.label,
+    active_layers: ["signals"],
+  };
+
   // Map signals → concern items (severity low → "watch")
   const concerns = signals?.map(s => ({
     level: (s.severity === "low" ? "watch" : s.severity) as ConcernLevel,
@@ -295,7 +309,7 @@ export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
         {/* Signal cards — with resident quotes injected after card index 1 */}
         {!isGenerating && signals && signals.map((signal, i) => (
           <div key={i}>
-            <SignalCard signal={signal} />
+            <SignalCard signal={signal} payload={cc3dPayload} />
             {/* Inject "What Residents Said" after the 2nd signal (if ≥2 signals exist) */}
             {i === 1 && signals.length >= 2 && (
               <ResidentQuotes
@@ -332,7 +346,7 @@ export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
                 Based on current permit activity and development pipeline for {locationLabel}.
               </p>
               {concerns.map((c, i) => (
-                <ConcernItem key={i} level={c.level} title={c.title} detail={c.detail} />
+                <ConcernItem key={i} level={c.level} title={c.title} detail={c.detail} payload={cc3dPayload} />
               ))}
             </div>
           </>
