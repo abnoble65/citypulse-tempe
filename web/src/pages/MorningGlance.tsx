@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { COLORS, FONTS } from "../theme";
 import { renderInlineMarkdown } from "../components/MarkdownText";
+import { linkifyText } from "../utils/linkifyBriefing";
 import { CityPulseLogo } from "../components/Icons";
 import { supabase } from "../services/supabase";
 import {
@@ -521,7 +522,10 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
                     fontFamily: FONTS.body, fontSize: 15, lineHeight: 1.78,
                     color: COLORS.charcoal, margin: "0 0 14px",
                   }}>
-                    {renderInlineMarkdown(firstSentences(overview, 3))}
+                    {renderInlineMarkdown(
+                      firstSentences(overview, 3),
+                      (t) => linkifyText(t, onNavigate),
+                    )}
                   </p>
                   <NavLink label="See full briefing" onClick={() => onNavigate("Briefing")} />
                 </>

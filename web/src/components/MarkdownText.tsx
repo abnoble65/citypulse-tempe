@@ -2,14 +2,21 @@
  * MarkdownText — lightweight markdown-to-React renderer for AI-generated text.
  *
  * Handles **bold**, *italic*, ## headings, and paragraph breaks (\n\n).
+ * Optional `linkify` callback turns plain-text segments into clickable links.
  * No external dependencies.
  */
 
 import { type ReactNode } from "react";
 import { COLORS, FONTS } from "../theme";
 
+/** Optional function that converts a plain-text string to React nodes with links. */
+export type Linkifier = (text: string) => ReactNode[];
+
 /** Convert inline **bold** and *italic* markers to React elements. */
-export function renderInlineMarkdown(text: string): ReactNode[] {
+export function renderInlineMarkdown(
+  text: string,
+  linkify?: Linkifier,
+): ReactNode[] {
   const nodes: ReactNode[] = [];
   const re = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
   let lastIndex = 0;
@@ -17,7 +24,9 @@ export function renderInlineMarkdown(text: string): ReactNode[] {
   let key = 0;
   while ((match = re.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      nodes.push(text.slice(lastIndex, match.index));
+      const plain = text.slice(lastIndex, match.index);
+      if (linkify) nodes.push(...linkify(plain));
+      else nodes.push(plain);
     }
     if (match[2]) {
       nodes.push(<strong key={key++}>{match[2]}</strong>);
@@ -26,7 +35,11 @@ export function renderInlineMarkdown(text: string): ReactNode[] {
     }
     lastIndex = match.index + match[0].length;
   }
-  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  if (lastIndex < text.length) {
+    const plain = text.slice(lastIndex);
+    if (linkify) nodes.push(...linkify(plain));
+    else nodes.push(plain);
+  }
   return nodes;
 }
 
@@ -34,8 +47,13 @@ export function renderInlineMarkdown(text: string): ReactNode[] {
  * Full block-level renderer: splits on double newlines into <p> paragraphs,
  * converts ## headings to styled headers, and runs inline markdown on
  * everything else. Use for longer AI text (briefing body, overview).
+ *
+ * Pass `linkify` to auto-link addresses, neighborhoods, and dollar amounts.
  */
-export function renderMarkdownBlock(text: string): ReactNode[] {
+export function renderMarkdownBlock(
+  text: string,
+  linkify?: Linkifier,
+): ReactNode[] {
   // Split on double newlines to get paragraphs
   const paragraphs = text.split(/\n\n+/);
   const nodes: ReactNode[] = [];
@@ -58,7 +76,7 @@ export function renderMarkdownBlock(text: string): ReactNode[] {
           marginTop: 24, marginBottom: 8,
           letterSpacing: "-0.01em",
         }}>
-          {renderInlineMarkdown(headingMatch[2])}
+          {renderInlineMarkdown(headingMatch[2], linkify)}
         </div>
       );
       continue;
@@ -81,12 +99,12 @@ export function renderMarkdownBlock(text: string): ReactNode[] {
             marginTop: 16, marginBottom: 4,
             letterSpacing: "-0.01em",
           }}>
-            {renderInlineMarkdown(lineHeading[2])}
+            {renderInlineMarkdown(lineHeading[2], linkify)}
           </div>
         );
       } else {
         if (inlineContent.length > 0 && i > 0) inlineContent.push(" ");
-        inlineContent.push(...renderInlineMarkdown(line));
+        inlineContent.push(...renderInlineMarkdown(line, linkify));
       }
     }
 

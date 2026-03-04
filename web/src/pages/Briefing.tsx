@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { COLORS, FONTS } from "../theme";
 import { renderMarkdownBlock } from "../components/MarkdownText";
+import { linkifyText } from "../utils/linkifyBriefing";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { parseBriefingSections, generateBriefingFromData, generateBriefingOverview, getCachedBriefingOverview } from "../services/briefing";
@@ -48,6 +49,12 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
   const [isGenerating, setIsGenerating] = useState(false);
   const [genError, setGenError]         = useState<string | null>(null);
   const [latestHearing, setLatestHearing] = useState<string | null>(null);
+
+  // Linkifier for auto-linking addresses, neighborhoods, dollar amounts
+  const briefingLinkify = useCallback(
+    (text: string) => linkifyText(text, onNavigate),
+    [onNavigate],
+  );
 
   // Overview state — instant from cache, async if missing
   const [overview, setOverview]                   = useState<string | null>(null);
@@ -297,7 +304,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
                       fontFamily: FONTS.body, fontSize: 15.5,
                       color: COLORS.charcoal,
                     }}>
-                      {renderMarkdownBlock(overview!)}
+                      {renderMarkdownBlock(overview!, briefingLinkify)}
                     </div>
                     {overviewGeneratedAt && (
                       <p style={{
@@ -323,7 +330,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
             }}>
               {sections.briefing ? (
                 <div>
-                  {renderMarkdownBlock(sections.briefing)}
+                  {renderMarkdownBlock(sections.briefing, briefingLinkify)}
                 </div>
               ) : (
                 <p style={{ color: COLORS.warmGray, fontStyle: "italic" }}>
