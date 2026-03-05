@@ -319,25 +319,19 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
               </div>
             )}
 
-            <div style={{
-              background: COLORS.white,
-              borderRadius: 20, padding: "clamp(20px, 5vw, 40px)",
-              border: `1px solid ${COLORS.lightBorder}`,
-              fontFamily: FONTS.body,
-              fontSize: 15.5, lineHeight: 1.8,
-              color: COLORS.charcoal,
-              boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
-            }}>
-              {sections.briefing ? (
-                <div>
-                  {renderMarkdownBlock(sections.briefing, briefingLinkify)}
-                </div>
-              ) : (
-                <p style={{ color: COLORS.warmGray, fontStyle: "italic" }}>
-                  Briefing content unavailable — the AI response may not have followed the expected format.
-                </p>
-              )}
-            </div>
+            {sections.briefing.trim() && (
+              <div style={{
+                background: COLORS.white,
+                borderRadius: 20, padding: "clamp(20px, 5vw, 40px)",
+                border: `1px solid ${COLORS.lightBorder}`,
+                fontFamily: FONTS.body,
+                fontSize: 15.5, lineHeight: 1.8,
+                color: COLORS.charcoal,
+                boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
+              }}>
+                {renderMarkdownBlock(sections.briefing, briefingLinkify)}
+              </div>
+            )}
           </>
         )}
       </div>
