@@ -36,6 +36,48 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+/** Reproduces the CityPulseLogo SVG from Icons.tsx as a raw string. */
+function buildLogoSvg(s: number, bg: string, fg: string): string {
+  const pad = s * 0.15;
+  const inner = s - pad * 2;
+  const sw = Math.max(1, s * 0.025);
+  const sw2 = Math.max(1.2, s * 0.03);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
+  <rect width="${s}" height="${s}" rx="${s * 0.22}" fill="${bg}"/>
+  <g transform="translate(${pad},${pad})" fill="none" stroke="${fg}" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke-width="${sw}">
+      <path d="M${inner*0.12} ${inner*0.62} L${inner*0.17} ${inner*0.15} L${inner*0.22} ${inner*0.62}"/>
+      <path d="M${inner*0.29} ${inner*0.62} L${inner*0.29} ${inner*0.2} Q${inner*0.35} ${inner*0.08} ${inner*0.41} ${inner*0.2} L${inner*0.41} ${inner*0.62}"/>
+      <path d="M${inner*0.48} ${inner*0.62} L${inner*0.48} ${inner*0.35} L${inner*0.60} ${inner*0.35} L${inner*0.60} ${inner*0.62}"/>
+      <path d="M${inner*0.65} ${inner*0.62} L${inner*0.65} ${inner*0.45} L${inner*0.75} ${inner*0.45} L${inner*0.75} ${inner*0.62}"/>
+      <path d="M${inner*0.80} ${inner*0.62} L${inner*0.80} ${inner*0.32} Q${inner*0.84} ${inner*0.25} ${inner*0.88} ${inner*0.32} L${inner*0.88} ${inner*0.62}"/>
+    </g>
+    <path d="M0 ${inner*0.78} L${inner*0.2} ${inner*0.78} L${inner*0.28} ${inner*0.68} L${inner*0.36} ${inner*0.88} L${inner*0.44} ${inner*0.72} L${inner*0.50} ${inner*0.78} L${inner} ${inner*0.78}" stroke-width="${sw2}" opacity="0.85"/>
+  </g>
+</svg>`;
+}
+
+/** Rasterize an SVG string to a PNG data URL via offscreen canvas. */
+function rasterizeSvg(svgString: string, px: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = px;
+      canvas.height = px;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("no 2d context")); return; }
+      ctx.drawImage(img, 0, 0, px, px);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("SVG rasterize failed")); };
+    img.src = url;
+  });
+}
+
 function fmtDollars(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `$${Math.round(n / 1_000)}K`;
@@ -79,14 +121,11 @@ export async function generateSitePacketPDF(input: SitePacketInput): Promise<voi
   const margin = 20;
   const contentW = pageW - margin * 2;
 
-  // ── Logo (fetch at runtime from public/) ──────────────────────────────
+  // ── Logo (rasterize splash-screen SVG at 2x for crisp output) ──────────
   try {
-    const logoRes = await fetch("/CityPulse_Logo1_Fun.png");
-    if (logoRes.ok) {
-      const blob = await logoRes.blob();
-      const dataUrl = await blobToDataUrl(blob);
-      doc.addImage(dataUrl, "PNG", 160, 8, 30, 30);
-    }
+    const svgStr = buildLogoSvg(200, ORANGE, "#FFFFFF");
+    const logoPng = await rasterizeSvg(svgStr, 400);
+    doc.addImage(logoPng, "PNG", 168, 8, 22, 22);
   } catch {
     // logo is optional — continue without it
   }
