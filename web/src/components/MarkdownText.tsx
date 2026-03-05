@@ -6,7 +6,7 @@
  * No external dependencies.
  */
 
-import { type ReactNode } from "react";
+import React, { type ReactNode } from "react";
 import { COLORS, FONTS } from "../theme";
 
 /** Optional function that converts a plain-text string to React nodes with links. */
@@ -50,12 +50,29 @@ export function renderInlineMarkdown(
  *
  * Pass `linkify` to auto-link addresses, neighborhoods, and dollar amounts.
  */
+/** Strip lines that are only "#" or "##" with no heading text (stray markdown artifacts). */
+function stripStrayHashes(text: string): string {
+  return text.replace(/^#{1,3}\s*$/gm, "").replace(/\n{3,}/g, "\n\n");
+}
+
+/** Style for ## section headers inside briefing cards. */
+const SECTION_HEADING_STYLE: React.CSSProperties = {
+  fontFamily: "'Urbanist', sans-serif",
+  fontSize: 16, fontWeight: 800,
+  color: "#1a1a2e",
+  marginTop: 20, marginBottom: 8,
+  paddingBottom: 6,
+  borderBottom: "2px solid rgba(232,101,45,0.18)",
+  letterSpacing: "-0.01em",
+};
+
 export function renderMarkdownBlock(
   text: string,
   linkify?: Linkifier,
 ): ReactNode[] {
+  const cleaned = stripStrayHashes(text);
   // Split on double newlines to get paragraphs
-  const paragraphs = text.split(/\n\n+/);
+  const paragraphs = cleaned.split(/\n\n+/);
   const nodes: ReactNode[] = [];
   let key = 0;
 
@@ -67,18 +84,25 @@ export function renderMarkdownBlock(
     const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)/);
     if (headingMatch) {
       const level = headingMatch[1].length;
-      const fontSize = level === 1 ? 20 : level === 2 ? 17 : 15;
-      nodes.push(
-        <div key={key++} style={{
-          fontFamily: "'Urbanist', sans-serif",
-          fontSize, fontWeight: 800,
-          color: COLORS.charcoal,
-          marginTop: 24, marginBottom: 8,
-          letterSpacing: "-0.01em",
-        }}>
-          {renderInlineMarkdown(headingMatch[2], linkify)}
-        </div>
-      );
+      if (level <= 2) {
+        nodes.push(
+          <div key={key++} style={SECTION_HEADING_STYLE}>
+            {renderInlineMarkdown(headingMatch[2], linkify)}
+          </div>
+        );
+      } else {
+        nodes.push(
+          <div key={key++} style={{
+            fontFamily: "'Urbanist', sans-serif",
+            fontSize: 15, fontWeight: 800,
+            color: COLORS.charcoal,
+            marginTop: 16, marginBottom: 4,
+            letterSpacing: "-0.01em",
+          }}>
+            {renderInlineMarkdown(headingMatch[2], linkify)}
+          </div>
+        );
+      }
       continue;
     }
 
@@ -90,18 +114,25 @@ export function renderMarkdownBlock(
       const lineHeading = line.match(/^(#{1,3})\s+(.+)/);
       if (lineHeading) {
         const level = lineHeading[1].length;
-        const fontSize = level === 1 ? 20 : level === 2 ? 17 : 15;
-        inlineContent.push(
-          <div key={`${key}-h${i}`} style={{
-            fontFamily: "'Urbanist', sans-serif",
-            fontSize, fontWeight: 800,
-            color: COLORS.charcoal,
-            marginTop: 16, marginBottom: 4,
-            letterSpacing: "-0.01em",
-          }}>
-            {renderInlineMarkdown(lineHeading[2], linkify)}
-          </div>
-        );
+        if (level <= 2) {
+          inlineContent.push(
+            <div key={`${key}-h${i}`} style={SECTION_HEADING_STYLE}>
+              {renderInlineMarkdown(lineHeading[2], linkify)}
+            </div>
+          );
+        } else {
+          inlineContent.push(
+            <div key={`${key}-h${i}`} style={{
+              fontFamily: "'Urbanist', sans-serif",
+              fontSize: 15, fontWeight: 800,
+              color: COLORS.charcoal,
+              marginTop: 16, marginBottom: 4,
+              letterSpacing: "-0.01em",
+            }}>
+              {renderInlineMarkdown(lineHeading[2], linkify)}
+            </div>
+          );
+        }
       } else {
         if (inlineContent.length > 0 && i > 0) inlineContent.push(" ");
         inlineContent.push(...renderInlineMarkdown(line, linkify));

@@ -550,7 +550,15 @@ function briefingSystemPrompt(district: DistrictConfig): string {
   const locale = district.number === '0'
     ? 'all of San Francisco'
     : `San Francisco ${district.label}${sup ? ` (Supervisor ${sup})` : ''}`;
-  return `You are CityPulse, an urban intelligence analyst specializing in ${locale}. Your role is to synthesize permit activity, development pipeline data, and zoning context into clear, narrative-driven briefings for urban planners, developers, and municipal clients. Always produce exactly four sections with these exact headings: THE BRIEFING, THE SIGNAL, THE ZONING CONTEXT, THE OUTLOOK. Total length 450-600 words. Write in confident prose, no bullet points. Use specific numbers from the data.${ANTI_HALLUCINATION_RULES}`;
+  return `You are CityPulse, an urban intelligence analyst specializing in ${locale}. Your role is to synthesize permit activity, development pipeline data, and zoning context into clear, narrative-driven briefings for urban planners, developers, and municipal clients. Always produce exactly four sections with these exact headings: THE BRIEFING, THE SIGNAL, THE ZONING CONTEXT, THE OUTLOOK. Total length 450-600 words. Write in confident prose, no bullet points. Use specific numbers from the data.
+
+Within THE BRIEFING section, structure your analysis with clear ## section headers. Use ## for each sub-section. Suggested sections:
+- ## Permit Activity
+- ## Development Pipeline
+- ## Eviction Landscape
+- ## Community Sentiment
+- ## Key Takeaways
+Only include sections where data exists. Each section should be 2-3 sentences.${ANTI_HALLUCINATION_RULES}`;
 }
 
 function signalsSystemPrompt(district: DistrictConfig): string {
@@ -579,7 +587,7 @@ export interface BriefingSections {
 function cleanSection(text: string): string {
   return text
     .split('\n')
-    .filter((line) => line.trim() !== '---' && !line.trimStart().startsWith('##'))
+    .filter((line) => line.trim() !== '---')
     .join('\n')
     .trim();
 }

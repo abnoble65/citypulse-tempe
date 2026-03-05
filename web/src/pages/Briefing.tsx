@@ -301,6 +301,16 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
                 ) : (
                   <>
                     <div style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      marginBottom: 14,
+                    }}>
+                      <div style={{ width: 3, height: 20, borderRadius: 2, background: "#E8652D", flexShrink: 0 }} />
+                      <span style={{
+                        fontFamily: "'Urbanist', sans-serif", fontSize: 18,
+                        fontWeight: 800, color: "#1a1a2e", letterSpacing: "-0.01em",
+                      }}>District Overview</span>
+                    </div>
+                    <div style={{
                       fontFamily: FONTS.body, fontSize: 15.5,
                       color: COLORS.charcoal,
                     }}>
