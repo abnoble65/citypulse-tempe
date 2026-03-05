@@ -11,6 +11,51 @@ import type { DistrictConfig } from "./districts";
 import { CityPulseLogo } from "./components/Icons";
 import { CityPulseChat } from "./components/CityPulseChat";
 
+// ── Stale chunk auto-reload ──────────────────────────────────────────────────
+// After a deploy, old chunk filenames no longer exist on the server.
+// Catch the dynamic import failure and reload the page once.
+sessionStorage.removeItem("chunk_reload");
+window.addEventListener("unhandledrejection", (event) => {
+  const msg = event.reason?.message ?? "";
+  if (
+    msg.includes("dynamically imported module") ||
+    msg.includes("Failed to fetch") ||
+    msg.includes("Loading chunk")
+  ) {
+    if (!sessionStorage.getItem("chunk_reload")) {
+      sessionStorage.setItem("chunk_reload", "1");
+      window.location.reload();
+    }
+  }
+});
+
+/** Thin orange progress bar shown while lazy chunks load (YouTube/GitHub style). */
+function ChunkLoadingBar() {
+  return (
+    <>
+      <style>{`
+        @keyframes cp-chunk-bar {
+          0%   { width: 0%; }
+          20%  { width: 30%; }
+          60%  { width: 70%; }
+          100% { width: 95%; }
+        }
+      `}</style>
+      <div style={{
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999, height: 3,
+        background: "transparent",
+      }}>
+        <div style={{
+          height: "100%",
+          background: "linear-gradient(90deg, #D4643B, #E8845E)",
+          borderRadius: "0 2px 2px 0",
+          animation: "cp-chunk-bar 4s ease-out forwards",
+        }} />
+      </div>
+    </>
+  );
+}
+
 const LOADING_MESSAGES = [
   "Connecting to DataSF…",
   "Pulling live permit data…",
@@ -256,7 +301,7 @@ export default function App() {
       <LoadingOverlay loading={loading} />
       {page !== "Home" && <NavBar activePage={page} onNavigate={navigate} districtConfig={districtConfig} />}
       <ErrorBoundary label={page}>
-        <Suspense fallback={<div />}>
+        <Suspense fallback={<ChunkLoadingBar />}>
           <div key={page} style={{ animation: "cp-page-in 0.15s ease-out" }}>
             {renderPage()}
           </div>

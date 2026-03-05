@@ -72,6 +72,26 @@ const GROUP_ICONS: Record<string, (props: { size?: number }) => React.ReactEleme
   government:   GovIcon,
 };
 
+function LiveBadge() {
+  return (
+    <span
+      title="CityPulse pulls live data from DataSF, SF Planning, and other city sources"
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 4,
+        fontSize: 9, fontWeight: 700, fontFamily: FONTS.body,
+        color: "#5B9A5F", letterSpacing: "0.06em", textTransform: "uppercase",
+        userSelect: "none", cursor: "default",
+      }}
+    >
+      <span style={{
+        width: 6, height: 6, borderRadius: "50%", background: "#5B9A5F",
+        boxShadow: "0 0 4px rgba(91,154,95,0.5)",
+      }} />
+      Live
+    </span>
+  );
+}
+
 /* ── NavBar ──────────────────────────────────────────────────────────────── */
 
 export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) {
@@ -153,17 +173,19 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
           ))}
         </div>
 
-        {/* District badge */}
-        <span style={{
-          flexShrink: 0, marginLeft: 12,
-          background: COLORS.cream, color: COLORS.charcoal,
-          padding: "5px 12px", borderRadius: 20,
-          fontSize: 11, fontWeight: 600, fontFamily: FONTS.body,
-          border: `1px solid ${COLORS.lightBorder}`,
-          letterSpacing: "0.01em", whiteSpace: "nowrap",
-        }}>
-          {districtBadge}
-        </span>
+        {/* District badge + live indicator */}
+        <div style={{ flexShrink: 0, marginLeft: 12, display: "flex", alignItems: "center", gap: 8 }}>
+          <LiveBadge />
+          <span style={{
+            background: COLORS.cream, color: COLORS.charcoal,
+            padding: "5px 12px", borderRadius: 20,
+            fontSize: 11, fontWeight: 600, fontFamily: FONTS.body,
+            border: `1px solid ${COLORS.lightBorder}`,
+            letterSpacing: "0.01em", whiteSpace: "nowrap",
+          }}>
+            {districtBadge}
+          </span>
+        </div>
       </nav>
     );
   }
@@ -197,15 +219,18 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
               letterSpacing: "-0.02em", fontFamily: FONTS.heading,
             }}>CityPulse</span>
           </div>
-          <span style={{
-            background: COLORS.cream, color: COLORS.charcoal,
-            padding: "4px 10px", borderRadius: 20,
-            fontSize: 10, fontWeight: 600, fontFamily: FONTS.body,
-            border: `1px solid ${COLORS.lightBorder}`,
-            whiteSpace: "nowrap",
-          }}>
-            {districtBadge}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <LiveBadge />
+            <span style={{
+              background: COLORS.cream, color: COLORS.charcoal,
+              padding: "4px 10px", borderRadius: 20,
+              fontSize: 10, fontWeight: 600, fontFamily: FONTS.body,
+              border: `1px solid ${COLORS.lightBorder}`,
+              whiteSpace: "nowrap",
+            }}>
+              {districtBadge}
+            </span>
+          </div>
         </div>
 
         {/* Row 2 — Sub-page tabs (44px), above the content area */}

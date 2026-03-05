@@ -1,22 +1,20 @@
-/* CityPulse Service Worker */
-const CACHE_NAME = "citypulse-v1";
+/* CityPulse Service Worker v2
+ *
+ * Strategy:
+ *   - JS/CSS bundles: never cached (Vite hashes filenames for cache-busting)
+ *   - index.html: network-first (always fetch latest deploy)
+ *   - Images & fonts: cache-first with network fallback
+ *   - API calls (Supabase, DataSF, Anthropic): network-only
+ */
 
-// Static assets to cache on install (cache-first)
-const PRECACHE_URLS = [
-  "/",
-  "/index.html",
-  "/manifest.json",
-];
+const CACHE_NAME = "citypulse-v2";
 
-// Install — pre-cache shell
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
-  );
+// ── Install ──────────────────────────────────────────────────────────────────
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
-// Activate — purge old caches
+// ── Activate — purge ALL old caches ──────────────────────────────────────────
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -26,50 +24,57 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch strategy:
-//   - DataSF / Supabase API calls → network-first (fresh data always preferred)
-//   - Everything else → cache-first with network fallback
+// ── Fetch ────────────────────────────────────────────────────────────────────
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  const url = new URL(request.url);
-
-  // Only handle GET requests
   if (request.method !== "GET") return;
 
-  // Network-first for API calls
-  const isApi =
+  const url = new URL(request.url);
+
+  // Network-only for API calls
+  if (
     url.hostname.includes("supabase.co") ||
     url.hostname.includes("data.sfgov.org") ||
-    url.hostname.includes("api.anthropic.com");
+    url.hostname.includes("api.anthropic.com") ||
+    url.hostname.includes("api.mapbox.com")
+  ) {
+    return;
+  }
 
-  if (isApi) {
+  // Don't cache JS/CSS bundles — Vite content-hashes them, browser cache is enough
+  if (/\.(js|css)$/.test(url.pathname)) {
+    return;
+  }
+
+  // Network-first for navigation / index.html (always get latest deploy)
+  if (request.mode === "navigate" || url.pathname === "/" || url.pathname === "/index.html") {
     event.respondWith(
-      fetch(request).catch(() => caches.match(request))
+      fetch(request).catch(() => caches.match("/index.html"))
     );
     return;
   }
 
-  // Cache-first for static assets
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((response) => {
-        // Only cache successful same-origin responses
-        if (
-          response.ok &&
-          response.type === "basic" &&
-          url.origin === self.location.origin
-        ) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-        }
-        return response;
-      });
-    })
-  );
+  // Cache-first for images, fonts, and other static assets
+  if (/\.(png|jpg|jpeg|svg|webp|gif|ico|woff2?|ttf|eot)$/.test(url.pathname)) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok && response.type === "basic") {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Everything else: network with no caching (manifest.json, etc.)
 });
 
-// Push notification stub — extend later
+// ── Push notifications ───────────────────────────────────────────────────────
 self.addEventListener("push", (event) => {
   if (!event.data) return;
   let payload;
