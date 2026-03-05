@@ -88,6 +88,7 @@ const MapPage    = lazy(() => import("./pages/MapPage").then(m => ({ default: m.
 const Board      = lazy(() => import("./pages/Board").then(m => ({ default: m.Board })));
 const Mayor      = lazy(() => import("./pages/Mayor").then(m => ({ default: m.Mayor })));
 const Parks      = lazy(() => import("./pages/Parks").then(m => ({ default: m.Parks })));
+const SiteSelection = lazy(() => import("./pages/SiteSelection").then(m => ({ default: m.SiteSelection })));
 
 const SPLASH_KEY = "citypulse_splash_seen";
 
@@ -104,12 +105,14 @@ const PATH_TO_PAGE: Record<string, string> = {
   "board":        "Board",
   "mayor":        "Mayor",
   "parks":        "Parks",
+  "demo/site-selection": "SiteSelection",
 };
 
 // Pages whose names don't map cleanly to lowercase paths
 const PAGE_TO_PATH: Record<string, string> = {
-  MorningGlance: "/pulse",
-  MapPage:       "/map",
+  MorningGlance:  "/pulse",
+  MapPage:        "/map",
+  SiteSelection:  "/demo/site-selection",
 };
 
 function pageFromPath(path: string): string {
@@ -240,6 +243,8 @@ export default function App() {
         return <Mayor districtConfig={districtConfig} />;
       case "Parks":
         return <Parks districtConfig={districtConfig} />;
+      case "SiteSelection":
+        return <SiteSelection districtConfig={districtConfig} onNavigate={navigate} />;
       default:
         return <Home onNavigate={navigate} onGenerate={handleGenerate} loading={loading} error={error} />;
     }
