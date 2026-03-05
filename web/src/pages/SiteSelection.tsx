@@ -71,14 +71,17 @@ interface SiteSelectionProps {
   onNavigate: (page: string) => void;
 }
 
-interface ParcelRow {
-  blklot?: string;
-  the_geom?: { type: string; coordinates: [number, number] | [number, number][] };
-  mapblklot?: string;
-  zoning_district?: string;
-  from_st?: string;
-  to_st?: string;
-  street?: string;
+interface ProjectRow {
+  address?: string;
+  district?: string;
+  lat?: number;
+  lng?: number;
+  parcel_apn?: string;
+  block?: string;
+  lot?: string;
+  zoning?: string;
+  action?: string;
+  shadow_flag?: boolean;
 }
 
 interface AssessmentRow {
@@ -86,18 +89,12 @@ interface AssessmentRow {
   property_location?: string;
   assessed_land_value?: string;
   assessed_improvement_value?: string;
-  supervisor_district?: string;
 }
 
 interface PermitCountRow {
   block?: string;
   lot?: string;
   count_permit_number?: string;
-}
-
-interface HearingRow {
-  address?: string;
-  district?: string;
 }
 
 interface SiteResult {
@@ -526,15 +523,15 @@ export function SiteSelection(_props: SiteSelectionProps) {
     setAiNotes("");
 
     try {
-      // 1. Parcels — D3 bounding box
-      const parcelParams = new URLSearchParams({
-        $where: "within_box(the_geom, 37.785, -122.420, 37.810, -122.390)",
-        $select: "blklot,the_geom,mapblklot,zoning_district,from_st,to_st,street",
-        $limit: "2000",
-      });
-      const parcelFetch = fetch(`${DATASF}/acdm-wktn.json?${parcelParams}`).then(r => r.json());
+      // 1. Primary source — Supabase projects table (reliable, pre-ingested)
+      const projectsFetch = supabase
+        .from("projects")
+        .select("address,district,lat,lng,parcel_apn,block,lot,zoning,action,shadow_flag")
+        .ilike("district", "%District 3%")
+        .not("lat", "is", null)
+        .not("lng", "is", null);
 
-      // 2. Assessments — D3
+      // 2. Enrichment — DataSF assessments for assessed values
       const assessParams = new URLSearchParams({
         $where: "supervisor_district='3'",
         $select: "parcel_number,property_location,assessed_land_value,assessed_improvement_value",
@@ -542,7 +539,7 @@ export function SiteSelection(_props: SiteSelectionProps) {
       });
       const assessFetch = fetch(`${DATASF}/wv5m-vpq2.json?${assessParams}`).then(r => r.json());
 
-      // 3. Permit counts — grouped by block/lot for D3
+      // 3. Enrichment — DataSF permit counts
       const permitParams = new URLSearchParams({
         $where: "supervisor_district='3' AND status='issued'",
         $select: "block,lot,count(permit_number)",
@@ -551,20 +548,24 @@ export function SiteSelection(_props: SiteSelectionProps) {
       });
       const permitFetch = fetch(`${DATASF}/i98e-djp9.json?${permitParams}`).then(r => r.json());
 
-      // 4. Hearing disputes — Supabase projects
-      const disputeFetch = supabase
-        .from("projects")
-        .select("address,district")
-        .ilike("district", "%District 3%");
-
-      const [parcels, assessments, permits, disputeRes] = await Promise.all([
-        parcelFetch as Promise<ParcelRow[]>,
-        assessFetch as Promise<AssessmentRow[]>,
-        permitFetch as Promise<PermitCountRow[]>,
-        disputeFetch,
+      const [projectsRes, assessRaw, permitsRaw] = await Promise.all([
+        projectsFetch,
+        assessFetch,
+        permitFetch,
       ]);
 
-      // Build lookup maps
+      const projects: ProjectRow[] = projectsRes.data ?? [];
+      const assessments: AssessmentRow[] = Array.isArray(assessRaw) ? assessRaw : [];
+      const permits: PermitCountRow[] = Array.isArray(permitsRaw) ? permitsRaw : [];
+
+      if (!Array.isArray(assessRaw)) {
+        console.error("[SiteSelection] Unexpected assessments response:", assessRaw);
+      }
+      if (!Array.isArray(permitsRaw)) {
+        console.error("[SiteSelection] Unexpected permits response:", permitsRaw);
+      }
+
+      // Build enrichment lookup maps
       const assessMap = new Map<string, { value: number; address: string }>();
       for (const a of assessments) {
         if (!a.parcel_number) continue;
@@ -582,40 +583,25 @@ export function SiteSelection(_props: SiteSelectionProps) {
         permitMap.set(key, parseInt(p.count_permit_number ?? "0", 10));
       }
 
-      const disputeAddresses = new Set<string>();
-      if (disputeRes.data) {
-        for (const d of disputeRes.data as HearingRow[]) {
-          if (d.address) disputeAddresses.add(d.address.toUpperCase().trim());
-        }
-      }
-
       // Budget range
       const [budgetMin, budgetMax] = BUDGET_RANGES[form.budget] ?? [0, Infinity];
       const transitMax = TRANSIT_OPTIONS[form.transit] ?? Infinity;
 
+      // Deduplicate projects by parcel_apn (same parcel may have multiple hearings)
+      const seen = new Set<string>();
+
       // Join and filter
       const candidates: SiteResult[] = [];
-      for (const parcel of parcels) {
-        if (!parcel.blklot || !parcel.the_geom) continue;
+      for (const proj of projects) {
+        const lat = proj.lat;
+        const lng = proj.lng;
+        if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) continue;
 
-        // Extract centroid
-        let lat: number, lng: number;
-        const coords = parcel.the_geom.coordinates;
-        if (typeof coords[0] === "number") {
-          lng = coords[0] as number;
-          lat = coords[1] as number;
-        } else {
-          // MultiPolygon or Polygon — use first coordinate pair
-          const firstCoord = (coords as unknown as number[][])[0];
-          if (!firstCoord || firstCoord.length < 2) continue;
-          lng = firstCoord[0];
-          lat = firstCoord[1];
-        }
+        const blklot = (proj.parcel_apn ?? "").replace(/\s/g, "");
+        if (!blklot || seen.has(blklot)) continue;
+        seen.add(blklot);
 
-        if (isNaN(lat) || isNaN(lng)) continue;
-
-        const zoning = parcel.zoning_district ?? "";
-        const blklot = parcel.blklot.replace(/\s/g, "");
+        const zoning = proj.zoning ?? "";
 
         // Zoning filter
         if (activeZoningPrefixes.length > 0) {
@@ -629,16 +615,16 @@ export function SiteSelection(_props: SiteSelectionProps) {
           if (dist > transitMax) continue;
         }
 
-        // Assessment join
+        // Assessment enrichment
         const assess = assessMap.get(blklot);
         const assessedValue = assess?.value ?? 0;
-        const address = assess?.address || `${parcel.from_st ?? ""} ${parcel.street ?? ""}`.trim() || blklot;
+        const address = proj.address || assess?.address || blklot;
 
         // Budget filter
         if (assessedValue < budgetMin || assessedValue > budgetMax) continue;
 
         const permitCount = permitMap.get(blklot) ?? 0;
-        const hasDispute = disputeAddresses.has(address.toUpperCase().trim());
+        const hasDispute = proj.action !== "Approved" || proj.shadow_flag === true;
 
         const zoningMatch = activeZoningPrefixes.some(prefix =>
           zoning.toUpperCase().startsWith(prefix.toUpperCase()),
