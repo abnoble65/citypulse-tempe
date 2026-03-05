@@ -646,7 +646,7 @@ const EMPTY_AFFORDABLE_HOUSING_SUMMARY: AffordableHousingSummary = {
   projects: [],
 };
 
-export async function aggregateDistrictData(district: DistrictConfig): Promise<DistrictData> {
+export async function aggregateDistrictData(district: DistrictConfig, signal?: AbortSignal): Promise<DistrictData> {
   // Return cached data if fresh
   const cached = districtCache.get(district.number);
   if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
@@ -656,22 +656,26 @@ export async function aggregateDistrictData(district: DistrictConfig): Promise<D
 
   const t0 = performance.now();
   const [permits, allProjects, allZones, evictions, assessmentStats, assessmentParcels, affordableProjects] = await Promise.all([
-    timed('permits',           fetchBuildingPermits(district.number)),
-    timed('pipeline',          fetchDevelopmentPipeline()),
-    timed('zoning',            fetchZoningDistricts()),
-    timed('evictions',         fetchEvictions(district.number).catch(err => {
+    timed('permits',           fetchBuildingPermits(district.number, 5000, signal)),
+    timed('pipeline',          fetchDevelopmentPipeline(500, signal)),
+    timed('zoning',            fetchZoningDistricts(200, signal)),
+    timed('evictions',         fetchEvictions(district.number, 1000, signal).catch(err => {
+      if (err?.name === 'AbortError') throw err;
       console.warn('[aggregator] Eviction fetch failed (non-fatal):', err);
       return [] as EvictionNotice[];
     })),
-    timed('assessment-stats',  fetchAssessmentStats(district.number).catch(err => {
+    timed('assessment-stats',  fetchAssessmentStats(district.number, signal).catch(err => {
+      if (err?.name === 'AbortError') throw err;
       console.warn('[aggregator] Assessment stats fetch failed (non-fatal):', err);
       return [] as AssessmentAggrRow[];
     })),
-    timed('assessment-parcels',fetchTopAssessedProperties(district.number).catch(err => {
+    timed('assessment-parcels',fetchTopAssessedProperties(district.number, signal).catch(err => {
+      if (err?.name === 'AbortError') throw err;
       console.warn('[aggregator] Assessment parcels fetch failed (non-fatal):', err);
       return [] as AssessmentParcel[];
     })),
-    timed('affordable-housing',fetchAffordableHousingPipeline(district.number).catch(err => {
+    timed('affordable-housing',fetchAffordableHousingPipeline(district.number, signal).catch(err => {
+      if (err?.name === 'AbortError') throw err;
       console.warn('[aggregator] Affordable housing fetch failed (non-fatal):', err);
       return [] as AffordableHousingProject[];
     })),
@@ -871,7 +875,7 @@ function buildCitywidePromptSummary(
 
 // ── Citywide aggregation ──────────────────────────────────────────────────────
 
-export async function aggregateCitywideData(): Promise<DistrictData> {
+export async function aggregateCitywideData(signal?: AbortSignal): Promise<DistrictData> {
   const cached = districtCache.get('0');
   if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
     console.log(`[aggregator] cache hit — citywide (age ${Math.round((Date.now() - cached.ts) / 1000)}s)`);
@@ -882,7 +886,7 @@ export async function aggregateCitywideData(): Promise<DistrictData> {
   const t0 = performance.now();
 
   const districtNums = ['1','2','3','4','5','6','7','8','9','10','11'];
-  const allData = await Promise.all(districtNums.map(n => aggregateDistrictData(DISTRICTS[n])));
+  const allData = await Promise.all(districtNums.map(n => aggregateDistrictData(DISTRICTS[n], signal)));
 
   const totalMs = (performance.now() - t0).toFixed(0);
   console.timeEnd('[aggregator] citywide total fetch');

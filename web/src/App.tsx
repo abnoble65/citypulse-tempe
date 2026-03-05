@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
 import { NavBar } from "./components/NavBar";
 import { SplashScreen } from "./components/SplashScreen";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -65,12 +65,14 @@ const LOADING_MESSAGES = [
   "Almost ready…",
 ];
 
-function LoadingOverlay({ loading }: { loading: boolean }) {
+function LoadingOverlay({ loading, onCancel }: { loading: boolean; onCancel?: () => void }) {
   const [msgIndex, setMsgIndex] = useState(0);
+  const [slow, setSlow]         = useState(false);
   useEffect(() => {
-    if (!loading) { setMsgIndex(0); return; }
+    if (!loading) { setMsgIndex(0); setSlow(false); return; }
     const id = setInterval(() => setMsgIndex(i => (i + 1) % LOADING_MESSAGES.length), 2200);
-    return () => clearInterval(id);
+    const slowTimer = setTimeout(() => setSlow(true), 20_000);
+    return () => { clearInterval(id); clearTimeout(slowTimer); };
   }, [loading]);
   if (!loading) return null;
   return (
@@ -105,10 +107,10 @@ function LoadingOverlay({ loading }: { loading: boolean }) {
         ))}
       </div>
       <p style={{ fontFamily: "'Lexend',sans-serif", fontSize: 16, fontWeight: 600, color: "#3D3832", minHeight: 24 }}>
-        {LOADING_MESSAGES[msgIndex]}
+        {slow ? "Taking longer than expected…" : LOADING_MESSAGES[msgIndex]}
       </p>
       <p style={{ fontFamily: "'Lexend',sans-serif", fontSize: 13, color: "#B0A89E", marginTop: 10 }}>
-        This may take a few seconds
+        {slow ? "DataSF may be slow right now" : "This may take a few seconds"}
       </p>
       <div style={{ width: "min(240px,80vw)", height: 4, background: "#EDE8E3", borderRadius: 2, marginTop: 24, overflow: "hidden" }}>
         <div style={{
@@ -118,6 +120,15 @@ function LoadingOverlay({ loading }: { loading: boolean }) {
           animation: "progress-sweep 14s ease-in-out forwards",
         }} />
       </div>
+      {slow && onCancel && (
+        <button onClick={onCancel} style={{
+          marginTop: 24, background: "none", border: `1px solid #D4643B`,
+          borderRadius: 20, padding: "8px 24px", fontSize: 13, fontWeight: 600,
+          color: "#D4643B", cursor: "pointer", fontFamily: "'Urbanist',sans-serif",
+        }}>
+          Cancel & Go Home
+        </button>
+      )}
     </div>
   );
 }
@@ -202,6 +213,17 @@ export default function App() {
   const [loading, setLoading]                 = useState(false);
   const [error, setError]                     = useState<string | null>(null);
 
+  // AbortController for in-flight data loads — aborted on navigation or cancel
+  const abortRef = useRef<AbortController | null>(null);
+
+  const cancelLoading = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setLoading(false);
+    setPage("Home");
+    history.pushState(null, "", "/");
+  }, []);
+
   // Persist district selection to localStorage
   useEffect(() => {
     try { localStorage.setItem("citypulse_district", districtConfig.number); } catch { /* ignore */ }
@@ -210,6 +232,13 @@ export default function App() {
   // Keep URL in sync with page state
   function navigate(newPage: string) {
     console.log("[CP] PAGE_CHANGE (navigate)", { from: page, to: newPage });
+    // Abort any in-flight data load when the user navigates away
+    if (loading && abortRef.current) {
+      console.log("[CP] aborting in-flight load on navigate");
+      abortRef.current.abort();
+      abortRef.current = null;
+      setLoading(false);
+    }
     history.pushState(null, "", pathFromPage(newPage));
     setPage(newPage);
   }
@@ -219,11 +248,17 @@ export default function App() {
     function onPop() {
       const newPage = pageFromPath(window.location.pathname);
       console.log("[CP] PAGE_CHANGE (popstate)", { pathname: window.location.pathname, newPage });
+      // Abort in-flight load on back/forward
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+        setLoading(false);
+      }
       setPage(newPage);
     }
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-load DataSF data when the user lands directly on a data-dependent page
   // (e.g. via bookmark or refresh). aggregatedData is in-memory-only so it's
@@ -233,33 +268,52 @@ export default function App() {
     console.log("[CP] auto-load effect fired | page:", page, "| hasData:", !!aggregatedData);
     if (!DATA_PAGES.has(page) || aggregatedData) return;
     console.log(`[CP] auto-fetching data for /${page.toLowerCase()}`);
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     const load = districtConfig.number === "0"
-      ? aggregateCitywideData()
-      : aggregateDistrictData(districtConfig);
+      ? aggregateCitywideData(controller.signal)
+      : aggregateDistrictData(districtConfig, controller.signal);
     load
-      .then(data => setAggregatedData(data))
-      .catch(err => console.warn("[app] auto-load failed:", err))
-      .finally(() => setLoading(false));
+      .then(data => {
+        if (!controller.signal.aborted) setAggregatedData(data);
+      })
+      .catch(err => {
+        if (err?.name === "AbortError") return;
+        console.warn("[app] auto-load failed:", err);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // intentionally runs once on mount only
 
   async function handleGenerate(district: DistrictConfig) {
+    // Abort any previous in-flight load
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     console.time(`[app] generate ${district.label}`);
     setLoading(true);
     setError(null);
     // Navigate immediately — user sees Briefing with loading overlay rather than waiting on Home
     setDistrictConfig(district);
-    navigate("Briefing");
+    history.pushState(null, "", pathFromPage("Briefing"));
+    setPage("Briefing");
     try {
       const { text, data } = await generateBriefing(district);
+      if (controller.signal.aborted) return;
       setBriefingText(text);
       setAggregatedData(data);
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "An unexpected error occurred.");
-      navigate("Home");
+      history.pushState(null, "", "/");
+      setPage("Home");
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
       console.timeEnd(`[app] generate ${district.label}`);
     }
   }
@@ -298,7 +352,7 @@ export default function App() {
   return (
     <ErrorBoundary label="App">
       {!splashDone && <SplashScreen onComplete={handleSplashComplete} />}
-      <LoadingOverlay loading={loading} />
+      <LoadingOverlay loading={loading} onCancel={cancelLoading} />
       {page !== "Home" && <NavBar activePage={page} onNavigate={navigate} districtConfig={districtConfig} />}
       <ErrorBoundary label={page}>
         <Suspense fallback={<ChunkLoadingBar />}>

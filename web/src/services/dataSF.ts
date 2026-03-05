@@ -5,15 +5,21 @@
  * Rate limits are sufficient for demo use without an app token.
  */
 
+import { fetchWithTimeout, TIMEOUT_DATA } from '../utils/fetchWithTimeout';
+
 const BASE_URL = 'https://data.sfgov.org/resource';
 
 function buildHeaders(): Record<string, string> {
   return { Accept: 'application/json' };
 }
 
-async function socrataFetch<T>(datasetId: string, params: URLSearchParams): Promise<T[]> {
+async function socrataFetch<T>(datasetId: string, params: URLSearchParams, signal?: AbortSignal): Promise<T[]> {
   const url = `${BASE_URL}/${datasetId}.json?${params.toString()}`;
-  const response = await fetch(url, { headers: buildHeaders() });
+  const response = await fetchWithTimeout(url, {
+    headers: buildHeaders(),
+    timeoutMs: TIMEOUT_DATA,
+    signal,
+  });
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
@@ -59,7 +65,7 @@ export interface BuildingPermit {
   data_as_of?: string;
 }
 
-export async function fetchBuildingPermits(district: string, limit = 5000): Promise<BuildingPermit[]> {
+export async function fetchBuildingPermits(district: string, limit = 5000, signal?: AbortSignal): Promise<BuildingPermit[]> {
   const year = new Date().getFullYear();
   const startDate = `${year}-01-01T00:00:00.000`;
   const params = new URLSearchParams({
@@ -74,7 +80,7 @@ export async function fetchBuildingPermits(district: string, limit = 5000): Prom
     $limit: String(limit),
     $order: 'filed_date DESC',
   });
-  return socrataFetch<BuildingPermit>('i98e-djp9', params);
+  return socrataFetch<BuildingPermit>('i98e-djp9', params, signal);
 }
 
 export interface DevelopmentProject {
@@ -98,11 +104,11 @@ export interface DevelopmentProject {
   sponsor?: string;
 }
 
-export async function fetchDevelopmentPipeline(limit = 500): Promise<DevelopmentProject[]> {
+export async function fetchDevelopmentPipeline(limit = 500, signal?: AbortSignal): Promise<DevelopmentProject[]> {
   const params = new URLSearchParams({
     $limit: String(limit),
   });
-  return socrataFetch<DevelopmentProject>('6jgi-cpb4', params);
+  return socrataFetch<DevelopmentProject>('6jgi-cpb4', params, signal);
 }
 
 export interface ZoningDistrict {
@@ -114,9 +120,9 @@ export interface ZoningDistrict {
   url?: string;
 }
 
-export async function fetchZoningDistricts(limit = 200): Promise<ZoningDistrict[]> {
+export async function fetchZoningDistricts(limit = 200, signal?: AbortSignal): Promise<ZoningDistrict[]> {
   const params = new URLSearchParams({ $limit: String(limit) });
-  return socrataFetch<ZoningDistrict>('3i4a-hu95', params);
+  return socrataFetch<ZoningDistrict>('3i4a-hu95', params, signal);
 }
 
 export interface EvictionNotice {
@@ -185,7 +191,7 @@ function assessmentYears(): [string, string] {
  * Fetch aggregated assessment stats for two roll years, grouped by use_code.
  * Returns ~10–20 rows — very lightweight.
  */
-export async function fetchAssessmentStats(district: string): Promise<AssessmentAggrRow[]> {
+export async function fetchAssessmentStats(district: string, signal?: AbortSignal): Promise<AssessmentAggrRow[]> {
   const [y1, y2] = assessmentYears();
   const params = new URLSearchParams({
     $select: [
@@ -200,14 +206,14 @@ export async function fetchAssessmentStats(district: string): Promise<Assessment
     $group: 'closed_roll_year,use_code',
     $limit: '100',
   });
-  return socrataFetch<AssessmentAggrRow>('wv5m-vpq2', params);
+  return socrataFetch<AssessmentAggrRow>('wv5m-vpq2', params, signal);
 }
 
 /**
  * Fetch the top 20 parcels by assessed land value for the most recent roll year.
  * Sorted server-side; client will re-sort by land+improvement total.
  */
-export async function fetchTopAssessedProperties(district: string): Promise<AssessmentParcel[]> {
+export async function fetchTopAssessedProperties(district: string, signal?: AbortSignal): Promise<AssessmentParcel[]> {
   const [, y2] = assessmentYears();
   const params = new URLSearchParams({
     $select: [
@@ -219,7 +225,7 @@ export async function fetchTopAssessedProperties(district: string): Promise<Asse
     $order: 'assessed_land_value DESC',
     $limit: '20',
   });
-  return socrataFetch<AssessmentParcel>('wv5m-vpq2', params);
+  return socrataFetch<AssessmentParcel>('wv5m-vpq2', params, signal);
 }
 
 // ── Affordable Housing Pipeline (MOHCD) ───────────────────────────────────────
@@ -260,16 +266,16 @@ export interface AffordableHousingProject {
   ami_undeclared?: string;
 }
 
-export async function fetchAffordableHousingPipeline(district: string): Promise<AffordableHousingProject[]> {
+export async function fetchAffordableHousingPipeline(district: string, signal?: AbortSignal): Promise<AffordableHousingProject[]> {
   const params = new URLSearchParams({
     $where: `supervisor_district='${district}'`,
     $limit: '200',
     $order: 'project_status ASC',
   });
-  return socrataFetch<AffordableHousingProject>('aaxw-2cb8', params);
+  return socrataFetch<AffordableHousingProject>('aaxw-2cb8', params, signal);
 }
 
-export async function fetchEvictions(district: string, limit = 1000): Promise<EvictionNotice[]> {
+export async function fetchEvictions(district: string, limit = 1000, signal?: AbortSignal): Promise<EvictionNotice[]> {
   const cutoff = new Date();
   cutoff.setFullYear(cutoff.getFullYear() - 2);
   const dateStr = cutoff.toISOString().split('T')[0]; // "YYYY-MM-DD"
@@ -279,5 +285,5 @@ export async function fetchEvictions(district: string, limit = 1000): Promise<Ev
     $limit: String(limit),
     $order: 'file_date DESC',
   });
-  return socrataFetch<EvictionNotice>('5cei-gny5', params);
+  return socrataFetch<EvictionNotice>('5cei-gny5', params, signal);
 }
