@@ -38,12 +38,14 @@ const D3_TRANSIT_STATIONS: [number, number][] = [
   [37.7952, -122.4000],  // California St Cable Car terminus
 ];
 
-// Maps form categories → DataSF zoning_district prefixes
-const ZONING_CATEGORY_MAP: Record<string, string[]> = {
-  "Commercial":  ["C-2", "C-3", "CCB", "CVR", "NCD"],
-  "Mixed-Use":   ["MUG", "MUO", "MUR", "UMU", "NCT"],
-  "Industrial":  ["M-1", "M-2", "PDR", "SALI"],
-  "Residential": ["RH", "RM", "RTO", "RC"],
+// Maps form categories → planning area names (from Supabase projects.zoning column)
+const PLANNING_AREA_MAP: Record<string, string[]> = {
+  "Downtown":    ["Downtown", "South of Market"],
+  "Northeast":   ["Northeast", "Marina"],
+  "Central":     ["Central", "Western Addition", "Buena Vista"],
+  "South":       ["South Central", "South Bayshore", "Ingleside", "Mission"],
+  "West":        ["Richmond", "Inner Sunset", "Outer Sunset", "Golden Gate Park"],
+  "Bernal":      ["Bernal Heights"],
 };
 
 const BUDGET_RANGES: Record<string, [number, number]> = {
@@ -243,11 +245,11 @@ function ProspectForm({
         display: "grid", gridTemplateColumns: "1fr 1fr",
         gap: 16,
       }}>
-        {/* Zoning */}
+        {/* Planning Area */}
         <div>
-          <span style={labelStyle}>Zoning Type</span>
+          <span style={labelStyle}>Planning Area</span>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {Object.keys(ZONING_CATEGORY_MAP).map(cat => (
+            {Object.keys(PLANNING_AREA_MAP).map(cat => (
               <label key={cat} style={{
                 display: "flex", alignItems: "center", gap: 5,
                 fontFamily: FONTS.body, fontSize: 12, color: COLORS.charcoal,
@@ -492,7 +494,7 @@ export function SiteSelection(_props: SiteSelectionProps) {
     () => typeof window !== "undefined" && window.innerWidth < 768,
   );
   const [form, setForm] = useState<FormState>({
-    zoning: ["Commercial"],
+    zoning: ["Northeast"],
     budget: "Any",
     sqft: "Any",
     transit: "Any",
@@ -503,6 +505,7 @@ export function SiteSelection(_props: SiteSelectionProps) {
   const [aiNotes, setAiNotes] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [flyTarget, setFlyTarget] = useState<[number, number] | null>(null);
+  const [searchedOnce, setSearchedOnce] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
@@ -511,9 +514,9 @@ export function SiteSelection(_props: SiteSelectionProps) {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // Get the selected zoning prefixes from form state
-  const activeZoningPrefixes = useMemo(() => {
-    return form.zoning.flatMap(cat => ZONING_CATEGORY_MAP[cat] ?? []);
+  // Get the selected planning areas from form state
+  const activePlanningAreas = useMemo(() => {
+    return form.zoning.flatMap(cat => PLANNING_AREA_MAP[cat] ?? []);
   }, [form.zoning]);
 
   const handleSearch = useCallback(async () => {
@@ -521,6 +524,9 @@ export function SiteSelection(_props: SiteSelectionProps) {
     setResults([]);
     setSelectedIdx(null);
     setAiNotes("");
+    setSearchedOnce(true);
+
+    console.log("[SiteSelection] Search started", { form, activePlanningAreas });
 
     try {
       // 1. Primary source — Supabase projects table (reliable, pre-ingested)
@@ -557,6 +563,10 @@ export function SiteSelection(_props: SiteSelectionProps) {
       const projects: ProjectRow[] = projectsRes.data ?? [];
       const assessments: AssessmentRow[] = Array.isArray(assessRaw) ? assessRaw : [];
       const permits: PermitCountRow[] = Array.isArray(permitsRaw) ? permitsRaw : [];
+
+      console.log("[SiteSelection] Supabase projects:", projects.length, "rows");
+      console.log("[SiteSelection] DataSF assessments:", assessments.length, "rows");
+      console.log("[SiteSelection] DataSF permits:", permits.length, "rows");
 
       if (!Array.isArray(assessRaw)) {
         console.error("[SiteSelection] Unexpected assessments response:", assessRaw);
@@ -603,9 +613,11 @@ export function SiteSelection(_props: SiteSelectionProps) {
 
         const zoning = proj.zoning ?? "";
 
-        // Zoning filter
-        if (activeZoningPrefixes.length > 0) {
-          const match = activeZoningPrefixes.some(prefix => zoning.toUpperCase().startsWith(prefix.toUpperCase()));
+        // Planning area filter
+        if (activePlanningAreas.length > 0) {
+          const match = activePlanningAreas.some(area =>
+            zoning.toUpperCase() === area.toUpperCase(),
+          );
           if (!match) continue;
         }
 
@@ -626,8 +638,8 @@ export function SiteSelection(_props: SiteSelectionProps) {
         const permitCount = permitMap.get(blklot) ?? 0;
         const hasDispute = proj.action !== "Approved" || proj.shadow_flag === true;
 
-        const zoningMatch = activeZoningPrefixes.some(prefix =>
-          zoning.toUpperCase().startsWith(prefix.toUpperCase()),
+        const zoningMatch = activePlanningAreas.length === 0 || activePlanningAreas.some(area =>
+          zoning.toUpperCase() === area.toUpperCase(),
         );
         const readinessScore = computeReadiness(zoningMatch, permitCount, hasDispute, assessedValue);
 
@@ -645,11 +657,14 @@ export function SiteSelection(_props: SiteSelectionProps) {
         });
       }
 
+      console.log("[SiteSelection] After filtering:", candidates.length, "candidates");
+
       // Sort by readiness desc, then assessed value desc
       candidates.sort((a, b) => b.readinessScore - a.readinessScore || b.assessedValue - a.assessedValue);
 
       // Top 10 with rank
       const top = candidates.slice(0, 10).map((s, i) => ({ ...s, rank: i + 1 }));
+      console.log("[SiteSelection] Final results:", top.length);
       setResults(top);
 
     } catch (err) {
@@ -657,7 +672,7 @@ export function SiteSelection(_props: SiteSelectionProps) {
     } finally {
       setSearching(false);
     }
-  }, [form, activeZoningPrefixes]);
+  }, [form, activePlanningAreas]);
 
   // AI notes generation on parcel click
   const generateNotes = useCallback(async (site: SiteResult) => {
@@ -791,13 +806,15 @@ Focus on development potential, zoning implications, and any risks. Be concise a
           </div>
         )}
 
-        {/* Empty state after search with no results */}
-        {!searching && results.length === 0 && form.zoning.length > 0 && (
+        {/* Empty state */}
+        {!searching && results.length === 0 && (
           <div style={{
             textAlign: "center", padding: "40px 20px",
             fontFamily: FONTS.body, color: COLORS.warmGray,
           }}>
-            Click "Find Sites" to search District 3 for matching parcels.
+            {searchedOnce
+              ? "No sites match your criteria. Try broadening your search."
+              : 'Click "Find Sites" to search District 3 for matching parcels.'}
           </div>
         )}
 
