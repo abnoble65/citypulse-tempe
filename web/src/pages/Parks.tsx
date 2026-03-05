@@ -88,6 +88,17 @@ function fmtDate(iso: string): string {
   });
 }
 
+/** Fix doubled-domain URLs like "https://host//host/path" → "https://host/path" */
+function fixUrl(raw: string): string {
+  try {
+    const u = new URL(raw);
+    u.pathname = u.pathname.replace(/\/\/[^/]+/, "");
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+
 // ── Skeleton cards ────────────────────────────────────────────────────────────
 
 function ParksSkeletons() {
@@ -265,7 +276,7 @@ function MeetingCard({
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {meeting.pdf_url && (
             <a
-              href={meeting.pdf_url}
+              href={fixUrl(meeting.pdf_url)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={e => e.stopPropagation()}
