@@ -59,11 +59,16 @@ function dateFileStamp(): string {
   return `${y}${m}${day}`;
 }
 
-// ── Colors ──────────────────────────────────────────────────────────────────
+// ── Brand colors ────────────────────────────────────────────────────────────
 
-const ORANGE = "#D4643B";
-const CHARCOAL = "#3D3832";
-const WARM_GRAY = "#B0A89E";
+const ORANGE = "#E8652D";
+const NAVY = "#1a1a2e";
+const BODY = "#333333";
+const LABEL = "#666666";
+const MUTED = "#999999";
+const STAR_EMPTY = "#CCCCCC";
+const RISK_RED = "#991B1B";
+const TABLE_BG = "#1a1a2e";
 
 // ── Main export ─────────────────────────────────────────────────────────────
 
@@ -74,23 +79,35 @@ export async function generateSitePacketPDF(input: SitePacketInput): Promise<voi
   const margin = 20;
   const contentW = pageW - margin * 2;
 
+  // ── Logo (fetch at runtime from public/) ──────────────────────────────
+  try {
+    const logoRes = await fetch("/CityPulse_Logo1_Fun.png");
+    if (logoRes.ok) {
+      const blob = await logoRes.blob();
+      const dataUrl = await blobToDataUrl(blob);
+      doc.addImage(dataUrl, "PNG", 160, 8, 30, 30);
+    }
+  } catch {
+    // logo is optional — continue without it
+  }
+
   // ── Header ──────────────────────────────────────────────────────────────
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.setTextColor(CHARCOAL);
-  doc.text("CityPulse Site Report", margin, 15);
+  doc.setFontSize(20);
+  doc.setTextColor(NAVY);
+  doc.text("CityPulse Site Report", margin, 16);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.setTextColor(WARM_GRAY);
+  doc.setTextColor(LABEL);
   doc.text(dateStamp(), margin, 22);
 
   // Orange accent bar
   doc.setFillColor(ORANGE);
-  doc.rect(margin, 25, contentW, 2, "F");
+  doc.rect(margin, 26, contentW, 2, "F");
 
   // ── Map thumbnail ───────────────────────────────────────────────────────
-  const mapY = 31;
+  const mapY = 32;
   const mapH = 80;
   const token = import.meta.env.VITE_MAPBOX_TOKEN ?? "";
 
@@ -99,7 +116,7 @@ export async function generateSitePacketPDF(input: SitePacketInput): Promise<voi
     try {
       const mapUrl =
         `https://api.mapbox.com/styles/v1/mapbox/light-v11/static/` +
-        `pin-s+d4643b(${site.lng},${site.lat})/` +
+        `pin-s+e8652d(${site.lng},${site.lat})/` +
         `${site.lng},${site.lat},15,0/600x300@2x` +
         `?access_token=${token}`;
       const res = await fetch(mapUrl);
@@ -119,22 +136,22 @@ export async function generateSitePacketPDF(input: SitePacketInput): Promise<voi
     doc.rect(margin, mapY, contentW, mapH, "F");
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.setTextColor(WARM_GRAY);
+    doc.setTextColor(MUTED);
     doc.text("Map preview unavailable", pageW / 2, mapY + mapH / 2, { align: "center" });
   }
 
   // ── Parcel Details ──────────────────────────────────────────────────────
   let y = mapY + mapH + 5;
 
+  // Table header bar
+  const headerH = 7;
+  doc.setFillColor(TABLE_BG);
+  doc.rect(margin, y - 4.5, contentW, headerH, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.setTextColor(ORANGE);
-  doc.text("Parcel Details", margin, y);
-  y += 1;
-  doc.setDrawColor(ORANGE);
-  doc.setLineWidth(0.3);
-  doc.line(margin, y, margin + contentW, y);
-  y += 6;
+  doc.setFontSize(11);
+  doc.setTextColor("#FFFFFF");
+  doc.text("Parcel Details", margin + 3, y);
+  y += headerH + 2;
 
   const details: [string, string][] = [
     ["Address", site.address],
@@ -148,11 +165,11 @@ export async function generateSitePacketPDF(input: SitePacketInput): Promise<voi
   doc.setFontSize(10);
   for (const [label, value] of details) {
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(WARM_GRAY);
-    doc.text(label, margin, y);
+    doc.setTextColor(LABEL);
+    doc.text(label, margin + 3, y);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(CHARCOAL);
-    doc.text(value, margin + 45, y);
+    doc.setTextColor(value === "Yes" ? RISK_RED : BODY);
+    doc.text(value, margin + 48, y);
     y += 6;
   }
 
@@ -160,58 +177,70 @@ export async function generateSitePacketPDF(input: SitePacketInput): Promise<voi
   y += 4;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
-  doc.setTextColor(ORANGE);
+  doc.setTextColor(NAVY);
   doc.text("Readiness Score", margin, y);
   y += 1;
   doc.setDrawColor(ORANGE);
+  doc.setLineWidth(0.4);
   doc.line(margin, y, margin + contentW, y);
-  y += 6;
+  y += 7;
 
+  // Stars — draw filled/empty with brand colors
   const filled = site.readinessScore;
-  const stars = Array.from({ length: 5 }, (_, i) => (i < filled ? "\u2605" : "\u2606")).join(" ");
+  doc.setFontSize(14);
+  let starX = margin;
+  for (let i = 0; i < 5; i++) {
+    doc.setTextColor(i < filled ? ORANGE : STAR_EMPTY);
+    doc.text("\u2605", starX, y);
+    starX += 7;
+  }
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  doc.setTextColor(CHARCOAL);
-  doc.text(`${stars}  ${filled}/5`, margin, y);
-  y += 5;
+  doc.setTextColor(BODY);
+  doc.text(`${filled}/5`, starX + 2, y);
+  y += 6;
 
   // Breakdown line
   const parts: string[] = [];
-  // The scoring logic mirrors computeReadiness in SiteSelection.tsx
   if (site.readinessScore >= 2) parts.push("Zoning match +2");
   if (site.permitCount > 0) parts.push("Active permits +1");
   if (!site.hasDispute) parts.push("No disputes +1");
   if (site.assessedValue > 500_000) parts.push("Value >$500K +1");
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.setTextColor(WARM_GRAY);
+  doc.setTextColor(LABEL);
   doc.text(parts.join("  |  "), margin, y);
 
   // ── AI Risk Notes ───────────────────────────────────────────────────────
   y += 10;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
-  doc.setTextColor(ORANGE);
+  doc.setTextColor(NAVY);
   doc.text("AI Risk Notes", margin, y);
   y += 1;
   doc.setDrawColor(ORANGE);
+  doc.setLineWidth(0.4);
   doc.line(margin, y, margin + contentW, y);
   y += 6;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.setTextColor(CHARCOAL);
+  doc.setTextColor(BODY);
   const wrappedNotes = doc.splitTextToSize(notes || "No notes generated.", contentW);
   doc.text(wrappedNotes, margin, y);
 
   // ── Footer ──────────────────────────────────────────────────────────────
+  doc.setDrawColor(ORANGE);
+  doc.setLineWidth(0.4);
+  doc.line(margin, 268, margin + contentW, 268);
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.setTextColor(WARM_GRAY);
+  doc.setTextColor(MUTED);
   doc.text(
     "Generated by CityPulse  |  citypulse-bay.vercel.app",
     pageW / 2,
-    272,
+    273,
     { align: "center" },
   );
 
