@@ -213,7 +213,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
       <div style={{ maxWidth: 820, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
         {districtConfig.number !== "0" && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
-            <SupervisorAvatar districtNumber={districtConfig.number} size={60} showName={true} />
+            <SupervisorAvatar districtNumber={districtConfig.number} size={60} showName={true} onClick={() => onNavigate("Home")} />
           </div>
         )}
         <SectionLabel text="The Briefing" />

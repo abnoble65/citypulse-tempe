@@ -321,7 +321,7 @@ export default function App() {
   const renderPage = () => {
     switch (page) {
       case "Home":
-        return <Home onNavigate={navigate} onGenerate={handleGenerate} loading={loading} error={error} />;
+        return <Home onNavigate={navigate} onGenerate={handleGenerate} loading={loading} error={error} aggregatedData={aggregatedData} />;
       case "MorningGlance":
         return <MorningGlance aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={navigate} />;
       case "Briefing":
@@ -345,7 +345,7 @@ export default function App() {
       case "SiteSelection":
         return <SiteSelection districtConfig={districtConfig} onNavigate={navigate} />;
       default:
-        return <Home onNavigate={navigate} onGenerate={handleGenerate} loading={loading} error={error} />;
+        return <Home onNavigate={navigate} onGenerate={handleGenerate} loading={loading} error={error} aggregatedData={aggregatedData} />;
     }
   };
 

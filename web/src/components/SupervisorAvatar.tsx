@@ -51,6 +51,8 @@ interface SupervisorAvatarProps {
   showName?: boolean;
   /** Override label color. Default COLORS.midGray. */
   nameColor?: string;
+  /** Optional click handler — makes the avatar a clickable element. */
+  onClick?: () => void;
 }
 
 export function SupervisorAvatar({
@@ -58,6 +60,7 @@ export function SupervisorAvatar({
   size = 40,
   showName = false,
   nameColor,
+  onClick,
 }: SupervisorAvatarProps) {
   const info = SUPERVISOR_INFO[districtNumber];
   if (!info) return null;
@@ -67,7 +70,10 @@ export function SupervisorAvatar({
   const fontSize = Math.max(10, Math.round(size * 0.32));
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+    <div
+      style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, cursor: onClick ? "pointer" : undefined }}
+      onClick={onClick}
+    >
       {/* Circle */}
       <div style={{
         width: size, height: size,

@@ -2,8 +2,11 @@ import { useState, lazy, Suspense } from "react";
 import { COLORS, FONTS } from "../theme";
 import { CityPulseLogo } from "../components/Icons";
 import { SupervisorAvatar } from "../components/SupervisorAvatar";
+import { SupervisorProfileCard } from "../components/SupervisorProfileCard";
+import { getProfile } from "../data/supervisorProfiles";
 import { DISTRICTS, DEFAULT_DISTRICT, CITYWIDE_DISTRICT } from "../districts";
 import type { DistrictConfig } from "../districts";
+import type { DistrictData } from "../services/aggregator";
 
 const SFDistrictMapLazy = lazy(() =>
   import("../components/SFDistrictMap").then(m => ({ default: m.SFDistrictMap }))
@@ -14,6 +17,7 @@ interface HomeProps {
   onGenerate: (district: DistrictConfig) => void;
   loading:    boolean;
   error:      string | null;
+  aggregatedData?: DistrictData | null;
 }
 
 /** Current SF Board of Supervisors (2025) */
@@ -33,7 +37,7 @@ const SUPERVISORS: Record<string, string> = {
 
 const DISTRICT_LIST = Object.values(DISTRICTS);
 
-export function Home({ onGenerate, loading, error }: HomeProps) {
+export function Home({ onGenerate, loading, error, aggregatedData }: HomeProps) {
   const [selectedDistrict, setSelectedDistrict] = useState<DistrictConfig>(DEFAULT_DISTRICT);
   const [hoveredDistrict,  setHoveredDistrict]  = useState<string | null>(null);
 
@@ -42,7 +46,6 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
       minHeight: "100vh",
       background: COLORS.cream,
       display: "flex", flexDirection: "column", alignItems: "center",
-      justifyContent: "center",
       padding: "60px 24px",
     }}>
       <div style={{ marginBottom: 40, filter: "drop-shadow(0 6px 24px rgba(212,100,59,0.2))" }}>
@@ -264,6 +267,18 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
           })}
         </div>
       </div>
+
+      {/* Supervisor profile card */}
+      {selectedDistrict.number !== "0" && (
+        <div style={{ marginTop: 28, marginBottom: 28, maxWidth: 520, width: "100%" }}>
+          <SupervisorProfileCard
+            profile={getProfile(selectedDistrict.number)}
+            districtConfig={selectedDistrict}
+            aggregatedData={aggregatedData}
+            defaultExpanded={false}
+          />
+        </div>
+      )}
 
       <button
         onClick={() => onGenerate(selectedDistrict)}
