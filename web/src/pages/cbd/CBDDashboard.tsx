@@ -21,6 +21,7 @@ import { COLORS, FONTS } from "../../theme";
 import { isPointInCBD, type CBDBoundaryEntry } from "../../utils/geoFilter";
 import { renderMarkdownBlock } from "../../components/MarkdownText";
 import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
+import { fetch311ForCBD } from "../../utils/cbdFetch";
 import Anthropic from "@anthropic-ai/sdk";
 
 const DATASF = "https://data.sfgov.org/resource";
@@ -382,45 +383,41 @@ export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
   const boundaryEntry = useMemo(() => config ? buildBoundaryEntry(config) : null, [config]);
   const cbdBoundaries = useMemo(() => boundaryEntry ? [boundaryEntry] : [], [boundaryEntry]);
 
-  // Fetch raw DataSF data and filter to CBD boundary
+  // Fetch data: 311 via server-side spatial filter, permits/evictions via district
   useEffect(() => {
     if (!config?.boundary_geojson || !cbdBoundaries.length) return;
     setStatsLoading(true);
 
     const district = config.supervisor_district ? String(config.supervisor_district) : null;
-    const cutoff90 = new Date();
-    cutoff90.setDate(cutoff90.getDate() - 90);
-    const cutoffStr = cutoff90.toISOString().split("T")[0];
 
     const permitWhere = district
       ? `supervisor_district='${district}' AND location IS NOT NULL`
       : `location IS NOT NULL`;
-    const threeOneOneWhere = district
-      ? `supervisor_district='${district}' AND requested_datetime >= '${cutoffStr}T00:00:00.000' AND lat IS NOT NULL`
-      : `requested_datetime >= '${cutoffStr}T00:00:00.000' AND lat IS NOT NULL`;
     const evictionWhere = district
       ? `supervisor_district='${district}' AND file_date>'2023-01-01'`
       : `file_date>'2023-01-01'`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
 
     Promise.all([
       fetch(`${DATASF}/i98e-djp9.json?${new URLSearchParams({
         $where: permitWhere,
         $select: "location,permit_type_definition,estimated_cost,street_number,street_name,street_suffix,status",
         $limit: "2000",
-      })}`).then(r => r.json()).catch(() => []),
+      })}`, { signal: controller.signal }).then(r => r.json()).catch(() => []),
 
-      fetch(`${DATASF}/vw6y-z8j6.json?${new URLSearchParams({
-        $where: threeOneOneWhere,
-        $select: "lat,long,service_name,address,requested_datetime,status_description",
-        $limit: "2000",
-      })}`).then(r => r.json()).catch(() => []),
+      // 311: server-side lat/lng bounding box filter — no client-side polygon
+      fetch311ForCBD(config, { days: 90, limit: 2000, signal: controller.signal }),
 
       fetch(`${DATASF}/5cei-gny5.json?${new URLSearchParams({
         $where: evictionWhere,
         $select: "shape,address,file_date",
         $limit: "500",
-      })}`).then(r => r.json()).catch(() => []),
+      })}`, { signal: controller.signal }).then(r => r.json()).catch(() => []),
     ]).then(([permitRows, threeOneOneRows, evictionRows]) => {
+      clearTimeout(timeout);
+
       const permits: PermitPoint[] = (permitRows as any[])
         .filter((r: any) => r.location?.coordinates)
         .map((r: any) => ({
@@ -431,15 +428,12 @@ export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
         }))
         .filter(p => isPointInCBD(p.lat, p.lng, cbdBoundaries) !== null);
 
-      const threeOneOne: ThreeOneOnePoint[] = (threeOneOneRows as any[])
-        .filter((r: any) => r.lat && r.long)
-        .map((r: any) => ({
-          lat: parseFloat(r.lat), lng: parseFloat(r.long),
-          category: r.service_name ?? "", address: r.address ?? "",
-          date: (r.requested_datetime ?? "").split("T")[0],
-          status: r.status_description,
-        }))
-        .filter(p => !isNaN(p.lat) && isPointInCBD(p.lat, p.lng, cbdBoundaries) !== null);
+      // 311 already filtered server-side by bounding box — map to local type
+      const threeOneOne: ThreeOneOnePoint[] = threeOneOneRows.map(r => ({
+        lat: r.lat, lng: r.lng,
+        category: r.category, address: r.address,
+        date: r.date, status: r.status,
+      }));
 
       const evictions: EvictionPoint[] = (evictionRows as any[])
         .filter((r: any) => r.shape?.coordinates)
@@ -452,7 +446,13 @@ export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
       console.log(`[CBDDashboard] ${config.name}: ${permits.length} permits, ${threeOneOne.length} 311, ${evictions.length} evictions`);
       setStats({ permits, threeOneOne, evictions });
       setStatsLoading(false);
+    }).catch(err => {
+      clearTimeout(timeout);
+      console.warn("[CBDDashboard] fetch failed:", err);
+      setStatsLoading(false);
     });
+
+    return () => { clearTimeout(timeout); controller.abort(); };
   }, [config, cbdBoundaries]);
 
   // Generate AI summary once stats are loaded

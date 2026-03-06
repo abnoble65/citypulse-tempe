@@ -18,9 +18,9 @@ import {
   XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
-import { useCBD, type CBDConfig } from "../../contexts/CBDContext";
+import { useCBD } from "../../contexts/CBDContext";
 import { COLORS, FONTS } from "../../theme";
-import { isPointInCBD, type CBDBoundaryEntry } from "../../utils/geoFilter";
+import { fetch311ForCBD, type CBD311Row } from "../../utils/cbdFetch";
 import { renderMarkdownBlock } from "../../components/MarkdownText";
 import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
 import Anthropic from "@anthropic-ai/sdk";
@@ -31,17 +31,8 @@ const MAPBOX_TILE = (token: string) =>
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-interface ThreeOneOneRow {
-  lat: number;
-  lng: number;
-  category: string;
+interface ThreeOneOneRow extends CBD311Row {
   normalizedCategory: Category;
-  address: string;
-  date: string;
-  closedDate: string | null;
-  month: string;
-  status?: string;
-  subtype?: string;
 }
 
 interface PermitRow {
@@ -77,11 +68,6 @@ function normalizeCategory(serviceName: string): Category {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function buildBoundaryEntry(config: CBDConfig): CBDBoundaryEntry | null {
-  if (!config.boundary_geojson) return null;
-  return { name: config.name, geometry: config.boundary_geojson };
-}
-
 function boundsFromMultiPolygon(coords: number[][][][]): L.LatLngBounds | null {
   const pts: L.LatLng[] = [];
   for (const poly of coords)
@@ -89,45 +75,6 @@ function boundsFromMultiPolygon(coords: number[][][][]): L.LatLngBounds | null {
       for (const [lng, lat] of ring)
         pts.push(L.latLng(lat, lng));
   return pts.length ? L.latLngBounds(pts) : null;
-}
-
-/** Extract a bounding box {minLat, maxLat, minLng, maxLng} from MultiPolygon coords. */
-function boundingBoxFromCoords(coords: number[][][][]): {
-  minLat: number; maxLat: number; minLng: number; maxLng: number;
-} {
-  let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
-  for (const poly of coords)
-    for (const ring of poly)
-      for (const [lng, lat] of ring) {
-        if (lat < minLat) minLat = lat;
-        if (lat > maxLat) maxLat = lat;
-        if (lng < minLng) minLng = lng;
-        if (lng > maxLng) maxLng = lng;
-      }
-  return { minLat, maxLat, minLng, maxLng };
-}
-
-/** Fast bounding-box pre-filter before expensive polygon check. */
-function inBBox(lat: number, lng: number, bb: ReturnType<typeof boundingBoxFromCoords>): boolean {
-  return lat >= bb.minLat && lat <= bb.maxLat && lng >= bb.minLng && lng <= bb.maxLng;
-}
-
-/** Parse a raw 311 API row into our ThreeOneOneRow type. */
-function parse311Row(r: any): ThreeOneOneRow | null {
-  const lat = parseFloat(r.lat);
-  const lng = parseFloat(r.long);
-  if (isNaN(lat) || isNaN(lng)) return null;
-  const cat = r.service_name ?? "";
-  const dt = r.requested_datetime ?? "";
-  const cd = r.closed_datetime ?? null;
-  return {
-    lat, lng,
-    category: cat, normalizedCategory: normalizeCategory(cat),
-    address: r.address ?? "", date: dt.split("T")[0],
-    closedDate: cd ? cd.split("T")[0] : null,
-    month: dt.slice(0, 7),
-    status: r.status_description, subtype: r.service_subtype,
-  };
 }
 
 // ── Icon helpers ───────────────────────────────────────────────────────────
@@ -251,69 +198,42 @@ export function CleanSafeReport() {
     setCatFilter(prev => ({ ...prev, [cat]: val }));
   }, []);
 
-  const boundaryEntry = useMemo(() => config ? buildBoundaryEntry(config) : null, [config]);
-  const cbdBoundaries = useMemo(() => boundaryEntry ? [boundaryEntry] : [], [boundaryEntry]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // ── Two-stage fetch: 90-day fast + 365-day background ──────────────────
+  // ── Fetch 311 (server-side spatial filter) + permits ──────────────────
   useEffect(() => {
-    if (!config?.boundary_geojson || !cbdBoundaries.length) return;
+    if (!config?.boundary_geojson) return;
     setLoading(true);
+    setFetchError(null);
 
-    const coords = config.boundary_geojson.coordinates;
-    const bb = boundingBoxFromCoords(coords);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+
     const district = config.supervisor_district ? String(config.supervisor_district) : null;
-    const now = new Date();
-
-    // 90-day cutoff for fast initial load
-    const cutoff90d = new Date(now);
-    cutoff90d.setDate(cutoff90d.getDate() - 90);
-    const cutoff90 = cutoff90d.toISOString().split("T")[0];
-
-    // Server-side spatial filters (Socrata within_box: NW lat, NW lng, SE lat, SE lng)
-    const spatial311 = `within_box(point, ${bb.maxLat}, ${bb.minLng}, ${bb.minLat}, ${bb.maxLng})`;
-    const spatialPermit = `within_box(location, ${bb.maxLat}, ${bb.minLng}, ${bb.minLat}, ${bb.maxLng})`;
-
-    const threeWhere90 = [
-      spatial311,
-      `requested_datetime>='${cutoff90}T00:00:00.000'`,
-      district ? `supervisor_district='${district}'` : null,
-    ].filter(Boolean).join(" AND ");
-
     const permitWhere = [
-      spatialPermit,
+      `location IS NOT NULL`,
       `status IN('ISSUED','FILING','APPROVED')`,
       district ? `supervisor_district='${district}'` : null,
     ].filter(Boolean).join(" AND ");
 
-    // 10-second timeout safety net — show partial data if still loading
-    let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; setLoading(false); }, 10_000);
-
-    // Stage 1: 90-day 311 + permits (fast)
+    // 311: server-side lat/lng filter via fetch311ForCBD (no client-side polygon)
+    // Permits: simple district filter (small dataset)
     Promise.all([
-      fetch(`${DATASF}/vw6y-z8j6.json?${new URLSearchParams({
-        $where: threeWhere90,
-        $select: "lat,long,service_name,service_subtype,address,requested_datetime,closed_datetime,status_description",
-        $limit: "2000", $order: "requested_datetime DESC",
-      })}`).then(r => r.json()).catch(() => []),
+      fetch311ForCBD(config, { days: 180, limit: 3000, signal: controller.signal }),
 
       fetch(`${DATASF}/i98e-djp9.json?${new URLSearchParams({
         $where: permitWhere,
         $select: "location,permit_type_definition,estimated_cost,street_number,street_name,street_suffix,status",
         $limit: "2000",
-      })}`).then(r => r.json()).catch(() => []),
-    ]).then(([rawThree, rawPermit]) => {
-      clearTimeout(timer);
+      })}`, { signal: controller.signal }).then(r => r.json()).catch(() => []),
+    ]).then(([raw311, rawPermit]) => {
+      clearTimeout(timeout);
 
-      // BBox pre-filter → polygon check (much faster than polygon-only)
-      const filtered311: ThreeOneOneRow[] = [];
-      for (const r of rawThree as any[]) {
-        const row = parse311Row(r);
-        if (!row) continue;
-        if (inBBox(row.lat, row.lng, bb) && isPointInCBD(row.lat, row.lng, cbdBoundaries) !== null) {
-          filtered311.push(row);
-        }
-      }
+      // Add normalizedCategory to 311 rows
+      const filtered311: ThreeOneOneRow[] = raw311.map(r => ({
+        ...r,
+        normalizedCategory: normalizeCategory(r.category),
+      }));
 
       const filteredPermits: PermitRow[] = (rawPermit as any[])
         .filter((r: any) => r.location?.coordinates)
@@ -323,46 +243,34 @@ export function CleanSafeReport() {
           cost: parseFloat(r.estimated_cost) || 0,
           address: [r.street_number, r.street_name, r.street_suffix].filter(Boolean).join(" "),
           status: r.status,
-        }))
-        .filter(p => inBBox(p.lat, p.lng, bb) && isPointInCBD(p.lat, p.lng, cbdBoundaries) !== null);
+        }));
 
-      console.log(`[CleanSafe] ${config.name}: ${filtered311.length} 311 (90d), ${filteredPermits.length} permits`);
+      console.log(`[CleanSafe] ${config.name}: ${filtered311.length} 311, ${filteredPermits.length} permits`);
       setRows311(filtered311);
       setPermits(filteredPermits);
-      if (!timedOut) setLoading(false);
+      setLoading(false);
 
-      // Stage 2: background fetch 365-day data for trends
+      // Background: 365-day historical data for trend charts
       setHistLoading(true);
-      const cutoff365d = new Date(now);
-      cutoff365d.setFullYear(cutoff365d.getFullYear() - 1);
-      const cutoff365 = cutoff365d.toISOString().split("T")[0];
-
-      const threeWhere365 = [
-        spatial311,
-        `requested_datetime>='${cutoff365}T00:00:00.000'`,
-        district ? `supervisor_district='${district}'` : null,
-      ].filter(Boolean).join(" AND ");
-
-      fetch(`${DATASF}/vw6y-z8j6.json?${new URLSearchParams({
-        $where: threeWhere365,
-        $select: "lat,long,service_name,service_subtype,address,requested_datetime,closed_datetime,status_description",
-        $limit: "5000", $order: "requested_datetime DESC",
-      })}`).then(r => r.json()).then((rawHist: any[]) => {
-        const hist: ThreeOneOneRow[] = [];
-        for (const r of rawHist) {
-          const row = parse311Row(r);
-          if (!row) continue;
-          if (inBBox(row.lat, row.lng, bb) && isPointInCBD(row.lat, row.lng, cbdBoundaries) !== null) {
-            hist.push(row);
-          }
-        }
-        console.log(`[CleanSafe] ${config.name}: ${hist.length} 311 (365d historical)`);
-        setHistRows311(hist);
-      }).catch(err => {
-        console.warn("[CleanSafe] historical fetch failed:", err);
-      }).finally(() => setHistLoading(false));
+      fetch311ForCBD(config, { days: 365, limit: 5000 })
+        .then(hist => {
+          setHistRows311(hist.map(r => ({ ...r, normalizedCategory: normalizeCategory(r.category) })));
+        })
+        .catch(err => console.warn("[CleanSafe] historical fetch failed:", err))
+        .finally(() => setHistLoading(false));
+    }).catch(err => {
+      clearTimeout(timeout);
+      if (err?.name === "AbortError") {
+        setFetchError("Unable to load 311 data — request timed out. Try refreshing.");
+      } else {
+        setFetchError("Unable to load 311 data. Try refreshing.");
+      }
+      console.warn("[CleanSafe] fetch failed:", err);
+      setLoading(false);
     });
-  }, [config, cbdBoundaries]);
+
+    return () => { clearTimeout(timeout); controller.abort(); };
+  }, [config]);
 
   // ── AI operational analysis ──────────────────────────────────────────────
   useEffect(() => {
@@ -604,7 +512,19 @@ Flag any categories with slow resolution times vs others and recommend resource 
         variant="clean-safe"
       />
 
-      {!loading && (
+      {/* ── Fetch error ──────────────────────────────────────── */}
+      {fetchError && !loading && (
+        <div style={{
+          background: "#FEF2F2", border: "1px solid #FECACA",
+          borderRadius: 12, padding: "20px 24px", marginBottom: 24,
+          fontFamily: FONTS.body, fontSize: 14, color: "#991B1B",
+          textAlign: "center",
+        }}>
+          {fetchError}
+        </div>
+      )}
+
+      {!loading && !fetchError && (
         <div style={{ animation: "cp-page-in 0.3s ease-out" }}>
           {/* ── Summary bar ────────────────────────────────────────── */}
           <div style={{
