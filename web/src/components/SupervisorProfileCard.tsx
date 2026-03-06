@@ -307,82 +307,96 @@ export function SupervisorProfileCard({
           {/* About */}
           <SectionHeading text="About" />
           <div style={{ marginBottom: 24 }}>
-            <LabeledRow label="Background" value={profile.background} />
-            <LabeledRow label="Education" value={profile.education} />
-            <LabeledRow label="Residency" value={profile.residency} />
-            <LabeledRow label="Prior Role" value={profile.priorRole} />
+            {profile.background && <LabeledRow label="Background" value={profile.background} />}
+            {profile.education && <LabeledRow label="Education" value={profile.education} />}
+            {profile.residency && <LabeledRow label="Residency" value={profile.residency} />}
+            {profile.priorRole && <LabeledRow label="Prior Role" value={profile.priorRole} />}
           </div>
 
           {/* Stated Priorities */}
           <SectionHeading text="Stated Priorities" />
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: 10,
-            marginBottom: 24,
-          }}>
-            {profile.statedPriorities.map(p => {
-              const IconFn = ICON_MAP[p.icon];
-              return (
-                <div key={p.topic} style={{
-                  background: COLORS.white,
-                  border: "1px solid #eee",
-                  borderLeft: `3px solid ${COLORS.orange}`,
-                  borderRadius: 10,
-                  padding: "14px 16px",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
-                    {IconFn && <IconFn />}
-                    <span style={{
-                      fontFamily: FONTS.display, fontSize: 14, fontWeight: 700,
-                      color: "#333",
-                    }}>
-                      {p.topic}
-                    </span>
-                  </div>
-                  <p style={{
-                    fontFamily: FONTS.body, fontSize: 13.5,
-                    color: "#333", lineHeight: 1.6,
-                    margin: "0 0 6px",
+          {profile.statedPriorities.length > 0 ? (
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: 10,
+              marginBottom: 24,
+            }}>
+              {profile.statedPriorities.map(p => {
+                const IconFn = ICON_MAP[p.icon];
+                return (
+                  <div key={p.topic} style={{
+                    background: COLORS.white,
+                    border: "1px solid #eee",
+                    borderLeft: `3px solid ${COLORS.orange}`,
+                    borderRadius: 10,
+                    padding: "14px 16px",
                   }}>
-                    {p.position}
-                  </p>
-                  <a
-                    href={p.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      fontFamily: FONTS.body, fontSize: 12,
-                      color: "#999", textDecoration: "none",
-                      fontStyle: "italic",
-                    }}
-                  >
-                    Source: {p.source}
-                  </a>
-                </div>
-              );
-            })}
-          </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
+                      {IconFn && <IconFn />}
+                      <span style={{
+                        fontFamily: FONTS.display, fontSize: 14, fontWeight: 700,
+                        color: "#333",
+                      }}>
+                        {p.topic}
+                      </span>
+                    </div>
+                    <p style={{
+                      fontFamily: FONTS.body, fontSize: 13.5,
+                      color: "#333", lineHeight: 1.6,
+                      margin: "0 0 6px",
+                    }}>
+                      {p.position}
+                    </p>
+                    <a
+                      href={p.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontFamily: FONTS.body, fontSize: 12,
+                        color: "#999", textDecoration: "none",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      Source: {p.source}
+                    </a>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{
+              fontFamily: FONTS.body, fontSize: 14,
+              color: "#999", fontStyle: "italic",
+              marginBottom: 24,
+            }}>
+              Policy priorities coming soon.
+            </div>
+          )}
 
           {/* Community Record */}
-          <SectionHeading text="Community Record" />
-          <ul style={{ margin: "0 0 24px", padding: 0, listStyle: "none" }}>
-            {profile.communityRecord.map((item, i) => (
-              <li key={i} style={{
-                fontFamily: FONTS.body, fontSize: 15,
-                color: "#333", lineHeight: 1.6,
-                paddingLeft: 18, position: "relative",
-                marginBottom: 5,
-              }}>
-                <span style={{
-                  position: "absolute", left: 0, top: 10,
-                  width: 6, height: 6, borderRadius: "50%",
-                  background: COLORS.orange,
-                }} />
-                {item}
-              </li>
-            ))}
-          </ul>
+          {profile.communityRecord.length > 0 && (
+            <>
+              <SectionHeading text="Community Record" />
+              <ul style={{ margin: "0 0 24px", padding: 0, listStyle: "none" }}>
+                {profile.communityRecord.map((item, i) => (
+                  <li key={i} style={{
+                    fontFamily: FONTS.body, fontSize: 15,
+                    color: "#333", lineHeight: 1.6,
+                    paddingLeft: 18, position: "relative",
+                    marginBottom: 5,
+                  }}>
+                    <span style={{
+                      position: "absolute", left: 0, top: 10,
+                      width: 6, height: 6, borderRadius: "50%",
+                      background: COLORS.orange,
+                    }} />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
           {/* Contact */}
           <SectionHeading text="Contact" />
