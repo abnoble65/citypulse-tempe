@@ -14,7 +14,8 @@ import { MapContainer, TileLayer, GeoJSON, Marker, Popup, useMap } from "react-l
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
+  LineChart, Line, AreaChart, Area,
+  XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
 import { useCBD, type CBDConfig } from "../../contexts/CBDContext";
@@ -36,6 +37,7 @@ interface ThreeOneOneRow {
   normalizedCategory: Category;
   address: string;
   date: string;
+  closedDate: string | null;
   month: string;
   status?: string;
   subtype?: string;
@@ -230,7 +232,7 @@ export function CleanSafeReport() {
     Promise.all([
       fetch(`${DATASF}/vw6y-z8j6.json?${new URLSearchParams({
         $where: threeWhere,
-        $select: "lat,long,service_name,service_subtype,address,requested_datetime,status_description",
+        $select: "lat,long,service_name,service_subtype,address,requested_datetime,closed_datetime,status_description",
         $limit: "5000", $order: "requested_datetime DESC",
       })}`).then(r => r.json()).catch(() => []),
 
@@ -245,10 +247,13 @@ export function CleanSafeReport() {
         .map((r: any) => {
           const cat = r.service_name ?? "";
           const dt = r.requested_datetime ?? "";
+          const cd = r.closed_datetime ?? null;
           return {
             lat: parseFloat(r.lat), lng: parseFloat(r.long),
             category: cat, normalizedCategory: normalizeCategory(cat),
-            address: r.address ?? "", date: dt.split("T")[0], month: dt.slice(0, 7),
+            address: r.address ?? "", date: dt.split("T")[0],
+            closedDate: cd ? cd.split("T")[0] : null,
+            month: dt.slice(0, 7),
             status: r.status_description, subtype: r.service_subtype,
           };
         })
@@ -299,7 +304,32 @@ export function CleanSafeReport() {
     const topAddrs = Object.entries(addrMap).sort(([, a], [, b]) => b.count - a.count).slice(0, 10)
       .map(([addr, { count, topCat }]) => `${addr} (${count} reports, mostly ${topCat})`).join("\n");
 
-    const prompt = `You are an operations analyst for the ${config.name} Community Benefit District in San Francisco. Analyze the 311 service request data for the last 90 days. Identify patterns, hotspots, and trends. Provide 3 specific actionable recommendations with addresses. Be concise and data-driven.
+    // Resolution data for AI context
+    const closedCount = rows311.filter(r => r.closedDate).length;
+    const resRate = rows311.length > 0 ? ((closedCount / rows311.length) * 100).toFixed(1) : "0";
+    const resDaysList: number[] = [];
+    for (const r of rows311) {
+      if (!r.closedDate) continue;
+      const d = (new Date(r.closedDate).getTime() - new Date(r.date).getTime()) / 86_400_000;
+      if (d > 0) resDaysList.push(d);
+    }
+    const avgResDays = resDaysList.length > 0
+      ? (resDaysList.reduce((s, d) => s + d, 0) / resDaysList.length).toFixed(1)
+      : "N/A";
+    const resCatDays: Record<string, number[]> = {};
+    for (const r of rows311) {
+      if (!r.closedDate) continue;
+      const d = (new Date(r.closedDate).getTime() - new Date(r.date).getTime()) / 86_400_000;
+      if (d > 0) {
+        if (!resCatDays[r.normalizedCategory]) resCatDays[r.normalizedCategory] = [];
+        resCatDays[r.normalizedCategory].push(d);
+      }
+    }
+    const catResBreakdown = Object.entries(resCatDays)
+      .map(([cat, days]) => `${cat}: ${(days.reduce((s, d) => s + d, 0) / days.length).toFixed(1)} days avg`)
+      .join(", ");
+
+    const prompt = `You are an operations analyst for the ${config.name} Community Benefit District in San Francisco. Analyze the 311 service request data. Identify patterns, hotspots, resolution performance, and trends. Provide 3 specific actionable recommendations with addresses. Be concise and data-driven.
 
 DATA (last 12 months within ${config.name} CBD boundary):
 - Total 311 requests: ${rows311.length}
@@ -308,7 +338,12 @@ DATA (last 12 months within ${config.name} CBD boundary):
 ${topAddrs}
 - Active construction permits in district: ${permits.length}
 
-Write 2-3 paragraphs of analysis. Include specific addresses and numbers. End with 3 bullet-point recommendations.`;
+RESOLUTION DATA:
+- Opened: ${rows311.length}, Closed/Resolved: ${closedCount} (${resRate}% resolution rate)
+- Average days to resolution: ${avgResDays}
+- Resolution speed by category: ${catResBreakdown || "no data"}
+
+Flag any categories with slow resolution times vs others and recommend resource reallocation. Write 2-3 paragraphs of analysis. Include specific addresses and numbers. End with 3 bullet-point recommendations.`;
 
     const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
     client.messages.create({
@@ -344,20 +379,89 @@ Write 2-3 paragraphs of analysis. Include specific addresses and numbers. End wi
     }));
   }, [rows311]);
 
+  // Resolution stats
+  const resolutionStats = useMemo(() => {
+    const closed = rows311.filter(r => r.closedDate);
+    const total = rows311.length;
+    const rate = total > 0 ? closed.length / total : 0;
+
+    // Days to resolution for closed requests
+    const daysList: number[] = [];
+    for (const r of closed) {
+      const open = new Date(r.date).getTime();
+      const close = new Date(r.closedDate!).getTime();
+      if (close > open) daysList.push((close - open) / 86_400_000);
+    }
+    const avgDays = daysList.length > 0 ? daysList.reduce((s, d) => s + d, 0) / daysList.length : 0;
+
+    // Per-category average resolution days
+    const catDays: Record<string, number[]> = {};
+    for (const r of closed) {
+      const open = new Date(r.date).getTime();
+      const close = new Date(r.closedDate!).getTime();
+      if (close <= open) continue;
+      const d = (close - open) / 86_400_000;
+      if (!catDays[r.normalizedCategory]) catDays[r.normalizedCategory] = [];
+      catDays[r.normalizedCategory].push(d);
+    }
+    const catAvgDays: Record<string, number> = {};
+    for (const [cat, days] of Object.entries(catDays)) {
+      catAvgDays[cat] = days.reduce((s, d) => s + d, 0) / days.length;
+    }
+
+    return { closedCount: closed.length, total, rate, avgDays, catAvgDays };
+  }, [rows311]);
+
+  // Weekly open vs closed data for area chart
+  const weeklyOpenClose = useMemo(() => {
+    if (!rows311.length) return [];
+    // Build weekly buckets keyed by ISO week start (Monday)
+    function weekStart(dateStr: string): string {
+      const d = new Date(dateStr);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+      const monday = new Date(d);
+      monday.setDate(diff);
+      return monday.toISOString().split("T")[0];
+    }
+
+    const opened: Record<string, number> = {};
+    const closed: Record<string, number> = {};
+    for (const r of rows311) {
+      const w = weekStart(r.date);
+      opened[w] = (opened[w] ?? 0) + 1;
+      if (r.closedDate) {
+        const cw = weekStart(r.closedDate);
+        closed[cw] = (closed[cw] ?? 0) + 1;
+      }
+    }
+    const allWeeks = new Set([...Object.keys(opened), ...Object.keys(closed)]);
+    return [...allWeeks].sort().map(w => ({
+      week: new Date(w).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      Opened: opened[w] ?? 0,
+      Resolved: closed[w] ?? 0,
+    }));
+  }, [rows311]);
+
   const hotspots = useMemo(() => {
-    const m: Record<string, { count: number; cats: Record<string, number>; lastDate: string; lat: number; lng: number }> = {};
+    const m: Record<string, { count: number; cats: Record<string, number>; lastDate: string; lat: number; lng: number; resDays: number[] }> = {};
     for (const r of rows311) {
       const a = r.address.toUpperCase().trim();
       if (!a) continue;
-      if (!m[a]) m[a] = { count: 0, cats: {}, lastDate: "", lat: r.lat, lng: r.lng };
+      if (!m[a]) m[a] = { count: 0, cats: {}, lastDate: "", lat: r.lat, lng: r.lng, resDays: [] };
       m[a].count++;
       m[a].cats[r.normalizedCategory] = (m[a].cats[r.normalizedCategory] ?? 0) + 1;
       if (r.date > m[a].lastDate) m[a].lastDate = r.date;
+      if (r.closedDate) {
+        const d = (new Date(r.closedDate).getTime() - new Date(r.date).getTime()) / 86_400_000;
+        if (d > 0) m[a].resDays.push(d);
+      }
     }
     return Object.entries(m).sort(([, a], [, b]) => b.count - a.count).slice(0, 10)
-      .map(([address, { count, cats, lastDate, lat, lng }]) => ({
+      .map(([address, { count, cats, lastDate, lat, lng, resDays }]) => ({
         address, count, lat, lng, lastDate,
         topCategory: Object.entries(cats).sort(([, a], [, b]) => b - a)[0]?.[0] as Category ?? "Other",
+        avgResDays: resDays.length > 0 ? resDays.reduce((s, d) => s + d, 0) / resDays.length : null,
       }));
   }, [rows311]);
 
@@ -416,6 +520,46 @@ Write 2-3 paragraphs of analysis. Include specific addresses and numbers. End wi
 
       {!loading && (
         <>
+          {/* ── Summary bar ────────────────────────────────────────── */}
+          <div style={{
+            display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24,
+          }}>
+            {[
+              { label: "Total Requests", value: String(rows311.length), color: "#8B5CF6" },
+              { label: "Open", value: String(rows311.length - resolutionStats.closedCount), color: "#EA580C" },
+              { label: "Resolved", value: String(resolutionStats.closedCount), color: "#10B981" },
+              { label: "Avg Resolution", value: resolutionStats.avgDays > 0 ? `${resolutionStats.avgDays.toFixed(1)}d` : "\u2014", color: "#3B82F6" },
+              { label: "Categories", value: String(CATEGORIES.length), color: "#6B7280" },
+              {
+                label: "Resolution Rate",
+                value: rows311.length > 0 ? `${(resolutionStats.rate * 100).toFixed(0)}%` : "\u2014",
+                color: resolutionStats.rate >= 0.75 ? "#10B981" : resolutionStats.rate >= 0.50 ? "#F59E0B" : "#EF4444",
+              },
+            ].map(s => (
+              <div key={s.label} style={{
+                flex: "1 1 120px", minWidth: 100,
+                background: COLORS.white, borderRadius: 12,
+                border: `1px solid ${COLORS.lightBorder}`,
+                borderLeft: `4px solid ${s.color}`,
+                padding: "14px 12px", textAlign: "center",
+              }}>
+                <div style={{
+                  fontFamily: FONTS.display, fontSize: 24, fontWeight: 700,
+                  color: s.color, lineHeight: 1.1,
+                }}>
+                  {s.value}
+                </div>
+                <div style={{
+                  fontFamily: FONTS.body, fontSize: 10, fontWeight: 500,
+                  color: COLORS.warmGray, marginTop: 4, textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                }}>
+                  {s.label}
+                </div>
+              </div>
+            ))}
+          </div>
+
           {/* ── Section 1: 311 Request Map ──────────────────────── */}
           <Section title="311 Request Map" accent={accent}>
             <CategoryFilters active={catFilter} onChange={toggleCat} />
@@ -510,7 +654,7 @@ Write 2-3 paragraphs of analysis. Include specific addresses and numbers. End wi
                   }}>
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${COLORS.lightBorder}` }}>
-                        {["#", "Address", "Total", "Top Category", "Last Report"].map(h => (
+                        {["#", "Address", "Total", "Top Category", "Avg Resolution", "Last Report"].map(h => (
                           <th key={h} style={{
                             textAlign: "left", padding: "8px 12px",
                             fontSize: 11, fontWeight: 700, color: COLORS.warmGray,
@@ -545,6 +689,18 @@ Write 2-3 paragraphs of analysis. Include specific addresses and numbers. End wi
                               {h.topCategory}
                             </span>
                           </td>
+                          <td style={{ padding: "10px 12px" }}>
+                            {h.avgResDays !== null ? (
+                              <span style={{
+                                fontWeight: 700, fontSize: 12,
+                                color: h.avgResDays < 3 ? "#10B981" : h.avgResDays <= 7 ? "#F59E0B" : "#EF4444",
+                              }}>
+                                {h.avgResDays.toFixed(1)}d
+                              </span>
+                            ) : (
+                              <span style={{ color: COLORS.warmGray }}>{"\u2014"}</span>
+                            )}
+                          </td>
                           <td style={{ padding: "10px 12px", color: COLORS.midGray }}>{h.lastDate}</td>
                         </tr>
                       ))}
@@ -568,12 +724,53 @@ Write 2-3 paragraphs of analysis. Include specific addresses and numbers. End wi
             }}>
               <h2 style={{
                 fontFamily: FONTS.heading, fontSize: 18, fontWeight: 700,
-                color: accent, margin: "0 0 16px",
+                color: accent, margin: "0 0 12px",
               }}>
-                Monthly Trends
+                Trends
               </h2>
+
+              {/* Open vs Resolved area chart */}
+              {weeklyOpenClose.length > 1 && (
+                <>
+                  <h3 style={{
+                    fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
+                    color: COLORS.charcoal, margin: "0 0 6px",
+                  }}>
+                    Open vs Resolved (weekly)
+                  </h3>
+                  <div style={{ height: 160, marginBottom: 16 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={weeklyOpenClose} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                        <XAxis dataKey="week" tick={{ fontSize: 9, fontFamily: FONTS.body }} interval="preserveStartEnd" />
+                        <YAxis tick={{ fontSize: 9, fontFamily: FONTS.body }} />
+                        <Tooltip contentStyle={{
+                          fontFamily: FONTS.body, fontSize: 12, borderRadius: 8,
+                          border: `1px solid ${COLORS.lightBorder}`,
+                        }} />
+                        <Area type="monotone" dataKey="Opened" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.25} strokeWidth={2} />
+                        <Area type="monotone" dataKey="Resolved" stroke="#10B981" fill="#10B981" fillOpacity={0.25} strokeWidth={2} />
+                        <Legend wrapperStyle={{ fontFamily: FONTS.body, fontSize: 10 }} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <p style={{
+                    fontFamily: FONTS.body, fontSize: 10, color: COLORS.warmGray,
+                    marginBottom: 16, lineHeight: 1.4,
+                  }}>
+                    Green above blue = clearing backlog. Blue above green = falling behind.
+                  </p>
+                </>
+              )}
+
+              {/* Category trends line chart */}
+              <h3 style={{
+                fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
+                color: COLORS.charcoal, margin: "0 0 6px",
+              }}>
+                By Category (monthly)
+              </h3>
               {trendData.length > 0 ? (
-                <div style={{ flex: 1, minHeight: 260 }}>
+                <div style={{ flex: 1, minHeight: 200 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={trendData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                       <XAxis dataKey="month" tick={{ fontSize: 11, fontFamily: FONTS.body }} />

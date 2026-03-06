@@ -80,7 +80,7 @@ function PreviewCard({ icon, title, description, accent }: {
 interface PacketData {
   config: CBDConfig;
   permits: { type: string; cost: number; address: string; status: string }[];
-  rows311: { category: string; address: string; date: string }[];
+  rows311: { category: string; address: string; date: string; closedDate: string | null }[];
   evictions: { address: string; date: string }[];
   aiSummary: string;
 }
@@ -140,6 +140,27 @@ function buildPDF(d: PacketData) {
   const permitTypes: Record<string, number> = {};
   for (const p of permits) permitTypes[p.type || "Other"] = (permitTypes[p.type || "Other"] ?? 0) + 1;
   const topByValue = [...permits].sort((a, b) => b.cost - a.cost).slice(0, 3);
+
+  // Resolution metrics
+  const closedRows = rows311.filter(r => r.closedDate);
+  const resRate = rows311.length > 0 ? ((closedRows.length / rows311.length) * 100).toFixed(1) : "0";
+  const resDaysList: number[] = [];
+  for (const r of closedRows) {
+    const d = (new Date(r.closedDate!).getTime() - new Date(r.date).getTime()) / 86_400_000;
+    if (d > 0) resDaysList.push(d);
+  }
+  const avgResDays = resDaysList.length > 0
+    ? (resDaysList.reduce((s, d) => s + d, 0) / resDaysList.length).toFixed(1)
+    : "N/A";
+  const catResDays: Record<string, number[]> = {};
+  for (const r of closedRows) {
+    const cat = normalize311Cat(r.category);
+    const d = (new Date(r.closedDate!).getTime() - new Date(r.date).getTime()) / 86_400_000;
+    if (d > 0) {
+      if (!catResDays[cat]) catResDays[cat] = [];
+      catResDays[cat].push(d);
+    }
+  }
 
   // ─── PAGE 1: COVER ───────────────────────────────────────────────────
 
@@ -276,6 +297,53 @@ function buildPDF(d: PacketData) {
     doc.setTextColor(60, 60, 60);
     doc.text(`${i + 1}. ${addr} \u2014 ${count} requests`, M + 4, yPos + 4);
     yPos += 7;
+  }
+
+  // Resolution metrics section
+  yPos += 10;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(50, 50, 50);
+  doc.text("Resolution Performance", M, yPos);
+  yPos += 8;
+
+  // Summary line
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(60, 60, 60);
+  doc.text(`Resolution Rate: ${resRate}%  |  Average Days to Resolution: ${avgResDays}  |  Closed: ${closedRows.length} of ${rows311.length}`, M + 4, yPos + 4);
+  yPos += 8;
+
+  // Category resolution speed table
+  doc.setFillColor(245, 245, 245);
+  doc.rect(M, yPos, W - M * 2, 8, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(120, 120, 120);
+  doc.text("CATEGORY", M + 4, yPos + 5.5);
+  doc.text("AVG DAYS", M + 100, yPos + 5.5);
+  doc.text("RESOLVED", M + 130, yPos + 5.5);
+  yPos += 10;
+
+  for (const [cat, days] of Object.entries(catResDays).sort(([, a], [, b]) => {
+    const avgA = a.reduce((s, d) => s + d, 0) / a.length;
+    const avgB = b.reduce((s, d) => s + d, 0) / b.length;
+    return avgB - avgA; // slowest first
+  })) {
+    const avg = days.reduce((s, d) => s + d, 0) / days.length;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    // Color code: green <3d, yellow 3-7d, red >7d
+    if (avg < 3) doc.setTextColor(16, 185, 129);
+    else if (avg <= 7) doc.setTextColor(245, 158, 11);
+    else doc.setTextColor(239, 68, 68);
+    doc.text(cat, M + 4, yPos + 4);
+    doc.text(`${avg.toFixed(1)} days`, M + 100, yPos + 4);
+    doc.setTextColor(60, 60, 60);
+    doc.text(String(days.length), M + 130, yPos + 4);
+    doc.setDrawColor(230, 230, 230);
+    doc.line(M, yPos + 6, W - M, yPos + 6);
+    yPos += 8;
   }
 
   if (aiSummary) {
@@ -423,7 +491,7 @@ export function BoardPacket() {
       const [raw311, rawPermit, rawEvict] = await Promise.all([
         fetch(`${DATASF}/vw6y-z8j6.json?${new URLSearchParams({
           $where: w311,
-          $select: "lat,long,service_name,address,requested_datetime,status_description",
+          $select: "lat,long,service_name,address,requested_datetime,closed_datetime,status_description",
           $limit: "5000",
         })}`).then(r => r.json()).catch(() => []),
 
@@ -446,6 +514,7 @@ export function BoardPacket() {
           category: r.service_name ?? "",
           address: r.address ?? "",
           date: (r.requested_datetime ?? "").split("T")[0],
+          closedDate: r.closed_datetime ? (r.closed_datetime as string).split("T")[0] : null as string | null,
           lat: parseFloat(r.lat),
           lng: parseFloat(r.long),
         }))
