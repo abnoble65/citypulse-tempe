@@ -14,7 +14,7 @@ import { MapContainer, TileLayer, GeoJSON, Marker, Popup, useMap } from "react-l
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar, Cell,
+  AreaChart, Area,
   XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
@@ -142,13 +142,15 @@ function Section({ title, accent, children }: {
   return (
     <div style={{
       background: COLORS.white, borderRadius: 12,
-      border: `1px solid ${COLORS.lightBorder}`,
-      padding: "20px 24px", marginBottom: 24,
+      border: "1px solid #e5e7eb",
+      padding: "20px 24px", marginBottom: 40,
     }}>
       <h2 style={{
-        fontFamily: FONTS.heading, fontSize: 18, fontWeight: 700,
-        color: accent, margin: "0 0 16px",
+        fontFamily: FONTS.heading, fontSize: 16, fontWeight: 600,
+        color: "#1a1a2e", margin: "0 0 16px",
+        display: "flex", alignItems: "center", gap: 8,
       }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: accent, flexShrink: 0 }} />
         {title}
       </h2>
       {children}
@@ -655,15 +657,21 @@ Flag any categories with slow resolution times vs others and recommend resource 
 
           {/* ── Section 2: Hotspots + Trends side by side ────────── */}
           <style>{`
-            @media (max-width: 768px) {
+            .cs-hotspot-row { border-left: 4px solid transparent; transition: border-color 0.15s, background 0.15s; }
+            .cs-hotspot-row:hover { background: #FAFAFA !important; }
+            .cs-hotspot-row .cs-addr { text-decoration: none; }
+            .cs-hotspot-row:hover .cs-addr { text-decoration: underline; }
+            @media (max-width: 1024px) {
               .cs-two-col { grid-template-columns: 1fr !important; }
+              .cs-two-col > .cs-trends { order: -1; }
             }
           `}</style>
           <div className="cs-two-col" style={{
             display: "grid",
             gridTemplateColumns: "55fr 45fr",
             gap: 24,
-            marginBottom: 24,
+            marginTop: 40,
+            marginBottom: 40,
             alignItems: "start",
           }}>
 
@@ -676,71 +684,91 @@ Flag any categories with slow resolution times vs others and recommend resource 
             }}>
               <h2 style={{
                 fontFamily: FONTS.heading, fontSize: 16, fontWeight: 600,
-                color: "#1a1a2e", margin: "0 0 14px",
+                color: "#1a1a2e", margin: "0 0 16px",
                 display: "flex", alignItems: "center", gap: 8,
               }}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: accent, flexShrink: 0 }} />
                 Top Hotspots
               </h2>
               {hotspots.length > 0 ? (
-                <div style={{ overflowX: "auto", flex: 1 }}>
+                <div style={{ maxHeight: 600, overflowY: "auto", flex: 1 }}>
                   <table style={{
                     width: "100%", borderCollapse: "collapse",
-                    fontFamily: FONTS.body, fontSize: 12,
+                    fontFamily: FONTS.body, fontSize: 13,
                   }}>
                     <thead>
-                      <tr style={{ borderBottom: `2px solid ${COLORS.lightBorder}` }}>
-                        {["#", "Address", "Neighborhood", "Total", "Category", "Avg Res", "Last"].map(h => (
+                      <tr style={{
+                        borderBottom: `2px solid ${COLORS.lightBorder}`,
+                        position: "sticky", top: 0, background: COLORS.white, zIndex: 1,
+                      }}>
+                        {["Location", "Requests", "Resolution"].map(h => (
                           <th key={h} style={{
-                            textAlign: "left", padding: "6px 8px",
+                            textAlign: h === "Resolution" ? "right" : "left",
+                            padding: "8px 12px",
                             fontSize: 10, fontWeight: 700, color: COLORS.warmGray,
-                            textTransform: "uppercase", letterSpacing: "0.05em",
-                            whiteSpace: "nowrap",
+                            textTransform: "uppercase", letterSpacing: "0.06em",
                           }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {hotspots.map((h, i) => (
+                      {hotspots.map(h => (
                         <tr key={h.address}
+                          className="cs-hotspot-row"
                           onClick={() => setFlyTo([h.lat, h.lng])}
                           style={{
                             cursor: "pointer",
                             borderBottom: `1px solid ${COLORS.lightBorder}`,
-                            transition: "background 0.1s",
+                            borderLeftColor: CAT_COLORS[h.topCategory],
                           }}
-                          onMouseEnter={e => { e.currentTarget.style.background = COLORS.cream; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                          onMouseEnter={e => { e.currentTarget.style.borderLeftColor = CAT_COLORS[h.topCategory]; }}
+                          onMouseLeave={e => { e.currentTarget.style.borderLeftColor = "transparent"; }}
                         >
-                          <td style={{ padding: "6px 8px", color: COLORS.warmGray, fontWeight: 700 }}>{i + 1}</td>
-                          <td style={{ padding: "6px 8px", fontWeight: 600, color: accent, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.address}</td>
-                          <td style={{ padding: "6px 8px", color: COLORS.midGray, fontSize: 11, whiteSpace: "nowrap" }}>{h.neighborhood || "\u2014"}</td>
-                          <td style={{ padding: "6px 8px", fontWeight: 700 }}>{h.count}</td>
-                          <td style={{ padding: "6px 8px" }}>
-                            <span style={{
-                              display: "inline-flex", alignItems: "center", gap: 3,
-                              padding: "1px 6px", borderRadius: 10, fontSize: 10,
-                              background: CAT_COLORS[h.topCategory] + "18",
-                              color: CAT_COLORS[h.topCategory], fontWeight: 600,
-                              whiteSpace: "nowrap",
+                          {/* Address + Neighborhood stacked */}
+                          <td style={{ padding: "10px 12px" }}>
+                            <div className="cs-addr" style={{
+                              fontWeight: 600, fontSize: 14, color: "#1a1a2e",
+                              lineHeight: 1.3,
                             }}>
-                              <span style={{ width: 5, height: 5, borderRadius: "50%", background: CAT_COLORS[h.topCategory] }} />
+                              {h.address}
+                            </div>
+                            {h.neighborhood && (
+                              <div style={{ fontSize: 12, color: COLORS.warmGray, marginTop: 2 }}>
+                                {h.neighborhood}
+                              </div>
+                            )}
+                          </td>
+                          {/* Requests · Category merged */}
+                          <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                            <span style={{ fontWeight: 700, fontSize: 14, color: "#1a1a2e" }}>
+                              {h.count}
+                            </span>
+                            <span style={{ color: COLORS.warmGray, margin: "0 6px", fontSize: 11 }}>&middot;</span>
+                            <span style={{
+                              display: "inline-flex", alignItems: "center", gap: 4,
+                              fontSize: 12, color: COLORS.midGray,
+                            }}>
+                              <span style={{
+                                width: 6, height: 6, borderRadius: "50%",
+                                background: CAT_COLORS[h.topCategory], flexShrink: 0,
+                              }} />
                               {h.topCategory}
                             </span>
                           </td>
-                          <td style={{ padding: "6px 8px" }}>
+                          {/* Resolution — just colored number */}
+                          <td style={{ padding: "10px 12px", textAlign: "right" }}>
                             {h.avgResDays !== null ? (
-                              <span style={{
-                                fontWeight: 700, fontSize: 11,
+                              <span title={`${h.avgResDays.toFixed(1)} days avg resolution`} style={{
+                                fontWeight: 700, fontSize: 15,
+                                fontFamily: FONTS.display,
                                 color: h.avgResDays < 3 ? "#10B981" : h.avgResDays <= 7 ? "#F59E0B" : "#EF4444",
                               }}>
-                                {h.avgResDays.toFixed(1)}d
+                                {h.avgResDays.toFixed(1)}
                               </span>
                             ) : (
-                              <span style={{ color: COLORS.warmGray }}>{"\u2014"}</span>
+                              <span style={{ color: COLORS.warmGray, fontSize: 13 }}>{"\u2014"}</span>
                             )}
                           </td>
-                          <td style={{ padding: "6px 8px", color: COLORS.midGray, fontSize: 11, whiteSpace: "nowrap" }}>{h.lastDate}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -749,134 +777,195 @@ Flag any categories with slow resolution times vs others and recommend resource 
               ) : (
                 <p style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray }}>No hotspot data.</p>
               )}
-              <p style={{ fontFamily: FONTS.body, fontSize: 10, color: COLORS.warmGray, marginTop: 6 }}>
-                Click any address to zoom the map above.
-              </p>
+              <div style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                marginTop: 10, paddingTop: 10, borderTop: `1px solid ${COLORS.lightBorder}`,
+              }}>
+                <span style={{ fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray }}>
+                  Click to zoom map
+                </span>
+                <span style={{ fontFamily: FONTS.body, fontSize: 10, color: COLORS.warmGray }}>
+                  Resolution in days
+                </span>
+              </div>
             </div>
 
-            {/* Right: Trends */}
-            <div style={{
-              background: COLORS.white, borderRadius: 12,
-              border: "1px solid #e5e7eb",
-              padding: "20px 24px",
-              display: "flex", flexDirection: "column",
+            {/* Right: Trends — three separate chart cards */}
+            <div className="cs-trends" style={{
+              display: "flex", flexDirection: "column", gap: 16,
             }}>
-              <h2 style={{
-                fontFamily: FONTS.heading, fontSize: 16, fontWeight: 600,
-                color: "#1a1a2e", margin: "0 0 12px",
-                display: "flex", alignItems: "center", gap: 8,
-              }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: accent, flexShrink: 0 }} />
-                Trends
-              </h2>
               {histLoading && (
                 <div style={{
                   display: "flex", alignItems: "center", gap: 6,
                   fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray,
-                  marginBottom: 8,
                 }}>
                   <div className="sk" style={{ width: 12, height: 12, borderRadius: "50%" }} />
-                  Loading 6-month historical data...
+                  Loading 6-month trends...
                 </div>
               )}
 
-              {/* Open vs Resolved area chart */}
+              {/* Card A: Open vs Resolved — HERO chart */}
               {weeklyOpenClose.length > 1 && (
-                <>
-                  <h3 style={{
-                    fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
-                    color: COLORS.charcoal, margin: "0 0 6px",
+                <div style={{
+                  background: COLORS.white, borderRadius: 12,
+                  border: "1px solid #e5e7eb", padding: 16,
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                }}>
+                  <div style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+                    marginBottom: 8,
                   }}>
-                    Open vs Resolved (weekly)
-                  </h3>
-                  <div style={{ height: 150, marginBottom: 12 }}>
+                    <div>
+                      <h3 style={{
+                        fontFamily: FONTS.body, fontSize: 13, fontWeight: 700,
+                        color: "#1a1a2e", margin: 0,
+                      }}>
+                        Open vs Resolved
+                      </h3>
+                      <span style={{ fontFamily: FONTS.body, fontSize: 10, color: COLORS.warmGray }}>
+                        Weekly &middot; Last {histRows311 ? "6 months" : "90 days"}
+                      </span>
+                    </div>
+                    <div style={{
+                      fontFamily: FONTS.display, fontSize: 24, fontWeight: 700,
+                      color: resolutionStats.rate >= 0.75 ? "#10B981" : resolutionStats.rate >= 0.5 ? "#F59E0B" : "#EF4444",
+                      lineHeight: 1,
+                    }}>
+                      {rows311.length > 0 ? `${(resolutionStats.rate * 100).toFixed(0)}%` : "\u2014"}
+                      <div style={{ fontSize: 10, fontWeight: 500, color: COLORS.warmGray, textAlign: "right" }}>
+                        resolved
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ height: 200 }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={weeklyOpenClose} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                      <AreaChart data={weeklyOpenClose} margin={{ top: 5, right: 5, bottom: 5, left: -15 }}>
                         <XAxis dataKey="week" tick={{ fontSize: 9, fontFamily: FONTS.body }} interval="preserveStartEnd" />
                         <YAxis tick={{ fontSize: 9, fontFamily: FONTS.body }} />
                         <Tooltip contentStyle={{
                           fontFamily: FONTS.body, fontSize: 12, borderRadius: 8,
-                          border: `1px solid ${COLORS.lightBorder}`,
+                          border: "1px solid #e5e7eb", boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
                         }} />
-                        <Area type="monotone" dataKey="Opened" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.25} strokeWidth={2} />
-                        <Area type="monotone" dataKey="Resolved" stroke="#10B981" fill="#10B981" fillOpacity={0.25} strokeWidth={2} />
+                        <Area type="monotone" dataKey="Opened" stroke="#3B82F6" fill="#3B82F6" fillOpacity={0.2} strokeWidth={2} />
+                        <Area type="monotone" dataKey="Resolved" stroke="#10B981" fill="#10B981" fillOpacity={0.2} strokeWidth={2} />
                         <Legend wrapperStyle={{ fontFamily: FONTS.body, fontSize: 10 }} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
-                </>
+                </div>
               )}
 
-              {/* Resolution Performance by Category (horizontal bar chart) */}
+              {/* Card B: Resolution Speed — horizontal bars */}
               {resPerfData.length > 0 && (
-                <>
+                <div style={{
+                  background: COLORS.white, borderRadius: 12,
+                  border: "1px solid #e5e7eb", padding: 16,
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                }}>
                   <h3 style={{
-                    fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
-                    color: COLORS.charcoal, margin: "0 0 6px",
+                    fontFamily: FONTS.body, fontSize: 13, fontWeight: 700,
+                    color: "#1a1a2e", margin: "0 0 12px",
                   }}>
-                    Resolution Performance by Category
+                    Resolution Speed
                   </h3>
-                  <div style={{ height: 140, marginBottom: 12 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {resPerfData.map(d => {
+                      const maxDays = Math.max(...resPerfData.map(x => x.avgDays));
+                      const pct = maxDays > 0 ? (d.avgDays / maxDays) * 100 : 0;
+                      return (
+                        <div key={d.category} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{
+                            fontFamily: FONTS.body, fontSize: 11, color: COLORS.midGray,
+                            width: 100, flexShrink: 0, textAlign: "right",
+                          }}>
+                            {d.category}
+                          </span>
+                          <div style={{
+                            flex: 1, height: 18, background: "#f3f4f6", borderRadius: 4,
+                            overflow: "hidden",
+                          }}>
+                            <div style={{
+                              height: "100%", borderRadius: 4,
+                              width: `${pct}%`,
+                              background: d.color, opacity: 0.6,
+                              transition: "width 0.5s ease",
+                            }} />
+                          </div>
+                          <span style={{
+                            fontFamily: FONTS.display, fontSize: 12, fontWeight: 700,
+                            color: "#1a1a2e", width: 40, textAlign: "right",
+                          }}>
+                            {d.avgDays.toFixed(1)}d
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Card C: Category Volume — stacked area */}
+              {trendData.length > 0 && (
+                <div style={{
+                  background: COLORS.white, borderRadius: 12,
+                  border: "1px solid #e5e7eb", padding: 16,
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                }}>
+                  <h3 style={{
+                    fontFamily: FONTS.body, fontSize: 13, fontWeight: 700,
+                    color: "#1a1a2e", margin: "0 0 8px",
+                  }}>
+                    Category Volume
+                  </h3>
+                  <div style={{ height: 160 }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={resPerfData} layout="vertical" margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
-                        <XAxis type="number" tick={{ fontSize: 9, fontFamily: FONTS.body }}
-                          tickFormatter={(v: number) => `${v.toFixed(0)}d`} />
-                        <YAxis type="category" dataKey="category" tick={{ fontSize: 10, fontFamily: FONTS.body }} width={100} />
-                        <Tooltip
-                          contentStyle={{
-                            fontFamily: FONTS.body, fontSize: 12, borderRadius: 8,
-                            border: `1px solid ${COLORS.lightBorder}`,
-                          }}
-                          formatter={(value: any) => [`${Number(value).toFixed(1)} days`, "Avg Resolution"]}
-                        />
-                        <Bar dataKey="avgDays" radius={[0, 4, 4, 0]} barSize={18}>
-                          {resPerfData.map((d, i) => (
-                            <Cell key={i} fill={d.color} fillOpacity={0.8} />
-                          ))}
-                        </Bar>
-                      </BarChart>
+                      <AreaChart data={trendData} margin={{ top: 5, right: 5, bottom: 5, left: -15 }}>
+                        <XAxis dataKey="month" tick={{ fontSize: 9, fontFamily: FONTS.body }} interval="preserveStartEnd" />
+                        <YAxis tick={{ fontSize: 9, fontFamily: FONTS.body }} />
+                        <Tooltip contentStyle={{
+                          fontFamily: FONTS.body, fontSize: 12, borderRadius: 8,
+                          border: "1px solid #e5e7eb", boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                        }} />
+                        {CATEGORIES.filter(c => c !== "Other").map(cat => (
+                          <Area key={cat} type="monotone" dataKey={cat} stackId="1"
+                            stroke={CAT_COLORS[cat]} fill={CAT_COLORS[cat]}
+                            fillOpacity={0.5} strokeWidth={1.5}
+                          />
+                        ))}
+                      </AreaChart>
                     </ResponsiveContainer>
                   </div>
-                </>
-              )}
-
-              {/* Category trends line chart */}
-              <h3 style={{
-                fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
-                color: COLORS.charcoal, margin: "0 0 6px",
-              }}>
-                By Category (monthly)
-              </h3>
-              {trendData.length > 0 ? (
-                <div style={{ flex: 1, minHeight: 180 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={trendData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
-                      <XAxis dataKey="month" tick={{ fontSize: 10, fontFamily: FONTS.body }} />
-                      <YAxis tick={{ fontSize: 10, fontFamily: FONTS.body }} />
-                      <Tooltip contentStyle={{
-                        fontFamily: FONTS.body, fontSize: 12, borderRadius: 8,
-                        border: `1px solid ${COLORS.lightBorder}`,
-                      }} />
-                      <Legend wrapperStyle={{ fontFamily: FONTS.body, fontSize: 10 }} />
-                      {CATEGORIES.map(cat => (
-                        <Line key={cat} type="monotone" dataKey={cat}
-                          stroke={CAT_COLORS[cat]} strokeWidth={2}
-                          dot={{ r: 2 }} activeDot={{ r: 4 }}
-                        />
-                      ))}
-                    </LineChart>
-                  </ResponsiveContainer>
+                  <div style={{
+                    display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap",
+                    fontFamily: FONTS.body, fontSize: 10, color: COLORS.warmGray,
+                  }}>
+                    {CATEGORIES.filter(c => c !== "Other").map(cat => (
+                      <span key={cat} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: CAT_COLORS[cat] }} />
+                        {cat}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              ) : (
-                <p style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray }}>
-                  No trend data available.
-                </p>
               )}
             </div>
           </div>
 
           {/* ── Section 3: AI Operational Analysis ──────────────── */}
-          <Section title="AI Operational Analysis" accent={accent}>
+          <div style={{
+            background: COLORS.white, borderRadius: 12,
+            border: "1px solid #e5e7eb",
+            borderTop: `3px solid ${accent}`,
+            padding: "20px 24px", marginBottom: 40,
+          }}>
+            <h2 style={{
+              fontFamily: FONTS.heading, fontSize: 16, fontWeight: 600,
+              color: "#1a1a2e", margin: "0 0 16px",
+              display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: accent, flexShrink: 0 }} />
+              AI Operational Analysis
+            </h2>
             {aiLoading ? (
               <div style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -893,7 +982,7 @@ Flag any categories with slow resolution times vs others and recommend resource 
                 {renderMarkdownBlock(aiAnalysis)}
               </div>
             ) : null}
-          </Section>
+          </div>
 
           {/* ── Section 4: Permit Impact Flags ──────────────────── */}
           <Section title="Permit Impact Flags" accent={accent}>
