@@ -476,93 +476,131 @@ Write 2-3 paragraphs of analysis. Include specific addresses and numbers. End wi
             </div>
           </Section>
 
-          {/* ── Section 2: Monthly Trends ───────────────────────── */}
-          <Section title="Monthly Trends" accent={accent}>
-            {trendData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={trendData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                  <XAxis dataKey="month" tick={{ fontSize: 12, fontFamily: FONTS.body }} />
-                  <YAxis tick={{ fontSize: 12, fontFamily: FONTS.body }} />
-                  <Tooltip contentStyle={{
-                    fontFamily: FONTS.body, fontSize: 12, borderRadius: 8,
-                    border: `1px solid ${COLORS.lightBorder}`,
-                  }} />
-                  <Legend wrapperStyle={{ fontFamily: FONTS.body, fontSize: 12 }} />
-                  {CATEGORIES.map(cat => (
-                    <Line key={cat} type="monotone" dataKey={cat}
-                      stroke={CAT_COLORS[cat]} strokeWidth={2}
-                      dot={{ r: 3 }} activeDot={{ r: 5 }}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <p style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray }}>
-                No trend data available.
-              </p>
-            )}
-          </Section>
+          {/* ── Section 2: Hotspots + Trends side by side ────────── */}
+          <style>{`
+            @media (max-width: 768px) {
+              .cs-two-col { grid-template-columns: 1fr !important; }
+            }
+          `}</style>
+          <div className="cs-two-col" style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 24,
+            marginBottom: 24,
+          }}>
 
-          {/* ── Section 3: Top Hotspots ─────────────────────────── */}
-          <Section title="Top Hotspots" accent={accent}>
-            {hotspots.length > 0 ? (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{
-                  width: "100%", borderCollapse: "collapse",
-                  fontFamily: FONTS.body, fontSize: 13,
-                }}>
-                  <thead>
-                    <tr style={{ borderBottom: `2px solid ${COLORS.lightBorder}` }}>
-                      {["#", "Address", "Total", "Top Category", "Last Report"].map(h => (
-                        <th key={h} style={{
-                          textAlign: "left", padding: "8px 12px",
-                          fontSize: 11, fontWeight: 700, color: COLORS.warmGray,
-                          textTransform: "uppercase", letterSpacing: "0.05em",
-                        }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {hotspots.map((h, i) => (
-                      <tr key={h.address}
-                        onClick={() => setFlyTo([h.lat, h.lng])}
-                        style={{
-                          cursor: "pointer",
-                          borderBottom: `1px solid ${COLORS.lightBorder}`,
-                          transition: "background 0.1s",
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.background = COLORS.cream; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                      >
-                        <td style={{ padding: "10px 12px", color: COLORS.warmGray, fontWeight: 700 }}>{i + 1}</td>
-                        <td style={{ padding: "10px 12px", fontWeight: 600, color: accent }}>{h.address}</td>
-                        <td style={{ padding: "10px 12px", fontWeight: 700 }}>{h.count}</td>
-                        <td style={{ padding: "10px 12px" }}>
-                          <span style={{
-                            display: "inline-flex", alignItems: "center", gap: 4,
-                            padding: "2px 8px", borderRadius: 12, fontSize: 11,
-                            background: CAT_COLORS[h.topCategory] + "18",
-                            color: CAT_COLORS[h.topCategory], fontWeight: 600,
-                          }}>
-                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: CAT_COLORS[h.topCategory] }} />
-                            {h.topCategory}
-                          </span>
-                        </td>
-                        <td style={{ padding: "10px 12px", color: COLORS.midGray }}>{h.lastDate}</td>
+            {/* Left: Top Hotspots */}
+            <div style={{
+              background: COLORS.white, borderRadius: 12,
+              border: `1px solid ${COLORS.lightBorder}`,
+              padding: "20px 24px",
+              display: "flex", flexDirection: "column",
+            }}>
+              <h2 style={{
+                fontFamily: FONTS.heading, fontSize: 18, fontWeight: 700,
+                color: accent, margin: "0 0 16px",
+              }}>
+                Top Hotspots
+              </h2>
+              {hotspots.length > 0 ? (
+                <div style={{ overflowX: "auto", flex: 1 }}>
+                  <table style={{
+                    width: "100%", borderCollapse: "collapse",
+                    fontFamily: FONTS.body, fontSize: 13,
+                  }}>
+                    <thead>
+                      <tr style={{ borderBottom: `2px solid ${COLORS.lightBorder}` }}>
+                        {["#", "Address", "Total", "Top Category", "Last Report"].map(h => (
+                          <th key={h} style={{
+                            textAlign: "left", padding: "8px 12px",
+                            fontSize: 11, fontWeight: 700, color: COLORS.warmGray,
+                            textTransform: "uppercase", letterSpacing: "0.05em",
+                          }}>{h}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray }}>No hotspot data.</p>
-            )}
-            <p style={{ fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray, marginTop: 8 }}>
-              Click any address to zoom the map above.
-            </p>
-          </Section>
+                    </thead>
+                    <tbody>
+                      {hotspots.map((h, i) => (
+                        <tr key={h.address}
+                          onClick={() => setFlyTo([h.lat, h.lng])}
+                          style={{
+                            cursor: "pointer",
+                            borderBottom: `1px solid ${COLORS.lightBorder}`,
+                            transition: "background 0.1s",
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = COLORS.cream; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          <td style={{ padding: "10px 12px", color: COLORS.warmGray, fontWeight: 700 }}>{i + 1}</td>
+                          <td style={{ padding: "10px 12px", fontWeight: 600, color: accent }}>{h.address}</td>
+                          <td style={{ padding: "10px 12px", fontWeight: 700 }}>{h.count}</td>
+                          <td style={{ padding: "10px 12px" }}>
+                            <span style={{
+                              display: "inline-flex", alignItems: "center", gap: 4,
+                              padding: "2px 8px", borderRadius: 12, fontSize: 11,
+                              background: CAT_COLORS[h.topCategory] + "18",
+                              color: CAT_COLORS[h.topCategory], fontWeight: 600,
+                            }}>
+                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: CAT_COLORS[h.topCategory] }} />
+                              {h.topCategory}
+                            </span>
+                          </td>
+                          <td style={{ padding: "10px 12px", color: COLORS.midGray }}>{h.lastDate}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray }}>No hotspot data.</p>
+              )}
+              <p style={{ fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray, marginTop: 8 }}>
+                Click any address to zoom the map above.
+              </p>
+            </div>
 
-          {/* ── Section 4: AI Operational Analysis ──────────────── */}
+            {/* Right: Monthly Trends */}
+            <div style={{
+              background: COLORS.white, borderRadius: 12,
+              border: `1px solid ${COLORS.lightBorder}`,
+              padding: "20px 24px",
+              display: "flex", flexDirection: "column",
+            }}>
+              <h2 style={{
+                fontFamily: FONTS.heading, fontSize: 18, fontWeight: 700,
+                color: accent, margin: "0 0 16px",
+              }}>
+                Monthly Trends
+              </h2>
+              {trendData.length > 0 ? (
+                <div style={{ flex: 1, minHeight: 260 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={trendData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fontFamily: FONTS.body }} />
+                      <YAxis tick={{ fontSize: 11, fontFamily: FONTS.body }} />
+                      <Tooltip contentStyle={{
+                        fontFamily: FONTS.body, fontSize: 12, borderRadius: 8,
+                        border: `1px solid ${COLORS.lightBorder}`,
+                      }} />
+                      <Legend wrapperStyle={{ fontFamily: FONTS.body, fontSize: 11 }} />
+                      {CATEGORIES.map(cat => (
+                        <Line key={cat} type="monotone" dataKey={cat}
+                          stroke={CAT_COLORS[cat]} strokeWidth={2}
+                          dot={{ r: 3 }} activeDot={{ r: 5 }}
+                        />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <p style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray }}>
+                  No trend data available.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* ── Section 3: AI Operational Analysis ──────────────── */}
           <Section title="AI Operational Analysis" accent={accent}>
             {aiLoading ? (
               <div style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray }}>
@@ -582,7 +620,7 @@ Write 2-3 paragraphs of analysis. Include specific addresses and numbers. End wi
             ) : null}
           </Section>
 
-          {/* ── Section 5: Permit Impact Flags ──────────────────── */}
+          {/* ── Section 4: Permit Impact Flags ──────────────────── */}
           <Section title="Permit Impact Flags" accent={accent}>
             {constructionPermits.length > 0 ? (
               <>
