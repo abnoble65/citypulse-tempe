@@ -90,6 +90,45 @@ function boundsFromMultiPolygon(coords: number[][][][]): L.LatLngBounds | null {
   return pts.length ? L.latLngBounds(pts) : null;
 }
 
+/** Extract a bounding box {minLat, maxLat, minLng, maxLng} from MultiPolygon coords. */
+function boundingBoxFromCoords(coords: number[][][][]): {
+  minLat: number; maxLat: number; minLng: number; maxLng: number;
+} {
+  let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+  for (const poly of coords)
+    for (const ring of poly)
+      for (const [lng, lat] of ring) {
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+        if (lng < minLng) minLng = lng;
+        if (lng > maxLng) maxLng = lng;
+      }
+  return { minLat, maxLat, minLng, maxLng };
+}
+
+/** Fast bounding-box pre-filter before expensive polygon check. */
+function inBBox(lat: number, lng: number, bb: ReturnType<typeof boundingBoxFromCoords>): boolean {
+  return lat >= bb.minLat && lat <= bb.maxLat && lng >= bb.minLng && lng <= bb.maxLng;
+}
+
+/** Parse a raw 311 API row into our ThreeOneOneRow type. */
+function parse311Row(r: any): ThreeOneOneRow | null {
+  const lat = parseFloat(r.lat);
+  const lng = parseFloat(r.long);
+  if (isNaN(lat) || isNaN(lng)) return null;
+  const cat = r.service_name ?? "";
+  const dt = r.requested_datetime ?? "";
+  const cd = r.closed_datetime ?? null;
+  return {
+    lat, lng,
+    category: cat, normalizedCategory: normalizeCategory(cat),
+    address: r.address ?? "", date: dt.split("T")[0],
+    closedDate: cd ? cd.split("T")[0] : null,
+    month: dt.slice(0, 7),
+    status: r.status_description, subtype: r.service_subtype,
+  };
+}
+
 // ── Icon helpers ───────────────────────────────────────────────────────────
 
 function iconCircle(emoji: string, borderColor: string, size: number): L.DivIcon {
@@ -196,6 +235,8 @@ export function CleanSafeReport() {
   const accent = config?.accent_color ?? "#E8652D";
 
   const [rows311, setRows311] = useState<ThreeOneOneRow[]>([]);
+  const [histRows311, setHistRows311] = useState<ThreeOneOneRow[] | null>(null);
+  const [histLoading, setHistLoading] = useState(false);
   const [permits, setPermits] = useState<PermitRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiAnalysis, setAiAnalysis] = useState("");
@@ -212,28 +253,47 @@ export function CleanSafeReport() {
   const boundaryEntry = useMemo(() => config ? buildBoundaryEntry(config) : null, [config]);
   const cbdBoundaries = useMemo(() => boundaryEntry ? [boundaryEntry] : [], [boundaryEntry]);
 
-  // ── Fetch 311 (12 months) + permits ─────────────────────────────────────
+  // ── Two-stage fetch: 90-day fast + 365-day background ──────────────────
   useEffect(() => {
     if (!config?.boundary_geojson || !cbdBoundaries.length) return;
     setLoading(true);
 
+    const coords = config.boundary_geojson.coordinates;
+    const bb = boundingBoxFromCoords(coords);
     const district = config.supervisor_district ? String(config.supervisor_district) : null;
-    const cutoff12m = new Date();
-    cutoff12m.setFullYear(cutoff12m.getFullYear() - 1);
-    const cutoffStr = cutoff12m.toISOString().split("T")[0];
+    const now = new Date();
 
-    const threeWhere = district
-      ? `supervisor_district='${district}' AND requested_datetime>='${cutoffStr}T00:00:00.000' AND lat IS NOT NULL`
-      : `requested_datetime>='${cutoffStr}T00:00:00.000' AND lat IS NOT NULL`;
-    const permitWhere = district
-      ? `supervisor_district='${district}' AND location IS NOT NULL AND status IN('ISSUED','FILING','APPROVED')`
-      : `location IS NOT NULL AND status IN('ISSUED','FILING','APPROVED')`;
+    // 90-day cutoff for fast initial load
+    const cutoff90d = new Date(now);
+    cutoff90d.setDate(cutoff90d.getDate() - 90);
+    const cutoff90 = cutoff90d.toISOString().split("T")[0];
 
+    // Server-side spatial filters (Socrata within_box: NW lat, NW lng, SE lat, SE lng)
+    const spatial311 = `within_box(point, ${bb.maxLat}, ${bb.minLng}, ${bb.minLat}, ${bb.maxLng})`;
+    const spatialPermit = `within_box(location, ${bb.maxLat}, ${bb.minLng}, ${bb.minLat}, ${bb.maxLng})`;
+
+    const threeWhere90 = [
+      spatial311,
+      `requested_datetime>='${cutoff90}T00:00:00.000'`,
+      district ? `supervisor_district='${district}'` : null,
+    ].filter(Boolean).join(" AND ");
+
+    const permitWhere = [
+      spatialPermit,
+      `status IN('ISSUED','FILING','APPROVED')`,
+      district ? `supervisor_district='${district}'` : null,
+    ].filter(Boolean).join(" AND ");
+
+    // 10-second timeout safety net — show partial data if still loading
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; setLoading(false); }, 10_000);
+
+    // Stage 1: 90-day 311 + permits (fast)
     Promise.all([
       fetch(`${DATASF}/vw6y-z8j6.json?${new URLSearchParams({
-        $where: threeWhere,
+        $where: threeWhere90,
         $select: "lat,long,service_name,service_subtype,address,requested_datetime,closed_datetime,status_description",
-        $limit: "5000", $order: "requested_datetime DESC",
+        $limit: "2000", $order: "requested_datetime DESC",
       })}`).then(r => r.json()).catch(() => []),
 
       fetch(`${DATASF}/i98e-djp9.json?${new URLSearchParams({
@@ -242,22 +302,17 @@ export function CleanSafeReport() {
         $limit: "2000",
       })}`).then(r => r.json()).catch(() => []),
     ]).then(([rawThree, rawPermit]) => {
-      const filtered311: ThreeOneOneRow[] = (rawThree as any[])
-        .filter((r: any) => r.lat && r.long)
-        .map((r: any) => {
-          const cat = r.service_name ?? "";
-          const dt = r.requested_datetime ?? "";
-          const cd = r.closed_datetime ?? null;
-          return {
-            lat: parseFloat(r.lat), lng: parseFloat(r.long),
-            category: cat, normalizedCategory: normalizeCategory(cat),
-            address: r.address ?? "", date: dt.split("T")[0],
-            closedDate: cd ? cd.split("T")[0] : null,
-            month: dt.slice(0, 7),
-            status: r.status_description, subtype: r.service_subtype,
-          };
-        })
-        .filter(p => !isNaN(p.lat) && isPointInCBD(p.lat, p.lng, cbdBoundaries) !== null);
+      clearTimeout(timer);
+
+      // BBox pre-filter → polygon check (much faster than polygon-only)
+      const filtered311: ThreeOneOneRow[] = [];
+      for (const r of rawThree as any[]) {
+        const row = parse311Row(r);
+        if (!row) continue;
+        if (inBBox(row.lat, row.lng, bb) && isPointInCBD(row.lat, row.lng, cbdBoundaries) !== null) {
+          filtered311.push(row);
+        }
+      }
 
       const filteredPermits: PermitRow[] = (rawPermit as any[])
         .filter((r: any) => r.location?.coordinates)
@@ -268,12 +323,43 @@ export function CleanSafeReport() {
           address: [r.street_number, r.street_name, r.street_suffix].filter(Boolean).join(" "),
           status: r.status,
         }))
-        .filter(p => isPointInCBD(p.lat, p.lng, cbdBoundaries) !== null);
+        .filter(p => inBBox(p.lat, p.lng, bb) && isPointInCBD(p.lat, p.lng, cbdBoundaries) !== null);
 
-      console.log(`[CleanSafe] ${config.name}: ${filtered311.length} 311 (12m), ${filteredPermits.length} permits`);
+      console.log(`[CleanSafe] ${config.name}: ${filtered311.length} 311 (90d), ${filteredPermits.length} permits`);
       setRows311(filtered311);
       setPermits(filteredPermits);
-      setLoading(false);
+      if (!timedOut) setLoading(false);
+
+      // Stage 2: background fetch 365-day data for trends
+      setHistLoading(true);
+      const cutoff365d = new Date(now);
+      cutoff365d.setFullYear(cutoff365d.getFullYear() - 1);
+      const cutoff365 = cutoff365d.toISOString().split("T")[0];
+
+      const threeWhere365 = [
+        spatial311,
+        `requested_datetime>='${cutoff365}T00:00:00.000'`,
+        district ? `supervisor_district='${district}'` : null,
+      ].filter(Boolean).join(" AND ");
+
+      fetch(`${DATASF}/vw6y-z8j6.json?${new URLSearchParams({
+        $where: threeWhere365,
+        $select: "lat,long,service_name,service_subtype,address,requested_datetime,closed_datetime,status_description",
+        $limit: "5000", $order: "requested_datetime DESC",
+      })}`).then(r => r.json()).then((rawHist: any[]) => {
+        const hist: ThreeOneOneRow[] = [];
+        for (const r of rawHist) {
+          const row = parse311Row(r);
+          if (!row) continue;
+          if (inBBox(row.lat, row.lng, bb) && isPointInCBD(row.lat, row.lng, cbdBoundaries) !== null) {
+            hist.push(row);
+          }
+        }
+        console.log(`[CleanSafe] ${config.name}: ${hist.length} 311 (365d historical)`);
+        setHistRows311(hist);
+      }).catch(err => {
+        console.warn("[CleanSafe] historical fetch failed:", err);
+      }).finally(() => setHistLoading(false));
     });
   }, [config, cbdBoundaries]);
 
@@ -365,10 +451,13 @@ Flag any categories with slow resolution times vs others and recommend resource 
     [rows311, catFilter],
   );
 
+  // Use historical data for trends when available, fall back to 90-day data
+  const trendSource = histRows311 ?? rows311;
+
   const trendData = useMemo(() => {
-    if (!rows311.length) return [];
+    if (!trendSource.length) return [];
     const buckets: Record<string, Record<string, number>> = {};
-    for (const r of rows311) {
+    for (const r of trendSource) {
       if (!r.month) continue;
       if (!buckets[r.month]) buckets[r.month] = { Graffiti: 0, "Street Cleaning": 0, Encampments: 0, "Blocked Sidewalk": 0, Other: 0 };
       buckets[r.month][r.normalizedCategory] = (buckets[r.month][r.normalizedCategory] ?? 0) + 1;
@@ -377,7 +466,7 @@ Flag any categories with slow resolution times vs others and recommend resource 
       month: new Date(month + "-01").toLocaleDateString("en-US", { month: "short", year: "2-digit" }),
       ...cats,
     }));
-  }, [rows311]);
+  }, [trendSource]);
 
   // Resolution stats
   const resolutionStats = useMemo(() => {
@@ -412,14 +501,13 @@ Flag any categories with slow resolution times vs others and recommend resource 
     return { closedCount: closed.length, total, rate, avgDays, catAvgDays };
   }, [rows311]);
 
-  // Weekly open vs closed data for area chart
+  // Weekly open vs closed data for area chart (uses historical data when available)
   const weeklyOpenClose = useMemo(() => {
-    if (!rows311.length) return [];
-    // Build weekly buckets keyed by ISO week start (Monday)
+    if (!trendSource.length) return [];
     function weekStart(dateStr: string): string {
       const d = new Date(dateStr);
       const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
       const monday = new Date(d);
       monday.setDate(diff);
       return monday.toISOString().split("T")[0];
@@ -427,7 +515,7 @@ Flag any categories with slow resolution times vs others and recommend resource 
 
     const opened: Record<string, number> = {};
     const closed: Record<string, number> = {};
-    for (const r of rows311) {
+    for (const r of trendSource) {
       const w = weekStart(r.date);
       opened[w] = (opened[w] ?? 0) + 1;
       if (r.closedDate) {
@@ -441,7 +529,7 @@ Flag any categories with slow resolution times vs others and recommend resource 
       Opened: opened[w] ?? 0,
       Resolved: closed[w] ?? 0,
     }));
-  }, [rows311]);
+  }, [trendSource]);
 
   const hotspots = useMemo(() => {
     const m: Record<string, { count: number; cats: Record<string, number>; lastDate: string; lat: number; lng: number; resDays: number[] }> = {};
@@ -503,7 +591,7 @@ Flag any categories with slow resolution times vs others and recommend resource 
         <p style={{
           fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray, marginTop: 6,
         }}>
-          311 service requests within {config.name} — last 12 months
+          311 service requests within {config.name} — last 90 days{histRows311 ? " (12-month trends loaded)" : ""}
         </p>
       </div>
 
@@ -728,6 +816,16 @@ Flag any categories with slow resolution times vs others and recommend resource 
               }}>
                 Trends
               </h2>
+              {histLoading && (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray,
+                  marginBottom: 8,
+                }}>
+                  <div className="sk" style={{ width: 12, height: 12, borderRadius: "50%" }} />
+                  Loading 12-month historical data...
+                </div>
+              )}
 
               {/* Open vs Resolved area chart */}
               {weeklyOpenClose.length > 1 && (
