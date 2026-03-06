@@ -10,6 +10,7 @@ import { DEFAULT_DISTRICT, DISTRICTS, CITYWIDE_DISTRICT } from "./districts";
 import type { DistrictConfig } from "./districts";
 import { CityPulseLogo } from "./components/Icons";
 import { CityPulseChat } from "./components/CityPulseChat";
+import { CBDPortal } from "./components/CBDPortal";
 
 // ── Stale chunk auto-reload ──────────────────────────────────────────────────
 // After a deploy, old chunk filenames no longer exist on the server.
@@ -181,6 +182,16 @@ function pathFromPage(pageName: string): string {
 }
 
 export default function App() {
+  // ── CBD Portal route detection ──────────────────────────────────────────
+  const cbdMatch = window.location.pathname.match(/^\/cbd\/([a-z0-9-]+)/);
+  if (cbdMatch) {
+    return (
+      <ErrorBoundary label="CBDPortal">
+        <CBDPortal slug={cbdMatch[1]} />
+      </ErrorBoundary>
+    );
+  }
+
   const [splashDone, setSplashDone] = useState(() => sessionStorage.getItem(SPLASH_KEY) === "1");
 
   function handleSplashComplete() {
