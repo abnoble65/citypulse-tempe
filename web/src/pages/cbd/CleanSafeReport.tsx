@@ -14,7 +14,7 @@ import { MapContainer, TileLayer, GeoJSON, Marker, Popup, useMap } from "react-l
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
-  LineChart, Line, AreaChart, Area,
+  LineChart, Line, AreaChart, Area, BarChart, Bar, Cell,
   XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
@@ -64,6 +64,19 @@ function normalizeCategory(serviceName: string): Category {
   if (s.includes("encampment")) return "Encampments";
   if (s.includes("sidewalk") || s.includes("block")) return "Blocked Sidewalk";
   return "Other";
+}
+
+// ── Address cleaning ──────────────────────────────────────────────────
+
+function cleanAddress(raw: string): string {
+  return raw
+    .replace(/,?\s*(SAN FRANCISCO|SF)\s*,?\s*(CA\s*)?\d{0,5}\s*$/i, "")
+    .replace(/,?\s*CA\s*\d{5}\s*$/i, "")
+    .trim();
+}
+
+function toTitleCase(str: string): string {
+  return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -192,7 +205,7 @@ export function CleanSafeReport() {
   const [flyTo, setFlyTo] = useState<[number, number] | null>(null);
 
   const [catFilter, setCatFilter] = useState<Record<Category, boolean>>(
-    Object.fromEntries(CATEGORIES.map(c => [c, true])) as Record<Category, boolean>,
+    Object.fromEntries(CATEGORIES.map(c => [c, c !== "Other"])) as Record<Category, boolean>,
   );
   const toggleCat = useCallback((cat: Category, val: boolean) => {
     setCatFilter(prev => ({ ...prev, [cat]: val }));
@@ -441,26 +454,40 @@ Flag any categories with slow resolution times vs others and recommend resource 
   }, [trendSource]);
 
   const hotspots = useMemo(() => {
-    const m: Record<string, { count: number; cats: Record<string, number>; lastDate: string; lat: number; lng: number; resDays: number[] }> = {};
+    const m: Record<string, { count: number; cats: Record<string, number>; lastDate: string; lat: number; lng: number; resDays: number[]; neighborhood?: string }> = {};
     for (const r of rows311) {
       const a = r.address.toUpperCase().trim();
       if (!a) continue;
-      if (!m[a]) m[a] = { count: 0, cats: {}, lastDate: "", lat: r.lat, lng: r.lng, resDays: [] };
+      if (!m[a]) m[a] = { count: 0, cats: {}, lastDate: "", lat: r.lat, lng: r.lng, resDays: [], neighborhood: r.neighborhood };
       m[a].count++;
       m[a].cats[r.normalizedCategory] = (m[a].cats[r.normalizedCategory] ?? 0) + 1;
       if (r.date > m[a].lastDate) m[a].lastDate = r.date;
+      if (!m[a].neighborhood && r.neighborhood) m[a].neighborhood = r.neighborhood;
       if (r.closedDate) {
         const d = (new Date(r.closedDate).getTime() - new Date(r.date).getTime()) / 86_400_000;
         if (d > 0) m[a].resDays.push(d);
       }
     }
     return Object.entries(m).sort(([, a], [, b]) => b.count - a.count).slice(0, 10)
-      .map(([address, { count, cats, lastDate, lat, lng, resDays }]) => ({
-        address, count, lat, lng, lastDate,
+      .map(([address, { count, cats, lastDate, lat, lng, resDays, neighborhood }]) => ({
+        address: toTitleCase(cleanAddress(address)), count, lat, lng, lastDate,
+        neighborhood: neighborhood ?? "",
         topCategory: Object.entries(cats).sort(([, a], [, b]) => b - a)[0]?.[0] as Category ?? "Other",
         avgResDays: resDays.length > 0 ? resDays.reduce((s, d) => s + d, 0) / resDays.length : null,
       }));
   }, [rows311]);
+
+  // Resolution performance by category (for horizontal bar chart)
+  const resPerfData = useMemo(() => {
+    return CATEGORIES.filter(cat => cat !== "Other")
+      .map(cat => ({
+        category: cat,
+        avgDays: resolutionStats.catAvgDays[cat] ?? 0,
+        color: CAT_COLORS[cat],
+      }))
+      .filter(d => d.avgDays > 0)
+      .sort((a, b) => b.avgDays - a.avgDays);
+  }, [resolutionStats]);
 
   const constructionPermits = useMemo(() =>
     permits.filter(p => {
@@ -634,37 +661,41 @@ Flag any categories with slow resolution times vs others and recommend resource 
           `}</style>
           <div className="cs-two-col" style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "55fr 45fr",
             gap: 24,
             marginBottom: 24,
+            alignItems: "start",
           }}>
 
             {/* Left: Top Hotspots */}
             <div style={{
               background: COLORS.white, borderRadius: 12,
-              border: `1px solid ${COLORS.lightBorder}`,
+              border: "1px solid #e5e7eb",
               padding: "20px 24px",
               display: "flex", flexDirection: "column",
             }}>
               <h2 style={{
-                fontFamily: FONTS.heading, fontSize: 18, fontWeight: 700,
-                color: accent, margin: "0 0 16px",
+                fontFamily: FONTS.heading, fontSize: 16, fontWeight: 600,
+                color: "#1a1a2e", margin: "0 0 14px",
+                display: "flex", alignItems: "center", gap: 8,
               }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: accent, flexShrink: 0 }} />
                 Top Hotspots
               </h2>
               {hotspots.length > 0 ? (
                 <div style={{ overflowX: "auto", flex: 1 }}>
                   <table style={{
                     width: "100%", borderCollapse: "collapse",
-                    fontFamily: FONTS.body, fontSize: 13,
+                    fontFamily: FONTS.body, fontSize: 12,
                   }}>
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${COLORS.lightBorder}` }}>
-                        {["#", "Address", "Total", "Top Category", "Avg Resolution", "Last Report"].map(h => (
+                        {["#", "Address", "Neighborhood", "Total", "Category", "Avg Res", "Last"].map(h => (
                           <th key={h} style={{
-                            textAlign: "left", padding: "8px 12px",
-                            fontSize: 11, fontWeight: 700, color: COLORS.warmGray,
+                            textAlign: "left", padding: "6px 8px",
+                            fontSize: 10, fontWeight: 700, color: COLORS.warmGray,
                             textTransform: "uppercase", letterSpacing: "0.05em",
+                            whiteSpace: "nowrap",
                           }}>{h}</th>
                         ))}
                       </tr>
@@ -681,24 +712,26 @@ Flag any categories with slow resolution times vs others and recommend resource 
                           onMouseEnter={e => { e.currentTarget.style.background = COLORS.cream; }}
                           onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
                         >
-                          <td style={{ padding: "10px 12px", color: COLORS.warmGray, fontWeight: 700 }}>{i + 1}</td>
-                          <td style={{ padding: "10px 12px", fontWeight: 600, color: accent }}>{h.address}</td>
-                          <td style={{ padding: "10px 12px", fontWeight: 700 }}>{h.count}</td>
-                          <td style={{ padding: "10px 12px" }}>
+                          <td style={{ padding: "6px 8px", color: COLORS.warmGray, fontWeight: 700 }}>{i + 1}</td>
+                          <td style={{ padding: "6px 8px", fontWeight: 600, color: accent, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.address}</td>
+                          <td style={{ padding: "6px 8px", color: COLORS.midGray, fontSize: 11, whiteSpace: "nowrap" }}>{h.neighborhood || "\u2014"}</td>
+                          <td style={{ padding: "6px 8px", fontWeight: 700 }}>{h.count}</td>
+                          <td style={{ padding: "6px 8px" }}>
                             <span style={{
-                              display: "inline-flex", alignItems: "center", gap: 4,
-                              padding: "2px 8px", borderRadius: 12, fontSize: 11,
+                              display: "inline-flex", alignItems: "center", gap: 3,
+                              padding: "1px 6px", borderRadius: 10, fontSize: 10,
                               background: CAT_COLORS[h.topCategory] + "18",
                               color: CAT_COLORS[h.topCategory], fontWeight: 600,
+                              whiteSpace: "nowrap",
                             }}>
-                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: CAT_COLORS[h.topCategory] }} />
+                              <span style={{ width: 5, height: 5, borderRadius: "50%", background: CAT_COLORS[h.topCategory] }} />
                               {h.topCategory}
                             </span>
                           </td>
-                          <td style={{ padding: "10px 12px" }}>
+                          <td style={{ padding: "6px 8px" }}>
                             {h.avgResDays !== null ? (
                               <span style={{
-                                fontWeight: 700, fontSize: 12,
+                                fontWeight: 700, fontSize: 11,
                                 color: h.avgResDays < 3 ? "#10B981" : h.avgResDays <= 7 ? "#F59E0B" : "#EF4444",
                               }}>
                                 {h.avgResDays.toFixed(1)}d
@@ -707,7 +740,7 @@ Flag any categories with slow resolution times vs others and recommend resource 
                               <span style={{ color: COLORS.warmGray }}>{"\u2014"}</span>
                             )}
                           </td>
-                          <td style={{ padding: "10px 12px", color: COLORS.midGray }}>{h.lastDate}</td>
+                          <td style={{ padding: "6px 8px", color: COLORS.midGray, fontSize: 11, whiteSpace: "nowrap" }}>{h.lastDate}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -716,22 +749,24 @@ Flag any categories with slow resolution times vs others and recommend resource 
               ) : (
                 <p style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray }}>No hotspot data.</p>
               )}
-              <p style={{ fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray, marginTop: 8 }}>
+              <p style={{ fontFamily: FONTS.body, fontSize: 10, color: COLORS.warmGray, marginTop: 6 }}>
                 Click any address to zoom the map above.
               </p>
             </div>
 
-            {/* Right: Monthly Trends */}
+            {/* Right: Trends */}
             <div style={{
               background: COLORS.white, borderRadius: 12,
-              border: `1px solid ${COLORS.lightBorder}`,
+              border: "1px solid #e5e7eb",
               padding: "20px 24px",
               display: "flex", flexDirection: "column",
             }}>
               <h2 style={{
-                fontFamily: FONTS.heading, fontSize: 18, fontWeight: 700,
-                color: accent, margin: "0 0 12px",
+                fontFamily: FONTS.heading, fontSize: 16, fontWeight: 600,
+                color: "#1a1a2e", margin: "0 0 12px",
+                display: "flex", alignItems: "center", gap: 8,
               }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: accent, flexShrink: 0 }} />
                 Trends
               </h2>
               {histLoading && (
@@ -741,7 +776,7 @@ Flag any categories with slow resolution times vs others and recommend resource 
                   marginBottom: 8,
                 }}>
                   <div className="sk" style={{ width: 12, height: 12, borderRadius: "50%" }} />
-                  Loading 12-month historical data...
+                  Loading 6-month historical data...
                 </div>
               )}
 
@@ -754,7 +789,7 @@ Flag any categories with slow resolution times vs others and recommend resource 
                   }}>
                     Open vs Resolved (weekly)
                   </h3>
-                  <div style={{ height: 160, marginBottom: 16 }}>
+                  <div style={{ height: 150, marginBottom: 12 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={weeklyOpenClose} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                         <XAxis dataKey="week" tick={{ fontSize: 9, fontFamily: FONTS.body }} interval="preserveStartEnd" />
@@ -769,12 +804,39 @@ Flag any categories with slow resolution times vs others and recommend resource 
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
-                  <p style={{
-                    fontFamily: FONTS.body, fontSize: 10, color: COLORS.warmGray,
-                    marginBottom: 16, lineHeight: 1.4,
+                </>
+              )}
+
+              {/* Resolution Performance by Category (horizontal bar chart) */}
+              {resPerfData.length > 0 && (
+                <>
+                  <h3 style={{
+                    fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
+                    color: COLORS.charcoal, margin: "0 0 6px",
                   }}>
-                    Green above blue = clearing backlog. Blue above green = falling behind.
-                  </p>
+                    Resolution Performance by Category
+                  </h3>
+                  <div style={{ height: 140, marginBottom: 12 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={resPerfData} layout="vertical" margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+                        <XAxis type="number" tick={{ fontSize: 9, fontFamily: FONTS.body }}
+                          tickFormatter={(v: number) => `${v.toFixed(0)}d`} />
+                        <YAxis type="category" dataKey="category" tick={{ fontSize: 10, fontFamily: FONTS.body }} width={100} />
+                        <Tooltip
+                          contentStyle={{
+                            fontFamily: FONTS.body, fontSize: 12, borderRadius: 8,
+                            border: `1px solid ${COLORS.lightBorder}`,
+                          }}
+                          formatter={(value: any) => [`${Number(value).toFixed(1)} days`, "Avg Resolution"]}
+                        />
+                        <Bar dataKey="avgDays" radius={[0, 4, 4, 0]} barSize={18}>
+                          {resPerfData.map((d, i) => (
+                            <Cell key={i} fill={d.color} fillOpacity={0.8} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </>
               )}
 
@@ -786,20 +848,20 @@ Flag any categories with slow resolution times vs others and recommend resource 
                 By Category (monthly)
               </h3>
               {trendData.length > 0 ? (
-                <div style={{ flex: 1, minHeight: 200 }}>
+                <div style={{ flex: 1, minHeight: 180 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={trendData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
-                      <XAxis dataKey="month" tick={{ fontSize: 11, fontFamily: FONTS.body }} />
-                      <YAxis tick={{ fontSize: 11, fontFamily: FONTS.body }} />
+                      <XAxis dataKey="month" tick={{ fontSize: 10, fontFamily: FONTS.body }} />
+                      <YAxis tick={{ fontSize: 10, fontFamily: FONTS.body }} />
                       <Tooltip contentStyle={{
                         fontFamily: FONTS.body, fontSize: 12, borderRadius: 8,
                         border: `1px solid ${COLORS.lightBorder}`,
                       }} />
-                      <Legend wrapperStyle={{ fontFamily: FONTS.body, fontSize: 11 }} />
+                      <Legend wrapperStyle={{ fontFamily: FONTS.body, fontSize: 10 }} />
                       {CATEGORIES.map(cat => (
                         <Line key={cat} type="monotone" dataKey={cat}
                           stroke={CAT_COLORS[cat]} strokeWidth={2}
-                          dot={{ r: 3 }} activeDot={{ r: 5 }}
+                          dot={{ r: 2 }} activeDot={{ r: 4 }}
                         />
                       ))}
                     </LineChart>

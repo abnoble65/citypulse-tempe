@@ -17,6 +17,7 @@ export interface CBD311Row {
   lng: number;
   category: string;
   address: string;
+  neighborhood?: string;
   date: string;
   closedDate: string | null;
   month: string;
@@ -63,7 +64,7 @@ export async function fetch311ForCBD(
 
   const params = new URLSearchParams({
     $where,
-    $select: "lat,long,service_name,service_subtype,address,requested_datetime,closed_date,status_description",
+    $select: "lat,long,service_name,service_subtype,address,neighborhoods_sffind_neighborhoods,requested_datetime,closed_date,status_description",
     $limit: String(limit),
     $order: "requested_datetime DESC",
   });
@@ -87,6 +88,7 @@ export async function fetch311ForCBD(
       lat, lng,
       category: r.service_name ?? "",
       address: r.address ?? "",
+      neighborhood: r.neighborhoods_sffind_neighborhoods ?? undefined,
       date: dt.split("T")[0],
       closedDate: cd ? cd.split("T")[0] : null,
       month: dt.slice(0, 7),
