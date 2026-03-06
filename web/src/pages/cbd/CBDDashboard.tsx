@@ -398,7 +398,7 @@ export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
       : `file_date>'2023-01-01'`;
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
+    const timeout = setTimeout(() => controller.abort(), 30_000);
 
     Promise.all([
       fetch(`${DATASF}/i98e-djp9.json?${new URLSearchParams({

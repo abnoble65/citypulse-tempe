@@ -207,7 +207,7 @@ export function CleanSafeReport() {
     setFetchError(null);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
+    const timeout = setTimeout(() => controller.abort(), 30_000);
 
     const district = config.supervisor_district ? String(config.supervisor_district) : null;
     const permitWhere = [
@@ -219,7 +219,7 @@ export function CleanSafeReport() {
     // 311: server-side lat/lng filter via fetch311ForCBD (no client-side polygon)
     // Permits: simple district filter (small dataset)
     Promise.all([
-      fetch311ForCBD(config, { days: 180, limit: 3000, signal: controller.signal }),
+      fetch311ForCBD(config, { days: 90, limit: 3000, signal: controller.signal }),
 
       fetch(`${DATASF}/i98e-djp9.json?${new URLSearchParams({
         $where: permitWhere,
@@ -252,7 +252,7 @@ export function CleanSafeReport() {
 
       // Background: 365-day historical data for trend charts
       setHistLoading(true);
-      fetch311ForCBD(config, { days: 365, limit: 5000 })
+      fetch311ForCBD(config, { days: 180, limit: 3000 })
         .then(hist => {
           setHistRows311(hist.map(r => ({ ...r, normalizedCategory: normalizeCategory(r.category) })));
         })
@@ -500,7 +500,7 @@ Flag any categories with slow resolution times vs others and recommend resource 
         <p style={{
           fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray, marginTop: 6,
         }}>
-          311 service requests within {config.name} — last 90 days{histRows311 ? " (12-month trends loaded)" : ""}
+          311 service requests within {config.name} — last 90 days{histRows311 ? " (6-month trends loaded)" : ""}
         </p>
       </div>
 

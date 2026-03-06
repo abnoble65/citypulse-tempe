@@ -45,7 +45,7 @@ export async function fetch311ForCBD(
   config: CBDConfig,
   opts: { days?: number; limit?: number; signal?: AbortSignal } = {},
 ): Promise<CBD311Row[]> {
-  const { days = 180, limit = 3000, signal } = opts;
+  const { days = 90, limit = 3000, signal } = opts;
   if (!config.boundary_geojson) return [];
 
   const bb = getBoundingBox(config.boundary_geojson);
