@@ -128,3 +128,33 @@ export function isPointInNeighborhoodSync(
   const feature = boundaries.get(geoName);
   return feature ? pointInFeature(lat, lng, feature) : false;
 }
+
+// ── CBD point-in-polygon ──────────────────────────────────────────────────
+
+export interface CBDBoundaryEntry {
+  name: string;
+  geometry: {
+    type: string;
+    coordinates: number[][][][] | number[][][];
+  };
+}
+
+/**
+ * Returns the name of the CBD that contains the given point, or null.
+ * Reuses the same ray-casting logic as neighborhood tests.
+ */
+export function isPointInCBD(
+  lat: number,
+  lng: number,
+  cbdBoundaries: CBDBoundaryEntry[],
+): string | null {
+  for (const cbd of cbdBoundaries) {
+    const feature: NHFeature = {
+      type: "Feature",
+      geometry: cbd.geometry as NHFeature["geometry"],
+      properties: { name: cbd.name },
+    };
+    if (pointInFeature(lat, lng, feature)) return cbd.name;
+  }
+  return null;
+}

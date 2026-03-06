@@ -10,6 +10,7 @@ import {
   fetchDevelopmentPipeline,
   fetchZoningDistricts,
   fetchEvictions,
+  fetch311Requests,
   fetchAssessmentStats,
   fetchTopAssessedProperties,
   fetchAffordableHousingPipeline,
@@ -17,6 +18,7 @@ import {
   type DevelopmentProject,
   type ZoningDistrict,
   type EvictionNotice,
+  type ThreeOneOneRequest,
   type AssessmentAggrRow,
   type AssessmentParcel,
   type AffordableHousingProject,
@@ -173,6 +175,13 @@ export interface AffordableHousingSummary {
   projects: AffordableHousingPipelineProject[];
 }
 
+export interface ThreeOneOneSummary {
+  total: number;
+  by_category: Record<string, number>;
+  top_addresses: Array<{ address: string; count: number }>;
+  by_month: Array<{ month: string; count: number }>;
+}
+
 /** Per-district high-level summary for citywide AI prompts (~200 bytes/district, ~2KB total). */
 export interface CitywideDistrictSummary {
   district_number: string;
@@ -194,6 +203,7 @@ export interface DistrictData {
   eviction_summary: EvictionSummary;
   assessment_summary: AssessmentSummary;
   affordable_housing_summary: AffordableHousingSummary;
+  three_one_one_summary: ThreeOneOneSummary;
   /** Up to 200 geocoded permits for map rendering. Excluded from AI prompts. */
   map_permits: MapPermit[];
   /** Only populated in citywide (number="0") mode. Keys are district numbers "1"–"11". */
@@ -646,6 +656,47 @@ const EMPTY_AFFORDABLE_HOUSING_SUMMARY: AffordableHousingSummary = {
   projects: [],
 };
 
+const EMPTY_311_SUMMARY: ThreeOneOneSummary = {
+  total: 0,
+  by_category: {},
+  top_addresses: [],
+  by_month: [],
+};
+
+function buildThreeOneOneSummary(requests: ThreeOneOneRequest[]): ThreeOneOneSummary {
+  const by_category = countBy(requests, r => r.service_name ?? 'Unknown');
+
+  // Top 5 addresses by request count
+  const addrMap: Record<string, number> = {};
+  for (const r of requests) {
+    const addr = normalizeAddress(r.address ?? '');
+    if (!addr) continue;
+    addrMap[addr] = (addrMap[addr] ?? 0) + 1;
+  }
+  const top_addresses = Object.entries(addrMap)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .map(([address, count]) => ({ address, count }));
+
+  // By month (last 3 months)
+  const monthMap: Record<string, number> = {};
+  for (const r of requests) {
+    const month = r.requested_datetime?.slice(0, 7);
+    if (!month) continue;
+    monthMap[month] = (monthMap[month] ?? 0) + 1;
+  }
+  const now = new Date();
+  const by_month: Array<{ month: string; count: number }> = [];
+  for (let i = 2; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    by_month.push({ month: key, count: monthMap[key] ?? 0 });
+  }
+
+  console.log(`[aggregator] 311: ${requests.length} total | categories: ${JSON.stringify(by_category)}`);
+  return { total: requests.length, by_category, top_addresses, by_month };
+}
+
 export async function aggregateDistrictData(district: DistrictConfig, signal?: AbortSignal): Promise<DistrictData> {
   // Return cached data if fresh
   const cached = districtCache.get(district.number);
@@ -655,7 +706,7 @@ export async function aggregateDistrictData(district: DistrictConfig, signal?: A
   }
 
   const t0 = performance.now();
-  const [permits, allProjects, allZones, evictions, assessmentStats, assessmentParcels, affordableProjects] = await Promise.all([
+  const [permits, allProjects, allZones, evictions, threeOneOneRequests, assessmentStats, assessmentParcels, affordableProjects] = await Promise.all([
     timed('permits',           fetchBuildingPermits(district.number, 5000, signal)),
     timed('pipeline',          fetchDevelopmentPipeline(500, signal)),
     timed('zoning',            fetchZoningDistricts(200, signal)),
@@ -663,6 +714,11 @@ export async function aggregateDistrictData(district: DistrictConfig, signal?: A
       if (err?.name === 'AbortError') throw err;
       console.warn('[aggregator] Eviction fetch failed (non-fatal):', err);
       return [] as EvictionNotice[];
+    })),
+    timed('311-requests',      fetch311Requests(district.number, 2000, signal).catch(err => {
+      if (err?.name === 'AbortError') throw err;
+      console.warn('[aggregator] 311 fetch failed (non-fatal):', err);
+      return [] as ThreeOneOneRequest[];
     })),
     timed('assessment-stats',  fetchAssessmentStats(district.number, signal).catch(err => {
       if (err?.name === 'AbortError') throw err;
@@ -680,7 +736,7 @@ export async function aggregateDistrictData(district: DistrictConfig, signal?: A
       return [] as AffordableHousingProject[];
     })),
   ]);
-  console.log(`[aggregator] all 7 fetches complete: ${(performance.now() - t0).toFixed(0)}ms | permits: ${permits.length}, pipeline: ${allProjects.length}, evictions: ${evictions.length}, assessment: ${assessmentStats.length}, parcels: ${assessmentParcels.length}, affordable: ${affordableProjects.length}`);
+  console.log(`[aggregator] all 8 fetches complete: ${(performance.now() - t0).toFixed(0)}ms | permits: ${permits.length}, pipeline: ${allProjects.length}, evictions: ${evictions.length}, 311: ${threeOneOneRequests.length}, assessment: ${assessmentStats.length}, parcels: ${assessmentParcels.length}, affordable: ${affordableProjects.length}`);
 
   const projects = allProjects.filter((p) => {
     const hood = (p.nhood41 ?? '').toLowerCase();
@@ -714,6 +770,10 @@ export async function aggregateDistrictData(district: DistrictConfig, signal?: A
     ? buildAffordableHousingSummary(affordableProjects)
     : EMPTY_AFFORDABLE_HOUSING_SUMMARY;
 
+  const three_one_one_summary = threeOneOneRequests.length > 0
+    ? buildThreeOneOneSummary(threeOneOneRequests)
+    : EMPTY_311_SUMMARY;
+
   const map_permits: MapPermit[] = permits
     .filter(p => p.location?.coordinates)
     .slice(0, 200)
@@ -736,6 +796,7 @@ export async function aggregateDistrictData(district: DistrictConfig, signal?: A
     eviction_summary,
     assessment_summary,
     affordable_housing_summary,
+    three_one_one_summary,
     map_permits,
   };
 
@@ -844,6 +905,20 @@ function mergeAffordableHousingSummaries(summaries: AffordableHousingSummary[]):
   };
 }
 
+function mergeThreeOneOneSummaries(summaries: ThreeOneOneSummary[]): ThreeOneOneSummary {
+  const by_category = mergeCountMaps(summaries.map(s => s.by_category));
+  const addrMap: Record<string, number> = {};
+  for (const s of summaries) for (const a of s.top_addresses) addrMap[a.address] = (addrMap[a.address] ?? 0) + a.count;
+  const top_addresses = Object.entries(addrMap)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .map(([address, count]) => ({ address, count }));
+  const monthMap: Record<string, number> = {};
+  for (const s of summaries) for (const m of s.by_month) monthMap[m.month] = (monthMap[m.month] ?? 0) + m.count;
+  const by_month = Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b)).map(([month, count]) => ({ month, count }));
+  return { total: summaries.reduce((s, t) => s + t.total, 0), by_category, top_addresses, by_month };
+}
+
 // ── Citywide prompt summary builder ──────────────────────────────────────────
 
 function buildCitywidePromptSummary(
@@ -923,6 +998,7 @@ export async function aggregateCitywideData(signal?: AbortSignal): Promise<Distr
     eviction_summary:           mergeEvictionSummaries(allData.map(d => d.eviction_summary)),
     assessment_summary:         mergeAssessmentSummaries(allData.map(d => d.assessment_summary)),
     affordable_housing_summary: mergeAffordableHousingSummaries(allData.map(d => d.affordable_housing_summary)),
+    three_one_one_summary:      mergeThreeOneOneSummaries(allData.map(d => d.three_one_one_summary)),
     map_permits:                allData.flatMap(d => d.map_permits).slice(0, 400),
     by_district,
     citywide_prompt_summary:    buildCitywidePromptSummary(districtNums, allData),

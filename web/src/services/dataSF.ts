@@ -275,6 +275,66 @@ export async function fetchAffordableHousingPipeline(district: string, signal?: 
   return socrataFetch<AffordableHousingProject>('aaxw-2cb8', params, signal);
 }
 
+// ── 311 Service Requests ────────────────────────────────────────────────────
+// Dataset ID: vw6y-z8j6
+
+export interface ThreeOneOneRequest {
+  service_request_id: string;
+  requested_datetime: string;
+  closed_datetime?: string;
+  status_description: string;
+  service_name: string;
+  service_subtype?: string;
+  address?: string;
+  lat?: string;
+  long?: string;
+  supervisor_district?: string;
+  neighborhoods_sffind_neighborhoods?: string;
+}
+
+export async function fetch311Requests(district: string, limit = 2000, signal?: AbortSignal): Promise<ThreeOneOneRequest[]> {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 90);
+  const dateStr = cutoff.toISOString().split('T')[0];
+
+  const params = new URLSearchParams({
+    $select: [
+      'service_request_id', 'requested_datetime', 'closed_datetime',
+      'status_description', 'service_name', 'service_subtype',
+      'address', 'lat', 'long', 'supervisor_district',
+      'neighborhoods_sffind_neighborhoods',
+    ].join(','),
+    $where: `supervisor_district='${district}' AND requested_datetime >= '${dateStr}T00:00:00.000'`,
+    $order: 'requested_datetime DESC',
+    $limit: String(limit),
+  });
+  return socrataFetch<ThreeOneOneRequest>('vw6y-z8j6', params, signal);
+}
+
+// ── Community Benefit District Boundaries ──────────────────────────────────
+// Dataset ID: c28a-f6gs (the eunk-59dy map view returns empty rows)
+
+export interface CBDBoundary {
+  community_benefit_district: string;
+  multipolygon: {
+    type: string;
+    coordinates: number[][][][];
+  };
+  revenue?: number;
+  established?: number;
+  expiration?: string;
+  sup_districts?: string;
+  annual_report_url?: string;
+}
+
+export async function fetchCBDBoundaries(signal?: AbortSignal): Promise<CBDBoundary[]> {
+  const params = new URLSearchParams({
+    $select: 'community_benefit_district,multipolygon,revenue,established,expiration,sup_districts,annual_report_url',
+    $limit: '50',
+  });
+  return socrataFetch<CBDBoundary>('c28a-f6gs', params, signal);
+}
+
 export async function fetchEvictions(district: string, limit = 1000, signal?: AbortSignal): Promise<EvictionNotice[]> {
   const cutoff = new Date();
   cutoff.setFullYear(cutoff.getFullYear() - 2);

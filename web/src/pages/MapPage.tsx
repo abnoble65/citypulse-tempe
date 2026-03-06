@@ -117,6 +117,8 @@ interface LayerState {
   permits:      boolean;
   evictions:    boolean;
   affordable:   boolean;
+  threeOneOne:  boolean;
+  cbds:         boolean;
   neighborhoods: boolean;
 }
 
@@ -165,12 +167,52 @@ interface AHMarker {
   completion: string;
 }
 
+interface ThreeOneOneRow {
+  service_request_id: string;
+  requested_datetime?: string;
+  status_description?: string;
+  service_name?: string;
+  service_subtype?: string;
+  address?: string;
+  lat?: string;
+  long?: string;
+}
+
+interface CBDRow {
+  community_benefit_district: string;
+  multipolygon?: {
+    type: string;
+    coordinates: number[][][][];
+  };
+  revenue?: number;
+  sup_districts?: string;
+}
+
+function cbdSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function threeOneOneColor(category: string | undefined): string {
+  const s = (category ?? "").toLowerCase();
+  if (s.includes("graffiti"))                        return "#7C3AED"; // purple
+  if (s.includes("street") && s.includes("clean"))   return "#92400E"; // brown
+  if (s.includes("sidewalk") && s.includes("clean")) return "#92400E"; // brown
+  if (s.includes("encampment"))                       return "#DC2626"; // red
+  return "#6B7280"; // gray
+}
+
 // ── Layer toggle panel ────────────────────────────────────────────────────────
+
+const THREE_ONE_ONE_COLOR = "#7C3AED";
+
+const CBD_COLOR = "#E8652D";
 
 const LAYER_META: { key: keyof LayerState; label: string; color: string }[] = [
   { key: "permits",       label: "Building Permits",        color: "#4A7FD0" },
   { key: "affordable",    label: "Affordable Housing",      color: AFFORDABLE_COLOR },
   { key: "evictions",     label: "Eviction Notices",        color: EVICTION_COLOR },
+  { key: "threeOneOne",   label: "311 Requests",            color: THREE_ONE_ONE_COLOR },
+  { key: "cbds",          label: "Community Benefit Districts", color: CBD_COLOR },
   { key: "neighborhoods", label: "Neighborhood Boundaries", color: "#94a3b8" },
 ];
 
@@ -314,6 +356,60 @@ function MapLegend({ layers }: { layers: LayerState }) {
           Eviction Notice
         </div>
       )}
+
+      {/* 311 Requests */}
+      {layers.threeOneOne && (
+        <>
+          <div style={{
+            fontFamily: FONTS.body, fontSize: 10, fontWeight: 700,
+            color: COLORS.warmGray, textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            marginTop: (layers.permits || layers.affordable || layers.evictions) ? 8 : 0,
+            paddingTop: (layers.permits || layers.affordable || layers.evictions) ? 6 : 0,
+            borderTop: (layers.permits || layers.affordable || layers.evictions) ? `1px solid ${COLORS.lightBorder}` : "none",
+            marginBottom: 5,
+          }}>
+            311 Requests
+          </div>
+          {([
+            { label: "Graffiti",                    color: "#7C3AED" },
+            { label: "Street/Sidewalk Cleaning",    color: "#92400E" },
+            { label: "Encampments",                 color: "#DC2626" },
+            { label: "Other",                       color: "#6B7280" },
+          ] as const).map(({ label, color }) => (
+            <div key={label} style={{
+              display: "flex", alignItems: "center", gap: 7,
+              padding: "2px 0", fontFamily: FONTS.body,
+              fontSize: 11, color: COLORS.charcoal,
+            }}>
+              <span style={{
+                width: 8, height: 8, borderRadius: "50%",
+                background: color, flexShrink: 0,
+              }} />
+              {label}
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Community Benefit Districts */}
+      {layers.cbds && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 7,
+          marginTop: (layers.permits || layers.affordable || layers.evictions || layers.threeOneOne) ? 6 : 0,
+          paddingTop: (layers.permits || layers.affordable || layers.evictions || layers.threeOneOne) ? 6 : 0,
+          borderTop: (layers.permits || layers.affordable || layers.evictions || layers.threeOneOne) ? `1px solid ${COLORS.lightBorder}` : "none",
+          fontFamily: FONTS.body, fontSize: 11, color: COLORS.charcoal,
+        }}>
+          <span style={{
+            width: 10, height: 10,
+            border: `2px dashed ${CBD_COLOR}`,
+            borderRadius: 2,
+            flexShrink: 0,
+          }} />
+          CBD Boundary
+        </div>
+      )}
     </div>
   );
 }
@@ -403,17 +499,72 @@ function NeighborhoodLabels({ geojson }: { geojson: GeoJSON.FeatureCollection | 
   return null;
 }
 
+// ── CBD labels (pill at centroid) ──────────────────────────────────────────────
+
+function CBDLabels({ geojson }: { geojson: GeoJSON.FeatureCollection | null }) {
+  const map = useMap();
+  const layerRef = useRef<L.LayerGroup | null>(null);
+
+  useEffect(() => {
+    if (layerRef.current) {
+      map.removeLayer(layerRef.current);
+      layerRef.current = null;
+    }
+    if (!geojson) return;
+
+    const group = L.layerGroup();
+    for (const feat of geojson.features) {
+      const name = feat.properties?.name;
+      if (!name) continue;
+      const coords = flatCoords((feat.geometry as any).coordinates);
+      if (!coords.length) continue;
+      let sumLat = 0, sumLng = 0;
+      for (const [lng, lat] of coords) { sumLat += lat; sumLng += lng; }
+      const centroid = L.latLng(sumLat / coords.length, sumLng / coords.length);
+
+      const icon = L.divIcon({
+        className: "cbd-label",
+        html: `<span style="
+          font-family: ${FONTS.body};
+          font-size: 12px;
+          font-weight: 700;
+          color: ${CBD_COLOR};
+          background: rgba(255,255,255,0.92);
+          padding: 2px 8px;
+          border-radius: 10px;
+          white-space: nowrap;
+          pointer-events: none;
+          border: 1px solid ${CBD_COLOR};
+        ">${name}</span>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+      L.marker(centroid, { icon, interactive: false }).addTo(group);
+    }
+    group.addTo(map);
+    layerRef.current = group;
+
+    return () => {
+      if (layerRef.current) map.removeLayer(layerRef.current);
+    };
+  }, [map, geojson]);
+
+  return null;
+}
+
 // ── Main page component ───────────────────────────────────────────────────────
 
 export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
   const [filter, setFilter] = useState(districtConfig.allLabel);
   const [layers, setLayers] = useState<LayerState>({
-    permits: true, evictions: false, affordable: true, neighborhoods: true,
+    permits: true, evictions: false, affordable: true, threeOneOne: false, cbds: false, neighborhoods: true,
   });
 
   const [permits, setPermits]       = useState<PermitRow[]>([]);
   const [evictions, setEvictions]   = useState<EvictionRow[]>([]);
   const [ahMarkers, setAhMarkers]  = useState<AHMarker[]>([]);
+  const [threeOneOne, setThreeOneOne] = useState<ThreeOneOneRow[]>([]);
+  const [cbdRows, setCbdRows]      = useState<CBDRow[]>([]);
   const [nhGeoJSON, setNhGeoJSON]  = useState<GeoJSON.FeatureCollection | null>(null);
   const [districtGeoJSON, setDistrictGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
 
@@ -521,6 +672,50 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
       .catch(err => console.warn("[MapPage] affordable housing fetch failed:", err));
   }, [districtConfig]);
 
+  // ── Fetch 311 requests (DataSF vw6y-z8j6) ────────────────────────────────────
+  useEffect(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 90);
+    const dateStr = cutoff.toISOString().split('T')[0];
+
+    const distWhere = districtConfig.number === "0"
+      ? `requested_datetime >= '${dateStr}T00:00:00.000' AND lat IS NOT NULL`
+      : `supervisor_district='${districtConfig.number}' AND requested_datetime >= '${dateStr}T00:00:00.000' AND lat IS NOT NULL`;
+
+    const params = new URLSearchParams({
+      $where:  distWhere,
+      $select: "service_request_id,requested_datetime,status_description,service_name,service_subtype,address,lat,long",
+      $limit:  "2000",
+      $order:  "requested_datetime DESC",
+    });
+
+    fetch(`${DATASF}/vw6y-z8j6.json?${params}`)
+      .then(r => r.json())
+      .then((rows: ThreeOneOneRow[]) => {
+        const valid = rows.filter(r => r.lat && r.long && !isNaN(parseFloat(r.lat)) && !isNaN(parseFloat(r.long)));
+        console.log(`[MapPage] 311: ${rows.length} total, ${valid.length} with coords`);
+        setThreeOneOne(valid);
+      })
+      .catch(err => console.warn("[MapPage] 311 fetch failed:", err));
+  }, [districtConfig]);
+
+  // ── Fetch CBD boundaries (DataSF c28a-f6gs) ────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams({
+      $select: "community_benefit_district,multipolygon,revenue,sup_districts",
+      $limit:  "50",
+    });
+
+    fetch(`${DATASF}/c28a-f6gs.json?${params}`)
+      .then(r => r.json())
+      .then((rows: CBDRow[]) => {
+        const valid = rows.filter(r => r.multipolygon?.coordinates && r.community_benefit_district);
+        console.log(`[MapPage] CBDs: ${rows.length} total, ${valid.length} with boundaries`);
+        setCbdRows(valid);
+      })
+      .catch(err => console.warn("[MapPage] CBD boundaries fetch failed:", err));
+  }, []);
+
   // ── Fetch neighborhood boundaries GeoJSON ──────────────────────────────────
   useEffect(() => {
     fetch(`${DATASF}/jwn9-ihcz.geojson?$limit=200`)
@@ -600,6 +795,15 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
     return ahMarkers.filter(m => !selectedBounds || selectedBounds.contains(L.latLng(m.lat, m.lng)));
   }, [ahMarkers, selectedBounds]);
 
+  const filtered311 = useMemo(() => {
+    return threeOneOne.filter(r => {
+      const lat = parseFloat(r.lat!);
+      const lng = parseFloat(r.long!);
+      if (selectedBounds && !selectedBounds.contains(L.latLng(lat, lng))) return false;
+      return true;
+    });
+  }, [threeOneOne, selectedBounds]);
+
   // GeoJSON key must change when data OR selection changes to force re-render
   const nhKey = useMemo(
     () => `nh-${nhGeoJSON ? nhGeoJSON.features.length : 0}-${selectedGeoName ?? "all"}`,
@@ -615,6 +819,24 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
       : { color: "#94a3b8", weight: 1, fillColor: "transparent", fillOpacity: 0 };
     return { ...base, interactive: false };
   }, [selectedGeoName]);
+
+  // Build CBD FeatureCollection from raw rows
+  const cbdGeoJSON = useMemo<GeoJSON.FeatureCollection | null>(() => {
+    if (!cbdRows.length) return null;
+    return {
+      type: "FeatureCollection",
+      features: cbdRows.map(r => ({
+        type: "Feature" as const,
+        geometry: r.multipolygon as GeoJSON.MultiPolygon,
+        properties: {
+          name: r.community_benefit_district,
+          slug: cbdSlug(r.community_benefit_district),
+          revenue: r.revenue,
+          sup_districts: r.sup_districts,
+        },
+      })),
+    };
+  }, [cbdRows]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -662,6 +884,48 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
                 style={nhStyle}
               />
               <NeighborhoodLabels geojson={nhGeoJSON} />
+            </>
+          )}
+
+          {/* Community Benefit Districts */}
+          {layers.cbds && cbdGeoJSON && (
+            <>
+              <GeoJSON
+                key={`cbd-${cbdGeoJSON.features.length}`}
+                data={cbdGeoJSON}
+                style={() => ({
+                  color: CBD_COLOR,
+                  weight: 2,
+                  dashArray: "6 4",
+                  fillColor: "transparent",
+                  fillOpacity: 0,
+                })}
+                onEachFeature={(feature, layer) => {
+                  const name = feature.properties?.name ?? "CBD";
+                  const slug = feature.properties?.slug ?? "";
+                  const revenue = feature.properties?.revenue;
+                  const revStr = revenue
+                    ? `$${(revenue / 1_000_000).toFixed(1)}M`
+                    : "—";
+                  layer.bindPopup(`
+                    <div style="font-family: ${FONTS.body}; font-size: 13px;">
+                      <strong>${name}</strong>
+                      <table style="margin-top: 6px; font-size: 12px; border-collapse: collapse;">
+                        <tbody>
+                          <tr><td style="color: #999; padding-right: 10px;">Revenue</td><td>${revStr}</td></tr>
+                          <tr><td style="color: #999; padding-right: 10px;">Districts</td><td>${feature.properties?.sup_districts ?? "—"}</td></tr>
+                        </tbody>
+                      </table>
+                      <a href="/cbd/${slug}" style="
+                        display: inline-block; margin-top: 8px;
+                        font-size: 12px; color: ${CBD_COLOR}; font-weight: 600;
+                        text-decoration: none;
+                      ">View CBD Portal &rarr;</a>
+                    </div>
+                  `);
+                }}
+              />
+              <CBDLabels geojson={cbdGeoJSON} />
             </>
           )}
 
@@ -797,13 +1061,55 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
               </Popup>
             </CircleMarker>
           ))}
+
+          {/* 311 Requests */}
+          {layers.threeOneOne && filtered311.map((r) => {
+            const lat = parseFloat(r.lat!);
+            const lng = parseFloat(r.long!);
+            const color = threeOneOneColor(r.service_name);
+            const fmtDate = (d?: string) => {
+              if (!d) return "—";
+              try { return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
+              catch { return d; }
+            };
+
+            return (
+              <CircleMarker
+                key={`311-${r.service_request_id}`}
+                center={[lat, lng]}
+                radius={5}
+                pathOptions={{
+                  color: "#ffffff",
+                  weight: 1,
+                  fillColor: color,
+                  fillOpacity: 0.85,
+                }}
+              >
+                <Popup>
+                  <div style={{ fontFamily: FONTS.body, fontSize: 13 }}>
+                    <strong>{r.service_name ?? "311 Request"}</strong>
+                    <table style={{ marginTop: 6, fontSize: 12, borderCollapse: "collapse" }}>
+                      <tbody>
+                        {r.service_subtype && (
+                          <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Subcategory</td><td>{r.service_subtype}</td></tr>
+                        )}
+                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Address</td><td>{r.address ?? "—"}</td></tr>
+                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Date</td><td>{fmtDate(r.requested_datetime)}</td></tr>
+                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Status</td><td>{r.status_description ?? "—"}</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            );
+          })}
         </MapContainer>
 
         {/* Floating layer toggle panel */}
         <LayerPanel layers={layers} onChange={toggleLayer} />
 
         {/* Map legend */}
-        {(layers.permits || layers.affordable || layers.evictions) && <MapLegend layers={layers} />}
+        {(layers.permits || layers.affordable || layers.evictions || layers.threeOneOne || layers.cbds) && <MapLegend layers={layers} />}
       </div>
     </div>
   );
