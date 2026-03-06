@@ -11,6 +11,9 @@ import { CBDNavBar } from "./CBDNavBar";
 import { CBDDashboard } from "../pages/cbd/CBDDashboard";
 import { CleanSafeReport } from "../pages/cbd/CleanSafeReport";
 import { BoardPacket } from "../pages/cbd/BoardPacket";
+import { CBDPermits } from "../pages/cbd/CBDPermits";
+import { CBD311Detail } from "../pages/cbd/CBD311Detail";
+import { CBDBusinessPulse } from "../pages/cbd/CBDBusinessPulse";
 import { CityPulseLogo } from "./Icons";
 import { COLORS, FONTS } from "../theme";
 
@@ -268,6 +271,9 @@ function CBDShell({ slug }: { slug: string }) {
     }
     if (subPath === "clean-safe") return <CleanSafeReport />;
     if (subPath === "board-packet") return <BoardPacket />;
+    if (subPath === "permits") return <CBDPermits />;
+    if (subPath === "311") return <CBD311Detail />;
+    if (subPath === "business") return <CBDBusinessPulse />;
     const title = PAGE_TITLES[subPath];
     if (title) return <ComingSoonPage title={title} />;
     return <ComingSoonPage title="Page Not Found" />;
