@@ -9,6 +9,8 @@ import { useState, useEffect, useCallback } from "react";
 import { CBDProvider, useCBD } from "../contexts/CBDContext";
 import { CBDNavBar } from "./CBDNavBar";
 import { CBDDashboard } from "../pages/cbd/CBDDashboard";
+import { CleanSafeReport } from "../pages/cbd/CleanSafeReport";
+import { BoardPacket } from "../pages/cbd/BoardPacket";
 import { CityPulseLogo } from "./Icons";
 import { COLORS, FONTS } from "../theme";
 
@@ -264,6 +266,8 @@ function CBDShell({ slug }: { slug: string }) {
     if (!subPath || subPath === "") {
       return <CBDDashboard onNavigate={navigate} />;
     }
+    if (subPath === "clean-safe") return <CleanSafeReport />;
+    if (subPath === "board-packet") return <BoardPacket />;
     const title = PAGE_TITLES[subPath];
     if (title) return <ComingSoonPage title={title} />;
     return <ComingSoonPage title="Page Not Found" />;
