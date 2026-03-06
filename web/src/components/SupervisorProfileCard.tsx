@@ -135,7 +135,7 @@ export function SupervisorProfileCard({
     );
   }
 
-  // ── Collapsed state ────────────────────────────────────────────────────
+  // ── Shared badge renderer ────────────────────────────────────────────
   const committeeBadges = profile.committees.map(c => (
     <span key={c.name} style={{
       display: "inline-block",
@@ -151,20 +151,40 @@ export function SupervisorProfileCard({
     </span>
   ));
 
-  return (
-    <div style={{
-      background: COLORS.white,
-      border: `1px solid ${COLORS.lightBorder}`,
-      borderRadius: 16,
-      overflow: "hidden",
-      boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
-    }}>
-      {/* ── Collapsed header ────────────────────────────────────────────── */}
+  const toggleButton = (
+    <button
+      onClick={() => setExpanded(!expanded)}
+      style={{
+        background: expanded ? COLORS.orangePale : COLORS.cream,
+        border: `1px solid ${expanded ? COLORS.orange : COLORS.lightBorder}`,
+        borderRadius: 10,
+        padding: "8px 16px",
+        fontFamily: FONTS.body,
+        fontSize: 12,
+        fontWeight: 700,
+        color: COLORS.orange,
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+        flexShrink: 0,
+        transition: "all 0.15s ease",
+      }}
+    >
+      {expanded ? "Collapse" : "View Profile"}
+    </button>
+  );
+
+  // ── Collapsed view ─────────────────────────────────────────────────
+  if (!expanded) {
+    return (
       <div style={{
+        background: COLORS.white,
+        border: `1px solid ${COLORS.lightBorder}`,
+        borderRadius: 16,
         padding: "18px 24px",
         display: "flex",
         alignItems: "center",
         gap: 14,
+        boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
       }}>
         <SupervisorAvatar districtNumber={districtConfig.number} size={52} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -178,83 +198,64 @@ export function SupervisorProfileCard({
             fontFamily: FONTS.body, fontSize: 13,
             color: COLORS.warmGray, marginTop: 2,
           }}>
-            {districtConfig.label} · {profile.termStart}\u2013{profile.termEnd}
+            {districtConfig.label} · {profile.termStart}–{profile.termEnd}
           </div>
           <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap" }}>
             {committeeBadges}
           </div>
         </div>
-        <button
-          onClick={() => setExpanded(!expanded)}
-          style={{
-            background: expanded ? COLORS.orangePale : COLORS.cream,
-            border: `1px solid ${expanded ? COLORS.orange : COLORS.lightBorder}`,
-            borderRadius: 10,
-            padding: "8px 16px",
-            fontFamily: FONTS.body,
-            fontSize: 12,
-            fontWeight: 700,
-            color: COLORS.orange,
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-            flexShrink: 0,
-            transition: "all 0.15s ease",
-          }}
-        >
-          {expanded ? "Collapse" : "View Profile"}
-        </button>
+        {toggleButton}
+      </div>
+    );
+  }
+
+  // ── Expanded view ──────────────────────────────────────────────────
+  return (
+    <div style={{
+      background: COLORS.white,
+      border: `1px solid ${COLORS.lightBorder}`,
+      borderRadius: 16,
+      overflow: "hidden",
+      boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
+    }}>
+      {/* Header — name + alt name + term + committees + collapse button */}
+      <div style={{
+        padding: "24px 24px 20px",
+        display: "flex", alignItems: "flex-start", gap: 16,
+      }}>
+        <SupervisorAvatar districtNumber={districtConfig.number} size={72} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontFamily: FONTS.display, fontSize: 22, fontWeight: 800,
+            color: COLORS.charcoal, lineHeight: 1.15,
+          }}>
+            {profile.name}
+            {profile.altName && (
+              <span style={{
+                fontWeight: 400, fontSize: 16, color: COLORS.midGray, marginLeft: 10,
+              }}>
+                {profile.altName}
+              </span>
+            )}
+          </div>
+          <div style={{
+            fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray, marginTop: 4,
+          }}>
+            {districtConfig.label} · {profile.termStart}–{profile.termEnd}
+          </div>
+          <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap" }}>
+            {committeeBadges}
+          </div>
+        </div>
+        {toggleButton}
       </div>
 
-      {/* ── Expanded sections ───────────────────────────────────────────── */}
-      {expanded && (
-        <div style={{
-          borderTop: `1px solid ${COLORS.lightBorder}`,
-          padding: "24px 24px 28px",
-        }}>
-          {/* 1. Header — name + alt name + term + committees */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: 16, marginBottom: 28,
-          }}>
-            <SupervisorAvatar districtNumber={districtConfig.number} size={72} />
-            <div>
-              <div style={{
-                fontFamily: FONTS.display, fontSize: 22, fontWeight: 800,
-                color: COLORS.charcoal, lineHeight: 1.15,
-              }}>
-                {profile.name}
-                {profile.altName && (
-                  <span style={{
-                    fontWeight: 400, fontSize: 16, color: COLORS.midGray, marginLeft: 10,
-                  }}>
-                    {profile.altName}
-                  </span>
-                )}
-              </div>
-              <div style={{
-                fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray, marginTop: 4,
-              }}>
-                {districtConfig.label} · {profile.termStart}\u2013{profile.termEnd}
-              </div>
-              <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap" }}>
-                {profile.committees.map(c => (
-                  <span key={c.name} style={{
-                    display: "inline-block",
-                    fontFamily: FONTS.body, fontSize: 11, fontWeight: 600,
-                    background: COLORS.orangePale,
-                    color: COLORS.charcoal,
-                    borderRadius: 8,
-                    padding: "3px 10px",
-                    marginRight: 6,
-                    marginBottom: 4,
-                  }}>
-                    {c.role !== "Member" ? `${c.role} · ` : ""}{c.name}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* 2. About */}
+      {/* Sections */}
+      <div style={{
+        borderTop: `1px solid ${COLORS.lightBorder}`,
+        padding: "24px 24px 28px",
+      }}>
+        {/* 2. About */}
           <SectionHeading text="About" />
           <div style={{ marginBottom: 24 }}>
             <LabeledRow label="Background" value={profile.background} />
@@ -375,7 +376,6 @@ export function SupervisorProfileCard({
           {/* 6. District Data Cross-Reference */}
           {aggregatedData && <CrossReference profile={profile} aggregatedData={aggregatedData} districtConfig={districtConfig} />}
         </div>
-      )}
     </div>
   );
 }

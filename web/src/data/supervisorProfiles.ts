@@ -10,7 +10,7 @@
 
 export interface CommitteeMembership {
   name: string;
-  role: "Chair" | "Vice Chair" | "Member";
+  role: "Chair" | "Vice Chair" | "Vice-Chair" | "Member";
 }
 
 export interface StatedPriority {
@@ -58,18 +58,20 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
   "3": {
     districtNumber: "3",
     name: "Danny Sauter",
-    altName: "\u8463\u5EF6\u658C",
-    termStart: "January 2025",
-    termEnd: "January 2029",
+    altName: "李爾德",
+    termStart: "January 8, 2025",
+    termEnd: "January 8, 2029",
     background:
-      "Danny Sauter is a neighborhood advocate, small business owner, and community organizer who has lived in District 3 for over a decade. He co-founded a neighborhood safety group and served on multiple community advisory boards before running for office.",
-    education: "B.A. in Political Science, University of California, Berkeley",
-    residency: "North Beach, San Francisco (10+ years)",
-    priorRole: "Small business owner; Co-founder, North Beach Neighbors",
+      "Community organizer in District 3 for over a decade. Former Executive Director of SF Neighborhood Centers Together, supporting youth and seniors at Cameron House in Chinatown and TEL HI Neighborhood Center in North Beach. Co-founded Bamboo, a marketing agency, growing it from 2 to 50 employees.",
+    education: "Miami University – Marketing major, dual minors in Entrepreneurship and Chinese. Studied abroad in China, learned Mandarin.",
+    residency: "North Beach resident for over a decade. Renter – one of two renters on the Board of Supervisors.",
+    priorRole: "Executive Director, SF Neighborhood Centers Together. President, North Beach Neighbors (8+ years). First Housing Chair, SF Sierra Club.",
     committees: [
-      { name: "Land Use and Transportation", role: "Member" },
-      { name: "Government Audit and Oversight", role: "Member" },
-      { name: "Budget and Appropriations", role: "Member" },
+      { name: "SF Downtown Revitalization & Economic Recovery Financing District", role: "Chair" },
+      { name: "Government Audit & Oversight Committee", role: "Vice-Chair" },
+      { name: "Budget & Finance Committee", role: "Member" },
+      { name: "Budget & Appropriations Committee", role: "Member" },
+      { name: "SF County Transportation Authority", role: "Member" },
     ],
     statedPriorities: [
       {
@@ -122,11 +124,11 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
       },
     ],
     communityRecord: [
-      "Co-founded North Beach Neighbors, a neighborhood safety and advocacy group",
-      "Served on the Telegraph Hill Dwellers board of directors",
-      "Member of the Chinatown Community Development Center advisory council",
-      "Organized annual North Beach community clean-up events (2019\u20132024)",
-      "Advocated for increased foot-patrol officers in the Central Police District",
+      "Executive Director, SF Neighborhood Centers Together – supporting youth and seniors at Cameron House and TEL HI",
+      "President, North Beach Neighbors for 8+ years",
+      "First Housing Chair, SF Sierra Club",
+      "Co-founded Bamboo, a marketing agency (grew from 2 to 50 employees)",
+      "North Beach resident and renter for over a decade",
     ],
     contact: {
       office: "City Hall, Room 244, 1 Dr. Carlton B. Goodlett Place, SF 94102",
