@@ -22,6 +22,7 @@ import { useCBD, type CBDConfig } from "../../contexts/CBDContext";
 import { COLORS, FONTS } from "../../theme";
 import { isPointInCBD, type CBDBoundaryEntry } from "../../utils/geoFilter";
 import { renderMarkdownBlock } from "../../components/MarkdownText";
+import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
 import Anthropic from "@anthropic-ai/sdk";
 
 const DATASF = "https://data.sfgov.org/resource";
@@ -595,19 +596,16 @@ Flag any categories with slow resolution times vs others and recommend resource 
         </p>
       </div>
 
-      {/* ── Loading ─────────────────────────────────────────────── */}
-      {loading && (
-        <div style={{
-          textAlign: "center", padding: 48,
-          fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray,
-        }}>
-          <div className="sk" style={{ width: 40, height: 40, borderRadius: 10, margin: "0 auto 16px" }} />
-          Loading 311 data...
-        </div>
-      )}
+      {/* ── Loading experience ────────────────────────────────── */}
+      <CBDLoadingExperience
+        config={config}
+        loading={loading}
+        itemCount={rows311.length}
+        variant="clean-safe"
+      />
 
       {!loading && (
-        <>
+        <div style={{ animation: "cp-page-in 0.3s ease-out" }}>
           {/* ── Summary bar ────────────────────────────────────────── */}
           <div style={{
             display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24,
@@ -977,7 +975,7 @@ Flag any categories with slow resolution times vs others and recommend resource 
               </p>
             )}
           </Section>
-        </>
+        </div>
       )}
     </div>
   );

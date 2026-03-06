@@ -20,6 +20,7 @@ import { useCBD, type CBDConfig } from "../../contexts/CBDContext";
 import { COLORS, FONTS } from "../../theme";
 import { isPointInCBD, type CBDBoundaryEntry } from "../../utils/geoFilter";
 import { renderMarkdownBlock } from "../../components/MarkdownText";
+import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
 import Anthropic from "@anthropic-ai/sdk";
 
 const DATASF = "https://data.sfgov.org/resource";
@@ -531,13 +532,23 @@ Focus on: permit activity within the district, 311 service request trends, and a
         </div>
       </div>
 
+      {/* ── Loading experience ────────────────────────────────────── */}
+      <CBDLoadingExperience
+        config={config}
+        loading={statsLoading}
+        itemCount={stats.threeOneOne.length}
+        variant="dashboard"
+      />
+
       {/* ── Stat cards with colored left borders ──────────────────── */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24 }}>
-        <StatCard label="Active Permits" value={stats.permits.length} color={STAT_COLORS.permits} loading={statsLoading} />
-        <StatCard label="311 Requests (90d)" value={stats.threeOneOne.length} color={STAT_COLORS.threeOneOne} loading={statsLoading} />
-        <StatCard label="Eviction Notices" value={stats.evictions.length} color={STAT_COLORS.evictions} loading={statsLoading} />
+      {!statsLoading && (
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24, animation: "cp-page-in 0.3s ease-out" }}>
+        <StatCard label="Active Permits" value={stats.permits.length} color={STAT_COLORS.permits} loading={false} />
+        <StatCard label="311 Requests (90d)" value={stats.threeOneOne.length} color={STAT_COLORS.threeOneOne} loading={false} />
+        <StatCard label="Eviction Notices" value={stats.evictions.length} color={STAT_COLORS.evictions} loading={false} />
         <StatCard label="Businesses" value="\u2014" color={STAT_COLORS.businesses} loading={false} />
       </div>
+      )}
 
       {/* ── AI Summary ──────────────────────────────────────────────── */}
       <div style={{
