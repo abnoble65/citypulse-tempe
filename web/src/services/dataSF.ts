@@ -281,7 +281,7 @@ export async function fetchAffordableHousingPipeline(district: string, signal?: 
 export interface ThreeOneOneRequest {
   service_request_id: string;
   requested_datetime: string;
-  closed_datetime?: string;
+  closed_date?: string;
   status_description: string;
   service_name: string;
   service_subtype?: string;
@@ -299,7 +299,7 @@ export async function fetch311Requests(district: string, limit = 2000, signal?: 
 
   const params = new URLSearchParams({
     $select: [
-      'service_request_id', 'requested_datetime', 'closed_datetime',
+      'service_request_id', 'requested_datetime', 'closed_date',
       'status_description', 'service_name', 'service_subtype',
       'address', 'lat', 'long', 'supervisor_district',
       'neighborhoods_sffind_neighborhoods',

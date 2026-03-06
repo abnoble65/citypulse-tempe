@@ -491,7 +491,7 @@ export function BoardPacket() {
       const [raw311, rawPermit, rawEvict] = await Promise.all([
         fetch(`${DATASF}/vw6y-z8j6.json?${new URLSearchParams({
           $where: w311,
-          $select: "lat,long,service_name,address,requested_datetime,closed_datetime,status_description",
+          $select: "lat,long,service_name,address,requested_datetime,closed_date,status_description",
           $limit: "5000",
         })}`).then(r => r.json()).catch(() => []),
 
@@ -514,7 +514,7 @@ export function BoardPacket() {
           category: r.service_name ?? "",
           address: r.address ?? "",
           date: (r.requested_datetime ?? "").split("T")[0],
-          closedDate: r.closed_datetime ? (r.closed_datetime as string).split("T")[0] : null as string | null,
+          closedDate: r.closed_date ? (r.closed_date as string).split("T")[0] : null as string | null,
           lat: parseFloat(r.lat),
           lng: parseFloat(r.long),
         }))

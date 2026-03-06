@@ -61,16 +61,17 @@ export async function fetch311ForCBD(
     `requested_datetime>'${cutoffStr}'`,
   ].join(" AND ");
 
+  const params = new URLSearchParams({
+    $where,
+    $select: "lat,long,service_name,service_subtype,address,requested_datetime,closed_date,status_description",
+    $limit: String(limit),
+    $order: "requested_datetime DESC",
+  });
+  const url = `${DATASF}/vw6y-z8j6.json?${params}`;
+  console.log("[fetch311ForCBD] URL:", url);
+
   const t0 = performance.now();
-  const res = await fetch(
-    `${DATASF}/vw6y-z8j6.json?${new URLSearchParams({
-      $where,
-      $select: "lat,long,service_name,service_subtype,address,requested_datetime,closed_datetime,status_description",
-      $limit: String(limit),
-      $order: "requested_datetime DESC",
-    })}`,
-    { signal },
-  );
+  const res = await fetch(url, { signal });
 
   if (!res.ok) throw new Error(`DataSF returned ${res.status}`);
   const raw: any[] = await res.json();
@@ -81,7 +82,7 @@ export async function fetch311ForCBD(
     const lng = parseFloat(r.long);
     if (isNaN(lat) || isNaN(lng)) continue;
     const dt = r.requested_datetime ?? "";
-    const cd = r.closed_datetime ?? null;
+    const cd = r.closed_date ?? null;
     rows.push({
       lat, lng,
       category: r.service_name ?? "",
