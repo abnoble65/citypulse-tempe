@@ -1,21 +1,56 @@
 /**
- * BoardPacket.tsx — One-click PDF board report for CBD meetings.
+ * BoardPacket.tsx — One-page landscape PDF board report for CBD meetings.
  *
- * 6-page PDF: Cover, Key Metrics, 311 Clean & Safe, Permit Activity,
- * Business Pulse, Executive Summary. Professional branding with accent
- * color headers, page numbers, and structured AI analysis.
+ * Landscape letter (11"x8.5") with grid layout:
+ *   Top bar → Key metrics row → 50/50 detail columns → AI brief → Footer
+ * Translates labels and AI content to zh/es via LanguageContext.
  */
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { jsPDF } from "jspdf";
 import { useCBD, type CBDConfig } from "../../contexts/CBDContext";
 import { COLORS, FONTS } from "../../theme";
 import { isPointInCBD, type CBDBoundaryEntry } from "../../utils/geoFilter";
 import { fetchBusinessesForCBD, type CBDBusinessRow } from "../../utils/cbdFetch";
 import Anthropic from "@anthropic-ai/sdk";
-import { useLanguage, getLanguageInstruction } from "../../contexts/LanguageContext";
+import { useLanguage, getLanguageInstruction, type AppLanguage } from "../../contexts/LanguageContext";
 
 const DATASF = "https://data.sfgov.org/resource";
+
+// ── Label translations ────────────────────────────────────────────────
+
+const LABELS: Record<string, Record<AppLanguage, string>> = {
+  boardReport:     { en: "Board Report",       zh: "董事會報告",      es: "Informe de la Junta" },
+  permits:         { en: "Permits",            zh: "許可證",         es: "Permisos" },
+  requests311:     { en: "311 Requests",        zh: "311 請求",       es: "Solicitudes 311" },
+  resolutionRate:  { en: "Resolution Rate",     zh: "解決率",         es: "Tasa de Resolución" },
+  evictions:       { en: "Evictions",           zh: "驅逐",          es: "Desalojos" },
+  newBusiness:     { en: "New Businesses",      zh: "新企業",         es: "Nuevos Negocios" },
+  avgResponse:     { en: "Avg Response",        zh: "平均回應",       es: "Resp. Promedio" },
+  activity311:     { en: "311 Activity Summary", zh: "311 活動摘要",   es: "Resumen de Actividad 311" },
+  permitActivity:  { en: "Permit Activity",     zh: "許可證活動",      es: "Actividad de Permisos" },
+  categoryBreak:   { en: "Category Breakdown",  zh: "類別細分",       es: "Desglose por Categoría" },
+  topHotspots:     { en: "Top Hotspots",        zh: "主要熱點",       es: "Puntos Críticos" },
+  resByCategory:   { en: "Resolution by Cat.",  zh: "按類別解決",      es: "Resolución por Cat." },
+  byType:          { en: "By Type",            zh: "按類型",         es: "Por Tipo" },
+  topProjects:     { en: "Top Projects",        zh: "主要項目",       es: "Proyectos Principales" },
+  executiveBrief:  { en: "Executive Brief",     zh: "執行摘要",       es: "Resumen Ejecutivo" },
+  poweredBy:       { en: "Powered by CityPulse", zh: "由 CityPulse 提供", es: "Desarrollado por CityPulse" },
+  generated:       { en: "Generated",           zh: "生成日期",       es: "Generado" },
+  requests:        { en: "requests",            zh: "個請求",         es: "solicitudes" },
+  days:            { en: "days",               zh: "天",            es: "días" },
+  generateBtn:     { en: "Generate Board Packet", zh: "生成董事會報告", es: "Generar Informe" },
+  regenerateBtn:   { en: "Regenerate Packet",   zh: "重新生成報告",    es: "Regenerar Informe" },
+  generating:      { en: "Generating...",       zh: "生成中...",      es: "Generando..." },
+  fetchingData:    { en: "Fetching data...",    zh: "正在獲取數據...", es: "Obteniendo datos..." },
+  genBrief:        { en: "Generating brief...", zh: "生成摘要中...",   es: "Generando resumen..." },
+  buildingPDF:     { en: "Building PDF...",     zh: "構建 PDF 中...", es: "Construyendo PDF..." },
+  downloadDone:    { en: "Download complete!",  zh: "下載完成！",      es: "¡Descarga completa!" },
+};
+
+function t(key: string, lang: AppLanguage): string {
+  return LABELS[key]?.[lang] ?? LABELS[key]?.en ?? key;
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -41,7 +76,12 @@ function normalize311Cat(serviceName: string): string {
   return "Other";
 }
 
-// ── PDF builder ────────────────────────────────────────────────────────
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return text.slice(0, max - 3) + "...";
+}
+
+// ── PDF data shape ────────────────────────────────────────────────────
 
 interface PacketData {
   config: CBDConfig;
@@ -50,60 +90,25 @@ interface PacketData {
   evictions: { address: string; date: string }[];
   businesses: CBDBusinessRow[];
   aiSummary: string;
+  lang: AppLanguage;
 }
 
+// ── One-page landscape PDF builder ─────────────────────────────────────
+
 function buildPDF(d: PacketData) {
-  const { config, permits, rows311, evictions, businesses, aiSummary } = d;
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const W = 210, H = 297, M = 20;
+  const { config, permits, rows311, evictions, businesses, aiSummary, lang } = d;
+  const doc = new jsPDF("l", "mm", "letter"); // landscape 279.4 x 215.9mm
+  const W = 279.4, H = 215.9, M = 12;
   const accent = hexToRGB(config.accent_color);
   const now = new Date();
-  const monthYear = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const monthYear = now.toLocaleDateString(lang === "zh" ? "zh-TW" : lang === "es" ? "es" : "en-US", { month: "long", year: "numeric" });
   const dateStr = now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  const TOTAL_PAGES = 6;
 
-  // Reporting period
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 90);
-  const periodStart = cutoff.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const nowStr = now.toISOString().split("T")[0];
 
-  // — Reusable elements ——————————————————————————————————————
-
-  function footer(pageNum: number) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(160, 160, 160);
-    const y = H - 12;
-    doc.text(`Powered by CityPulse \u00B7 Generated ${dateStr}`, M, y);
-    doc.text(`Page ${pageNum} of ${TOTAL_PAGES}`, W / 2, y, { align: "center" });
-    if (config.website_url) {
-      doc.text(config.website_url, W - M, y, { align: "right" });
-    }
-  }
-
-  function pageHeader(title: string) {
-    doc.setDrawColor(...accent);
-    doc.setLineWidth(0.8);
-    doc.line(M, 14, W - M, 14);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(...accent);
-    doc.text(config.name, M, 12);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(120, 120, 120);
-    doc.text(title, W - M, 12, { align: "right" });
-  }
-
-  function sectionTitle(title: string, y: number): number {
-    doc.setFont("times", "bold");
-    doc.setFontSize(13);
-    doc.setTextColor(50, 50, 50);
-    doc.text(title, M, y);
-    return y + 8;
-  }
-
-  // — Category / permit summaries ————————————————————————————
+  // ── Data aggregation ────────────────────────────────
 
   const catCounts: Record<string, number> = {};
   for (const r of rows311) {
@@ -123,9 +128,8 @@ function buildPDF(d: PacketData) {
   for (const p of permits) permitTypes[p.type || "Other"] = (permitTypes[p.type || "Other"] ?? 0) + 1;
   const topByValue = [...permits].sort((a, b) => b.cost - a.cost).slice(0, 3);
 
-  // Resolution metrics
   const closedRows = rows311.filter(r => r.closedDate);
-  const resRate = rows311.length > 0 ? ((closedRows.length / rows311.length) * 100).toFixed(1) : "0";
+  const resRate = rows311.length > 0 ? ((closedRows.length / rows311.length) * 100).toFixed(0) : "0";
   const resDaysList: number[] = [];
   for (const r of closedRows) {
     const dd = (new Date(r.closedDate!).getTime() - new Date(r.date).getTime()) / 86_400_000;
@@ -134,330 +138,289 @@ function buildPDF(d: PacketData) {
   const avgResDays = resDaysList.length > 0
     ? (resDaysList.reduce((s, dd) => s + dd, 0) / resDaysList.length).toFixed(1)
     : "N/A";
+
   const catResDays: Record<string, number[]> = {};
   for (const r of closedRows) {
     const cat = normalize311Cat(r.category);
     const dd = (new Date(r.closedDate!).getTime() - new Date(r.date).getTime()) / 86_400_000;
-    if (dd > 0) {
-      if (!catResDays[cat]) catResDays[cat] = [];
-      catResDays[cat].push(dd);
-    }
+    if (dd > 0) { if (!catResDays[cat]) catResDays[cat] = []; catResDays[cat].push(dd); }
   }
 
-  // Business metrics
   const cutoff90Str = cutoff.toISOString().split("T")[0];
-  const nowStr = now.toISOString().split("T")[0];
   const activeBiz = businesses.filter(b => !b.endDate || b.endDate >= nowStr);
   const newBiz = businesses.filter(b => b.startDate >= cutoff90Str);
-  const closedBiz = businesses.filter(b => b.endDate && b.endDate >= cutoff90Str);
 
-  // ─── PAGE 1: COVER ───────────────────────────────────────────────────
+  // ─── TOP BAR (y: 0–15) ────────────────────────────────────────────
 
   doc.setFillColor(...accent);
-  doc.rect(0, 0, W, 6, "F");
+  doc.rect(0, 0, W, 2, "F");
 
-  doc.setFont("times", "bold");
-  doc.setFontSize(36);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
   doc.setTextColor(...accent);
-  doc.text(config.name, W / 2, 80, { align: "center" });
+  doc.text(config.name, M, 10);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(18);
+  doc.setFontSize(10);
   doc.setTextColor(80, 80, 80);
-  doc.text(`Board Report \u2014 ${monthYear}`, W / 2, 95, { align: "center" });
+  doc.text(`${t("boardReport", lang)} · ${monthYear}`, W / 2, 10, { align: "center" });
 
-  doc.setFontSize(12);
-  doc.setTextColor(120, 120, 120);
-  doc.text(`Reporting Period: ${periodStart} \u2013 ${dateStr}`, W / 2, 108, { align: "center" });
+  doc.setFontSize(7);
+  doc.setTextColor(140, 140, 140);
+  doc.text(`${t("poweredBy", lang)}  ·  ${t("generated", lang)} ${dateStr}`, W - M, 10, { align: "right" });
 
-  if (config.description) {
-    doc.setFont("times", "normal");
-    doc.setFontSize(11);
-    doc.setTextColor(100, 100, 100);
-    const lines = doc.splitTextToSize(config.description, W - M * 2 - 20);
-    doc.text(lines, W / 2, 125, { align: "center" });
-  }
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.3);
+  doc.line(M, 14, W - M, 14);
 
-  if (config.executive_director) {
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(11);
-    doc.setTextColor(120, 120, 120);
-    doc.text(`Executive Director: ${config.executive_director}`, W / 2, 150, { align: "center" });
-  }
+  // ─── ROW 1: KEY METRICS (y: 16–40) ─────────────────────────────────
 
-  doc.setFillColor(...accent);
-  doc.rect(0, H - 18, W, 18, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(255, 255, 255);
-  doc.text("Powered by CityPulse", W / 2, H - 8, { align: "center" });
-
-  // ─── PAGE 2: KEY METRICS ─────────────────────────────────────────────
-
-  doc.addPage();
-  pageHeader("Key Metrics");
-
+  const metricsY = 18;
   const metrics = [
-    { label: "Active Permits", value: String(permits.length), color: [59, 130, 246] as [number, number, number] },
-    { label: "311 Requests (90d)", value: String(rows311.length), color: [139, 92, 246] as [number, number, number] },
-    { label: "Eviction Notices", value: String(evictions.length), color: [239, 68, 68] as [number, number, number] },
-    { label: "Active Businesses", value: String(activeBiz.length), color: [16, 185, 129] as [number, number, number] },
-    { label: "Resolution Rate", value: `${resRate}%`, color: [59, 130, 246] as [number, number, number] },
-    { label: "Avg Resolution", value: `${avgResDays}d`, color: [245, 158, 11] as [number, number, number] },
+    { label: t("permits", lang),        value: String(permits.length),   color: [59, 130, 246] as [number, number, number] },
+    { label: t("requests311", lang),     value: String(rows311.length),   color: [139, 92, 246] as [number, number, number] },
+    { label: t("resolutionRate", lang),  value: `${resRate}%`,           color: [16, 185, 129] as [number, number, number] },
+    { label: t("evictions", lang),       value: String(evictions.length), color: [239, 68, 68] as [number, number, number] },
+    { label: t("newBusiness", lang),     value: String(newBiz.length),    color: [245, 158, 11] as [number, number, number] },
+    { label: t("avgResponse", lang),     value: avgResDays === "N/A" ? "—" : `${avgResDays}d`, color: [100, 116, 139] as [number, number, number] },
   ];
 
-  const boxW = (W - M * 2 - 10) / 2;
-  const boxH = 36;
+  const mBoxW = (W - M * 2 - 5 * 5) / 6;
+  const mBoxH = 20;
   metrics.forEach((m, i) => {
-    const col = i % 2;
-    const row = Math.floor(i / 2);
-    const x = M + col * (boxW + 10);
-    const y = 28 + row * (boxH + 8);
-
-    doc.setDrawColor(220, 220, 220);
-    doc.setLineWidth(0.3);
-    doc.rect(x, y, boxW, boxH, "S");
-
+    const x = M + i * (mBoxW + 5);
+    doc.setDrawColor(230, 230, 230);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(x, metricsY, mBoxW, mBoxH, 2, 2, "S");
     doc.setFillColor(...m.color);
-    doc.rect(x, y + 4, 1.5, boxH - 8, "F");
+    doc.rect(x, metricsY + 3, 1.2, mBoxH - 6, "F");
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(26);
+    doc.setFontSize(14);
     doc.setTextColor(...m.color);
-    doc.text(m.value, x + boxW / 2, y + 18, { align: "center" });
+    doc.text(m.value, x + mBoxW / 2, metricsY + 10, { align: "center" });
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(140, 140, 140);
-    doc.text(m.label, x + boxW / 2, y + 28, { align: "center" });
+    doc.setFontSize(6.5);
+    doc.setTextColor(120, 120, 120);
+    const labelLines = doc.splitTextToSize(m.label, mBoxW - 6);
+    doc.text(labelLines[0], x + mBoxW / 2, metricsY + 16, { align: "center" });
   });
 
-  let yPos = 28 + 3 * (boxH + 8) + 8;
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(9);
-  doc.setTextColor(160, 160, 160);
-  doc.text(`Data period: ${periodStart} \u2013 ${dateStr}`, M, yPos);
-  footer(2);
+  // ─── ROW 2: TWO-COLUMN DETAIL (y: 42–115) ──────────────────────────
 
-  // ─── PAGE 3: 311 CLEAN & SAFE SUMMARY ────────────────────────────────
+  const row2Y = 42;
+  const colW = (W - M * 2 - 8) / 2;
+  const leftX = M;
+  const rightX = M + colW + 8;
+  // — LEFT COLUMN: 311 Activity Summary ——————————————
 
-  doc.addPage();
-  pageHeader("311 Clean & Safe Summary");
-
-  yPos = sectionTitle("Category Breakdown", 26);
-
-  // Resolution rate highlight
-  doc.setFillColor(240, 253, 244);
-  doc.rect(M, yPos, W - M * 2, 14, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(22, 163, 74);
-  doc.text(`Resolution Rate: ${resRate}%`, M + 6, yPos + 6);
-  doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.setTextColor(80, 80, 80);
-  doc.text(`${closedRows.length} of ${rows311.length} requests resolved  |  Avg ${avgResDays} days`, M + 6, yPos + 12);
-  yPos += 18;
+  doc.setTextColor(...accent);
+  doc.text(t("activity311", lang), leftX, row2Y);
+  doc.setDrawColor(...accent);
+  doc.setLineWidth(0.4);
+  doc.line(leftX, row2Y + 1.5, leftX + colW, row2Y + 1.5);
 
-  doc.setFillColor(245, 245, 245);
-  doc.rect(M, yPos, W - M * 2, 7, "F");
+  // Category breakdown bars
+  let ly = row2Y + 6;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
-  doc.setTextColor(120, 120, 120);
-  doc.text("CATEGORY", M + 4, yPos + 5);
-  doc.text("COUNT", M + 90, yPos + 5);
-  doc.text("% TOTAL", M + 115, yPos + 5);
-  doc.text("AVG DAYS", M + 140, yPos + 5);
-  yPos += 9;
+  doc.setTextColor(80, 80, 80);
+  doc.text(t("categoryBreak", lang), leftX + 2, ly);
+  ly += 4;
 
-  for (const [cat, count] of catEntries) {
-    const pct = rows311.length > 0 ? ((count / rows311.length) * 100).toFixed(1) : "0";
-    const days = catResDays[cat];
-    const avgD = days ? (days.reduce((s, d) => s + d, 0) / days.length).toFixed(1) : "\u2014";
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(60, 60, 60);
-    doc.text(cat, M + 4, yPos + 4);
-    doc.text(String(count), M + 90, yPos + 4);
-    doc.text(`${pct}%`, M + 115, yPos + 4);
-    if (days) {
-      const avg = days.reduce((s, d) => s + d, 0) / days.length;
-      if (avg < 3) doc.setTextColor(16, 185, 129);
-      else if (avg <= 7) doc.setTextColor(245, 158, 11);
-      else doc.setTextColor(239, 68, 68);
-    }
-    doc.text(String(avgD), M + 140, yPos + 4);
-    doc.setDrawColor(230, 230, 230);
-    doc.line(M, yPos + 6, W - M, yPos + 6);
-    yPos += 8;
-  }
+  const maxCatCount = catEntries.length > 0 ? catEntries[0][1] : 1;
+  const barMaxW = colW * 0.45;
+  const catColors: Record<string, [number, number, number]> = {
+    Graffiti: [124, 58, 237], "Street Cleaning": [146, 64, 14],
+    Encampments: [220, 38, 38], "Blocked Sidewalk": [37, 99, 235], Other: [140, 140, 140],
+  };
 
-  yPos = sectionTitle("Top 5 Hotspot Addresses", yPos + 10);
-  for (let i = 0; i < topAddresses.length; i++) {
-    const [addr, count] = topAddresses[i];
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(60, 60, 60);
-    doc.text(`${i + 1}. ${addr} \u2014 ${count} requests`, M + 4, yPos + 4);
-    yPos += 7;
-  }
-
-  footer(3);
-
-  // ─── PAGE 4: PERMIT ACTIVITY ─────────────────────────────────────────
-
-  doc.addPage();
-  pageHeader("Permit Activity");
-
-  yPos = sectionTitle("Permits by Type", 26);
-
-  for (const [type, count] of Object.entries(permitTypes).sort(([, a], [, b]) => b - a)) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(60, 60, 60);
-    doc.text(`\u2022  ${type}: ${count}`, M + 4, yPos + 4);
-    yPos += 7;
-  }
-
-  if (topByValue.length > 0) {
-    yPos = sectionTitle("Notable Projects (by estimated cost)", yPos + 10);
-    for (const p of topByValue) {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(60, 60, 60);
-      const line = `${p.address}  \u2014  ${p.type}, $${(p.cost / 1000).toFixed(0)}K est., ${p.status ?? "Unknown"}`;
-      doc.text(line, M + 4, yPos + 4);
-      yPos += 7;
-    }
-  }
-
-  const newConst = permits.filter(p => (p.type ?? "").toLowerCase().includes("new construction"));
-  if (newConst.length > 0) {
-    yPos += 8;
-    doc.setFillColor(254, 243, 205);
-    doc.rect(M, yPos, W - M * 2, 14, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(133, 100, 4);
-    doc.text(
-      `${newConst.length} new construction permit(s) may impact district cleaning and safety operations.`,
-      M + 4, yPos + 9,
-    );
-  }
-
-  footer(4);
-
-  // ─── PAGE 5: BUSINESS PULSE ──────────────────────────────────────────
-
-  doc.addPage();
-  pageHeader("Business Pulse");
-
-  yPos = 26;
-
-  // Business metrics boxes
-  const bizMetrics = [
-    { label: "Active Businesses", value: String(activeBiz.length), color: [139, 92, 246] as [number, number, number] },
-    { label: "New (90 days)", value: String(newBiz.length), color: [16, 185, 129] as [number, number, number] },
-    { label: "Closures (90 days)", value: String(closedBiz.length), color: [239, 68, 68] as [number, number, number] },
-  ];
-
-  const bBoxW = (W - M * 2 - 16) / 3;
-  bizMetrics.forEach((m, i) => {
-    const x = M + i * (bBoxW + 8);
-    doc.setDrawColor(220, 220, 220);
-    doc.setLineWidth(0.3);
-    doc.rect(x, yPos, bBoxW, 28, "S");
-    doc.setFillColor(...m.color);
-    doc.rect(x, yPos + 4, 1.5, 20, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
-    doc.setTextColor(...m.color);
-    doc.text(m.value, x + bBoxW / 2, yPos + 14, { align: "center" });
+  for (const [cat, count] of catEntries.slice(0, 5)) {
+    const barW = Math.max(2, (count / maxCatCount) * barMaxW);
+    const clr = catColors[cat] ?? [140, 140, 140];
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
-    doc.setTextColor(140, 140, 140);
-    doc.text(m.label, x + bBoxW / 2, yPos + 22, { align: "center" });
-  });
-
-  yPos += 38;
-
-  if (newBiz.length > 0) {
-    yPos = sectionTitle("Recent Registrations", yPos);
-    const showBiz = newBiz.slice(0, 10);
-    for (const b of showBiz) {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(60, 60, 60);
-      doc.text(b.dba || b.name, M + 4, yPos + 4);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(120, 120, 120);
-      doc.text(`${b.address} \u2022 Started ${b.startDate}`, M + 4, yPos + 10);
-      yPos += 13;
-    }
+    doc.setTextColor(60, 60, 60);
+    doc.text(truncate(cat, 18), leftX + 2, ly + 3);
+    doc.setFillColor(...clr);
+    doc.roundedRect(leftX + 42, ly, barW, 3.5, 1, 1, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(...clr);
+    doc.text(String(count), leftX + 44 + barW, ly + 3);
+    ly += 6;
   }
 
-  if (closedBiz.length > 0) {
-    yPos = sectionTitle("Recent Closures", yPos + 6);
-    const showClosed = closedBiz.slice(0, 5);
-    for (const b of showClosed) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(60, 60, 60);
-      doc.text(`${b.dba || b.name} \u2014 ${b.address} (closed ${b.endDate})`, M + 4, yPos + 4);
-      yPos += 7;
-    }
+  // Top hotspots
+  ly += 3;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(80, 80, 80);
+  doc.text(t("topHotspots", lang), leftX + 2, ly);
+  ly += 4;
+
+  for (const [addr, count] of topAddresses.slice(0, 5)) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(60, 60, 60);
+    const line = truncate(`${addr}  —  ${count} ${t("requests", lang)}`, 55);
+    doc.text(line, leftX + 2, ly + 3);
+    ly += 5;
   }
 
-  footer(5);
+  // Resolution by category
+  ly += 3;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(80, 80, 80);
+  doc.text(t("resByCategory", lang), leftX + 2, ly);
+  ly += 4;
 
-  // ─── PAGE 6: EXECUTIVE SUMMARY ────────────────────────────────────────
+  for (const [cat] of catEntries.slice(0, 5)) {
+    const days = catResDays[cat];
+    const avg = days ? (days.reduce((s, d) => s + d, 0) / days.length).toFixed(1) : "—";
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(60, 60, 60);
+    doc.text(truncate(cat, 18), leftX + 2, ly + 3);
+    if (days) {
+      const avgN = parseFloat(avg);
+      if (avgN < 3) doc.setTextColor(16, 185, 129);
+      else if (avgN <= 7) doc.setTextColor(180, 130, 10);
+      else doc.setTextColor(220, 50, 50);
+    }
+    doc.setFont("helvetica", "bold");
+    doc.text(`${avg} ${t("days", lang)}`, leftX + 44, ly + 3);
+    ly += 5;
+  }
 
-  doc.addPage();
-  pageHeader("Executive Summary");
+  // — RIGHT COLUMN: Permit Activity ——————————————
 
-  yPos = 26;
-  doc.setFont("times", "bold");
-  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
   doc.setTextColor(...accent);
-  doc.text("Executive Summary", M, yPos);
-  yPos += 10;
+  doc.text(t("permitActivity", lang), rightX, row2Y);
+  doc.setDrawColor(...accent);
+  doc.line(rightX, row2Y + 1.5, rightX + colW, row2Y + 1.5);
+
+  let ry = row2Y + 6;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(80, 80, 80);
+  doc.text(t("byType", lang), rightX + 2, ry);
+  ry += 4;
+
+  const permitEntries = Object.entries(permitTypes).sort(([, a], [, b]) => b - a);
+  const maxPermitCount = permitEntries.length > 0 ? permitEntries[0][1] : 1;
+
+  for (const [type, count] of permitEntries.slice(0, 5)) {
+    const barW = Math.max(2, (count / maxPermitCount) * barMaxW);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(60, 60, 60);
+    doc.text(truncate(type, 22), rightX + 2, ry + 3);
+    doc.setFillColor(59, 130, 246);
+    doc.roundedRect(rightX + 50, ry, barW, 3.5, 1, 1, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(59, 130, 246);
+    doc.text(String(count), rightX + 52 + barW, ry + 3);
+    ry += 6;
+  }
+
+  // Top projects
+  ry += 3;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(80, 80, 80);
+  doc.text(t("topProjects", lang), rightX + 2, ry);
+  ry += 4;
+
+  for (const p of topByValue.slice(0, 3)) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(50, 50, 50);
+    const projLine = truncate(`${p.address}  —  $${(p.cost / 1000).toFixed(0)}K  (${p.type})`, 60);
+    doc.text(projLine, rightX + 2, ry + 3);
+    ry += 5.5;
+  }
+  if (topByValue.length === 0) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(6.5);
+    doc.setTextColor(140, 140, 140);
+    doc.text("No high-value permits in period", rightX + 2, ry + 3);
+    ry += 5.5;
+  }
+
+  // Business summary
+  ry += 3;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(80, 80, 80);
+  doc.text(t("newBusiness", lang), rightX + 2, ry);
+  ry += 4;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.5);
+  doc.setTextColor(60, 60, 60);
+  doc.text(`${activeBiz.length} active  ·  ${newBiz.length} new (90d)  ·  ${businesses.filter(b => b.endDate && b.endDate >= cutoff90Str).length} closures`, rightX + 2, ry + 3);
+
+  // ─── ROW 3: AI EXECUTIVE BRIEF (y: 120–200) ────────────────────────
+
+  const briefY = 122;
+  doc.setDrawColor(...accent);
+  doc.setLineWidth(0.6);
+  doc.line(M, briefY - 2, W - M, briefY - 2);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...accent);
+  doc.text(t("executiveBrief", lang), M, briefY + 3);
+
+  const briefMaxW = W - M * 2 - 4;
+  const briefMaxH = 75; // mm available for AI text
 
   if (aiSummary) {
-    // Split AI summary into sections if it has headers
-    doc.setFont("times", "normal");
-    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
     doc.setTextColor(50, 50, 50);
-    const paragraphs = aiSummary.split("\n\n");
-    for (const para of paragraphs) {
-      if (para.startsWith("**") || para.startsWith("###") || para.startsWith("##")) {
-        // Header line
-        const cleaned = para.replace(/^[#*]+\s*/, "").replace(/\*+$/, "");
-        doc.setFont("times", "bold");
-        doc.setFontSize(11);
-        doc.setTextColor(...accent);
-        doc.text(cleaned, M, yPos);
-        yPos += 7;
-        doc.setFont("times", "normal");
-        doc.setFontSize(10);
-        doc.setTextColor(50, 50, 50);
-      } else {
-        const lines = doc.splitTextToSize(para.replace(/\*\*/g, ""), W - M * 2);
-        if (yPos + lines.length * 4.5 > H - 20) {
-          // Would overflow — truncate
-          break;
-        }
-        doc.text(lines, M, yPos);
-        yPos += lines.length * 4.5 + 4;
-      }
+
+    // Clean markdown formatting
+    const cleaned = aiSummary
+      .replace(/^#{1,3}\s+/gm, "")
+      .replace(/\*\*/g, "")
+      .replace(/\*/g, "")
+      .trim();
+
+    const lines = doc.splitTextToSize(cleaned, briefMaxW);
+    const lineH = 3.4;
+    const maxLines = Math.floor(briefMaxH / lineH);
+    const showLines = lines.slice(0, maxLines);
+    if (lines.length > maxLines) {
+      showLines[maxLines - 1] = showLines[maxLines - 1].replace(/\s+\S*$/, "...");
     }
+    doc.text(showLines, M + 2, briefY + 8);
   }
 
-  footer(6);
+  // ─── BOTTOM BAR (y: H-8 to H) ──────────────────────────────────────
 
-  // — Save ————————————————————————————————————————————————
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.2);
+  doc.line(M, H - 10, W - M, H - 10);
 
-  const filename = `${config.short_name.replace(/\s+/g, "-")}_Board-Packet_${monthYear.replace(/\s+/g, "-")}.pdf`;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.5);
+  doc.setTextColor(150, 150, 150);
+  const contactParts = [config.contact_email, config.contact_phone].filter(Boolean);
+  if (contactParts.length) doc.text(contactParts.join("  ·  "), M, H - 5);
+  doc.text("Page 1 of 1", W / 2, H - 5, { align: "center" });
+  if (config.website_url) doc.text(config.website_url, W - M, H - 5, { align: "right" });
+
+  // — Save ————————————————————————————————————————————
+
+  const filename = `${config.short_name.replace(/\s+/g, "-")}_Board-Report_${monthYear.replace(/\s+/g, "-")}.pdf`;
   doc.save(filename);
 }
 
@@ -465,11 +428,14 @@ function buildPDF(d: PacketData) {
 
 type Stage = "idle" | "fetching" | "ai" | "building" | "done" | "error";
 
-const STAGE_STEPS = [
-  { key: "fetching" as Stage, label: "Fetching DataSF data" },
-  { key: "ai" as Stage,       label: "Generating AI analysis" },
-  { key: "building" as Stage, label: "Building PDF" },
-];
+// ── Live preview data ────────────────────────────────────────────────────
+
+interface PreviewData {
+  permits: { type: string; cost: number; address: string; status: string }[];
+  rows311: { category: string; address: string; date: string; closedDate: string | null }[];
+  evictions: { address: string; date: string }[];
+  businesses: CBDBusinessRow[];
+}
 
 // ── Main component ─────────────────────────────────────────────────────────
 
@@ -479,305 +445,310 @@ export function BoardPacket() {
   const accent = config?.accent_color ?? "#E8652D";
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState("");
+  const [preview, setPreview] = useState<PreviewData | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const boundaryEntry = useMemo(() => config ? buildBoundaryEntry(config) : null, [config]);
   const cbdBoundaries = useMemo(() => boundaryEntry ? [boundaryEntry] : [], [boundaryEntry]);
 
-  const generate = useCallback(async () => {
+  // ── Fetch preview data on mount ─────────────────────────────────────
+
+  useEffect(() => {
     if (!config || !cbdBoundaries.length) return;
+    let cancelled = false;
+    setPreviewLoading(true);
+
+    (async () => {
+      try {
+        const district = config.supervisor_district ? String(config.supervisor_district) : null;
+        const cutoff90 = new Date();
+        cutoff90.setDate(cutoff90.getDate() - 90);
+        const cutoffStr = cutoff90.toISOString().split("T")[0];
+
+        const w311 = district
+          ? `supervisor_district='${district}' AND requested_datetime>='${cutoffStr}T00:00:00.000' AND lat IS NOT NULL`
+          : `requested_datetime>='${cutoffStr}T00:00:00.000' AND lat IS NOT NULL`;
+        const wPermit = district
+          ? `supervisor_district='${district}' AND location IS NOT NULL`
+          : `location IS NOT NULL`;
+        const wEvict = district
+          ? `supervisor_district='${district}' AND file_date>'2023-01-01'`
+          : `file_date>'2023-01-01'`;
+
+        const [raw311, rawPermit, rawEvict, businesses] = await Promise.all([
+          fetch(`${DATASF}/vw6y-z8j6.json?${new URLSearchParams({ $where: w311, $select: "lat,long,service_name,address,requested_datetime,closed_date,status_description", $limit: "5000" })}`).then(r => r.json()).catch(() => []),
+          fetch(`${DATASF}/i98e-djp9.json?${new URLSearchParams({ $where: wPermit, $select: "location,permit_type_definition,estimated_cost,street_number,street_name,street_suffix,status", $limit: "2000" })}`).then(r => r.json()).catch(() => []),
+          fetch(`${DATASF}/5cei-gny5.json?${new URLSearchParams({ $where: wEvict, $select: "shape,address,file_date", $limit: "500" })}`).then(r => r.json()).catch(() => []),
+          fetchBusinessesForCBD(config, { limit: 3000 }).catch(() => [] as CBDBusinessRow[]),
+        ]);
+
+        const rows311 = (raw311 as any[]).filter((r: any) => r.lat && r.long)
+          .map((r: any) => ({ category: r.service_name ?? "", address: r.address ?? "", date: (r.requested_datetime ?? "").split("T")[0], closedDate: r.closed_date ? (r.closed_date as string).split("T")[0] : null as string | null, lat: parseFloat(r.lat), lng: parseFloat(r.long) }))
+          .filter(p => !isNaN(p.lat) && isPointInCBD(p.lat, p.lng, cbdBoundaries) !== null);
+
+        const permits = (rawPermit as any[]).filter((r: any) => r.location?.coordinates)
+          .map((r: any) => ({ type: r.permit_type_definition ?? "", cost: parseFloat(r.estimated_cost) || 0, address: [r.street_number, r.street_name, r.street_suffix].filter(Boolean).join(" "), status: r.status ?? "", lat: r.location.coordinates[1], lng: r.location.coordinates[0] }))
+          .filter(p => isPointInCBD(p.lat, p.lng, cbdBoundaries) !== null);
+
+        const evictions = (rawEvict as any[]).filter((r: any) => r.shape?.coordinates)
+          .map((r: any) => ({ address: r.address ?? "", date: (r.file_date ?? "").split("T")[0], lat: r.shape.coordinates[1], lng: r.shape.coordinates[0] }))
+          .filter(p => isPointInCBD(p.lat, p.lng, cbdBoundaries) !== null);
+
+        if (!cancelled) setPreview({ permits, rows311, evictions, businesses });
+      } catch (e) {
+        console.warn("[BoardPacket] preview fetch failed:", e);
+      } finally {
+        if (!cancelled) setPreviewLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [config, cbdBoundaries]);
+
+  // ── Generate PDF ────────────────────────────────────────────────────
+
+  const generate = useCallback(async () => {
+    if (!config || !preview) return;
     setStage("fetching");
     setError("");
 
     try {
-      const district = config.supervisor_district ? String(config.supervisor_district) : null;
-      const cutoff90 = new Date();
-      cutoff90.setDate(cutoff90.getDate() - 90);
-      const cutoffStr = cutoff90.toISOString().split("T")[0];
+      const { permits, rows311, evictions, businesses } = preview;
 
-      const w311 = district
-        ? `supervisor_district='${district}' AND requested_datetime>='${cutoffStr}T00:00:00.000' AND lat IS NOT NULL`
-        : `requested_datetime>='${cutoffStr}T00:00:00.000' AND lat IS NOT NULL`;
-      const wPermit = district
-        ? `supervisor_district='${district}' AND location IS NOT NULL`
-        : `location IS NOT NULL`;
-      const wEvict = district
-        ? `supervisor_district='${district}' AND file_date>'2023-01-01'`
-        : `file_date>'2023-01-01'`;
-
-      const [raw311, rawPermit, rawEvict, businesses] = await Promise.all([
-        fetch(`${DATASF}/vw6y-z8j6.json?${new URLSearchParams({
-          $where: w311,
-          $select: "lat,long,service_name,address,requested_datetime,closed_date,status_description",
-          $limit: "5000",
-        })}`).then(r => r.json()).catch(() => []),
-
-        fetch(`${DATASF}/i98e-djp9.json?${new URLSearchParams({
-          $where: wPermit,
-          $select: "location,permit_type_definition,estimated_cost,street_number,street_name,street_suffix,status",
-          $limit: "2000",
-        })}`).then(r => r.json()).catch(() => []),
-
-        fetch(`${DATASF}/5cei-gny5.json?${new URLSearchParams({
-          $where: wEvict,
-          $select: "shape,address,file_date",
-          $limit: "500",
-        })}`).then(r => r.json()).catch(() => []),
-
-        fetchBusinessesForCBD(config, { limit: 3000 }).catch(() => [] as CBDBusinessRow[]),
-      ]);
-
-      const rows311 = (raw311 as any[])
-        .filter((r: any) => r.lat && r.long)
-        .map((r: any) => ({
-          category: r.service_name ?? "",
-          address: r.address ?? "",
-          date: (r.requested_datetime ?? "").split("T")[0],
-          closedDate: r.closed_date ? (r.closed_date as string).split("T")[0] : null as string | null,
-          lat: parseFloat(r.lat),
-          lng: parseFloat(r.long),
-        }))
-        .filter(p => !isNaN(p.lat) && isPointInCBD(p.lat, p.lng, cbdBoundaries) !== null);
-
-      const permits = (rawPermit as any[])
-        .filter((r: any) => r.location?.coordinates)
-        .map((r: any) => ({
-          type: r.permit_type_definition ?? "",
-          cost: parseFloat(r.estimated_cost) || 0,
-          address: [r.street_number, r.street_name, r.street_suffix].filter(Boolean).join(" "),
-          status: r.status ?? "",
-          lat: r.location.coordinates[1],
-          lng: r.location.coordinates[0],
-        }))
-        .filter(p => isPointInCBD(p.lat, p.lng, cbdBoundaries) !== null);
-
-      const evictions = (rawEvict as any[])
-        .filter((r: any) => r.shape?.coordinates)
-        .map((r: any) => ({
-          address: r.address ?? "",
-          date: (r.file_date ?? "").split("T")[0],
-          lat: r.shape.coordinates[1],
-          lng: r.shape.coordinates[0],
-        }))
-        .filter(p => isPointInCBD(p.lat, p.lng, cbdBoundaries) !== null);
-
-      console.log(`[BoardPacket] ${config.name}: ${permits.length} permits, ${rows311.length} 311, ${evictions.length} evictions, ${businesses.length} biz`);
-
-      // ── AI executive summary ─────────────────────────────────
-
+      // ── AI executive brief ─────────────────────────────────
       setStage("ai");
       let aiSummary = "";
       const apiKey = (import.meta as any).env?.VITE_ANTHROPIC_API_KEY;
 
       if (apiKey) {
         const catCounts: Record<string, number> = {};
-        for (const r of rows311) {
-          const c = normalize311Cat(r.category);
-          catCounts[c] = (catCounts[c] ?? 0) + 1;
-        }
-        const catList = Object.entries(catCounts).sort(([, a], [, b]) => b - a)
-          .map(([c, n]) => `${c}: ${n}`).join(", ");
-
+        for (const r of rows311) catCounts[normalize311Cat(r.category)] = (catCounts[normalize311Cat(r.category)] ?? 0) + 1;
+        const catList = Object.entries(catCounts).sort(([, a], [, b]) => b - a).map(([c, n]) => `${c}: ${n}`).join(", ");
         const addrCounts: Record<string, number> = {};
-        for (const r of rows311) {
-          const a = r.address.toUpperCase().trim();
-          if (a) addrCounts[a] = (addrCounts[a] ?? 0) + 1;
-        }
-        const topAddrs = Object.entries(addrCounts).sort(([, a], [, b]) => b - a)
-          .slice(0, 5).map(([a, n]) => `${a}: ${n} requests`).join(", ");
-
-        const permitTypesList: Record<string, number> = {};
-        for (const p of permits) permitTypesList[p.type || "Other"] = (permitTypesList[p.type || "Other"] ?? 0) + 1;
-        const topByVal = [...permits].sort((a, b) => b.cost - a.cost).slice(0, 3);
-
+        for (const r of rows311) { const a = r.address.toUpperCase().trim(); if (a) addrCounts[a] = (addrCounts[a] ?? 0) + 1; }
+        const topAddrs = Object.entries(addrCounts).sort(([, a], [, b]) => b - a).slice(0, 3).map(([a, n]) => `${a}: ${n}`).join("; ");
+        const closedCount = rows311.filter(r => r.closedDate).length;
+        const resRate = rows311.length > 0 ? ((closedCount / rows311.length) * 100).toFixed(0) : "0";
         const nowStr = new Date().toISOString().split("T")[0];
+        const cutoff90 = new Date(); cutoff90.setDate(cutoff90.getDate() - 90);
         const activeBiz = businesses.filter(b => !b.endDate || b.endDate >= nowStr);
-        const cutoff90Str = cutoff90.toISOString().split("T")[0];
-        const newBiz = businesses.filter(b => b.startDate >= cutoff90Str);
-        const closedBiz = businesses.filter(b => b.endDate && b.endDate >= cutoff90Str);
+        const newBiz = businesses.filter(b => b.startDate >= cutoff90.toISOString().split("T")[0]);
+        const topByVal = [...permits].sort((a, b) => b.cost - a.cost).slice(0, 2);
 
         const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
         const res = await client.messages.create({
           model: "claude-haiku-4-5-20251001",
-          max_tokens: 1200,
-          messages: [{
-            role: "user",
-            content: `You are writing an executive summary for the ${config.name} Community Benefit District board packet. Write exactly 3 sections with headers:
+          max_tokens: 400,
+          messages: [{ role: "user", content: `Write a 150-word executive brief for the ${config.name} CBD board. Two sections: Key Findings (2-3 sentences on data highlights) and Recommended Actions (2-3 bullet points).
 
-## Permit Activity
-Overview of permit activity — count, notable projects, construction impact.
+DATA (90 days): ${permits.length} permits, ${rows311.length} 311 requests (${catList}), ${resRate}% resolved, ${evictions.length} evictions, ${activeBiz.length} active businesses (${newBiz.length} new). Top hotspots: ${topAddrs}. ${topByVal.length > 0 ? `Highest permits: ${topByVal.map(p => `${p.address} $${(p.cost/1000).toFixed(0)}K`).join(", ")}` : ""}
 
-## Clean & Safe
-311 request patterns, resolution performance, hotspot areas.
-
-## Business Climate
-Business registration trends, new openings, closures.
-
-DATA (last 90 days within ${config.name} boundary):
-- ${permits.length} active building permits (${Object.entries(permitTypesList).slice(0, 3).map(([t, n]) => `${t}: ${n}`).join(", ")})
-- ${rows311.length} 311 service requests (${catList})
-- Top hotspots: ${topAddrs}
-- ${evictions.length} eviction notices
-- Active businesses: ${activeBiz.length}, New: ${newBiz.length}, Closures: ${closedBiz.length}
-${topByVal.length > 0 ? `- Highest-value permits: ${topByVal.map(p => `${p.address} ($${(p.cost / 1000).toFixed(0)}K)`).join(", ")}` : ""}
-
-Be concise, data-driven, professional. Include specific numbers and addresses. Each section should be 2-3 sentences.${getLanguageInstruction(language)}`,
-          }],
+Be concise and data-driven. 150 words maximum.${getLanguageInstruction(language)}` }],
         });
         aiSummary = res.content[0]?.type === "text" ? res.content[0].text : "";
       } else {
-        aiSummary = "AI summary unavailable \u2014 API key not configured.";
+        aiSummary = "AI summary unavailable — API key not configured.";
       }
 
       // ── Build PDF ────────────────────────────────────────────
-
       setStage("building");
-      buildPDF({ config, permits, rows311, evictions, businesses, aiSummary });
+      buildPDF({ config, permits, rows311, evictions, businesses, aiSummary, lang: language });
       setStage("done");
     } catch (err) {
       console.error("[BoardPacket] Error:", err);
       setError(err instanceof Error ? err.message : "An unexpected error occurred.");
       setStage("error");
     }
-  }, [config, cbdBoundaries]);
+  }, [config, preview, language]);
 
   if (!config) return null;
 
   const isGenerating = stage === "fetching" || stage === "ai" || stage === "building";
   const now = new Date();
-  const previewMonthYear = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const monthYear = now.toLocaleDateString(language === "zh" ? "zh-TW" : language === "es" ? "es" : "en-US", { month: "long", year: "numeric" });
 
-  const previews = [
-    {
-      page: 1, title: "Cover Page",
-      preview: config.name,
-      sub: `${previewMonthYear} Board Report`,
-      color: config.accent_color,
-    },
-    {
-      page: 2, title: "Key Metrics",
-      preview: "6 metrics",
-      sub: "Permits, 311, Evictions, Businesses, Resolution",
-      color: "#3B82F6",
-    },
-    {
-      page: 3, title: "311 Clean & Safe",
-      preview: "Resolution",
-      sub: "Category breakdown, hotspots, resolution",
-      color: "#8B5CF6",
-    },
-    {
-      page: 4, title: "Permit Activity",
-      preview: "By type",
-      sub: "Type breakdown, notable projects, flags",
-      color: "#10B981",
-    },
-    {
-      page: 5, title: "Business Pulse",
-      preview: "New",
-      sub: "Registrations, closures, trends",
-      color: "#F59E0B",
-    },
-    {
-      page: 6, title: "Executive Summary",
-      preview: "AI",
-      sub: "Permit Activity, Clean & Safe, Business Climate",
-      color: config.accent_color,
-    },
+  // ── Preview metrics ─────────────────────────────────────────────────
+
+  const pm = useMemo(() => {
+    if (!preview) return null;
+    const { permits, rows311, evictions, businesses } = preview;
+    const closedRows = rows311.filter(r => r.closedDate);
+    const resRate = rows311.length > 0 ? ((closedRows.length / rows311.length) * 100).toFixed(0) : "0";
+    const resDays: number[] = [];
+    for (const r of closedRows) {
+      const dd = (new Date(r.closedDate!).getTime() - new Date(r.date).getTime()) / 86_400_000;
+      if (dd > 0) resDays.push(dd);
+    }
+    const avgDays = resDays.length > 0 ? (resDays.reduce((s, d) => s + d, 0) / resDays.length).toFixed(1) : "—";
+    const cutoff90 = new Date(); cutoff90.setDate(cutoff90.getDate() - 90);
+    const cutoffStr = cutoff90.toISOString().split("T")[0];
+    const newBiz = businesses.filter(b => b.startDate >= cutoffStr);
+    const catCounts: Record<string, number> = {};
+    for (const r of rows311) catCounts[normalize311Cat(r.category)] = (catCounts[normalize311Cat(r.category)] ?? 0) + 1;
+    const cats = Object.entries(catCounts).sort(([, a], [, b]) => b - a);
+    const addrCounts: Record<string, number> = {};
+    for (const r of rows311) { const a = r.address.toUpperCase().trim(); if (a) addrCounts[a] = (addrCounts[a] ?? 0) + 1; }
+    const topAddr = Object.entries(addrCounts).sort(([, a], [, b]) => b - a).slice(0, 4);
+    const permitTypes: Record<string, number> = {};
+    for (const p of permits) permitTypes[p.type || "Other"] = (permitTypes[p.type || "Other"] ?? 0) + 1;
+    const pTypes = Object.entries(permitTypes).sort(([, a], [, b]) => b - a);
+    const topProjects = [...permits].sort((a, b) => b.cost - a.cost).slice(0, 3);
+
+    return { permits: permits.length, requests: rows311.length, resRate, evictions: evictions.length, newBiz: newBiz.length, avgDays, cats, topAddr, pTypes, topProjects };
+  }, [preview]);
+
+  const stageSteps = [
+    { key: "fetching" as Stage, label: t("fetchingData", language) },
+    { key: "ai" as Stage,       label: t("genBrief", language) },
+    { key: "building" as Stage, label: t("buildingPDF", language) },
   ];
 
   return (
-    <div style={{ maxWidth: 780, margin: "0 auto", padding: "0 16px 48px" }}>
+    <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 16px 48px" }}>
       {/* Header */}
       <div style={{ padding: "24px 0 16px" }}>
-        <h1 style={{
-          fontFamily: FONTS.heading, fontSize: 28, fontWeight: 700,
-          color: COLORS.charcoal, margin: 0,
-        }}>
-          Board Packet
+        <h1 style={{ fontFamily: FONTS.heading, fontSize: 28, fontWeight: 700, color: COLORS.charcoal, margin: 0 }}>
+          {t("boardReport", language)}
         </h1>
-        <p style={{
-          fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray, marginTop: 6,
-        }}>
-          Generate a 6-page PDF report for {config.name} board meetings.
+        <p style={{ fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray, marginTop: 6 }}>
+          {config.name} · {monthYear}
         </p>
       </div>
 
-      {/* Preview cards — 3-column grid */}
-      <style>{`
-        @media (max-width: 640px) {
-          .bp-preview-grid { grid-template-columns: repeat(2, 1fr) !important; }
-        }
-      `}</style>
-      <div className="bp-preview-grid" style={{
-        display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
-        gap: 12, marginBottom: 32,
+      {/* ── Live Preview ─────────────────────────────────────────── */}
+
+      <div style={{
+        background: COLORS.white, borderRadius: 12,
+        border: "1px solid #e5e7eb", overflow: "hidden",
+        marginBottom: 24,
       }}>
-        {previews.map(p => (
-          <div key={p.page} style={{
-            background: COLORS.white, borderRadius: 12,
-            border: "1px solid #e5e7eb", padding: 16,
-            display: "flex", flexDirection: "column",
-            position: "relative", overflow: "hidden",
-          }}>
-            {/* Accent top line */}
-            <div style={{
-              position: "absolute", top: 0, left: 0, right: 0,
-              height: 3, background: p.color,
-            }} />
-            <div style={{
-              fontFamily: FONTS.body, fontSize: 10, fontWeight: 700,
-              color: COLORS.warmGray, textTransform: "uppercase",
-              letterSpacing: "0.06em", marginBottom: 8,
-            }}>
-              Page {p.page}
+        {/* Preview top bar */}
+        <div style={{
+          borderTop: `3px solid ${accent}`,
+          padding: "10px 20px",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          borderBottom: "1px solid #e5e7eb",
+        }}>
+          <span style={{ fontFamily: FONTS.heading, fontSize: 15, fontWeight: 700, color: accent }}>{config.name}</span>
+          <span style={{ fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray }}>{t("boardReport", language)} · {monthYear}</span>
+        </div>
+
+        {previewLoading || !pm ? (
+          <div style={{ padding: 40, textAlign: "center" }}>
+            <div className="sk" style={{ width: 32, height: 32, borderRadius: 8, margin: "0 auto 12px" }} />
+            <span style={{ fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray }}>{t("fetchingData", language)}</span>
+          </div>
+        ) : (
+          <div style={{ padding: "16px 20px" }}>
+            {/* Metric boxes row */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+              {[
+                { label: t("permits", language), value: String(pm.permits), color: "#3B82F6" },
+                { label: t("requests311", language), value: String(pm.requests), color: "#8B5CF6" },
+                { label: t("resolutionRate", language), value: `${pm.resRate}%`, color: "#10B981" },
+                { label: t("evictions", language), value: String(pm.evictions), color: "#EF4444" },
+                { label: t("newBusiness", language), value: String(pm.newBiz), color: "#F59E0B" },
+                { label: t("avgResponse", language), value: pm.avgDays === "—" ? "—" : `${pm.avgDays}d`, color: "#64748B" },
+              ].map(m => (
+                <div key={m.label} style={{
+                  flex: "1 1 100px", minWidth: 90, background: "#f9fafb",
+                  borderRadius: 8, padding: "10px 12px", textAlign: "center",
+                  borderLeft: `3px solid ${m.color}`,
+                }}>
+                  <div style={{ fontFamily: FONTS.display, fontSize: 22, fontWeight: 700, color: m.color, lineHeight: 1 }}>{m.value}</div>
+                  <div style={{ fontFamily: FONTS.body, fontSize: 10, color: COLORS.warmGray, marginTop: 4 }}>{m.label}</div>
+                </div>
+              ))}
             </div>
-            <div style={{
-              fontFamily: FONTS.display, fontSize: 20, fontWeight: 700,
-              color: p.color, lineHeight: 1.1, marginBottom: 4,
-            }}>
-              {p.preview}
+
+            {/* Two-column detail */}
+            <style>{`
+              @media (max-width: 640px) { .bp-cols { flex-direction: column !important; } }
+            `}</style>
+            <div className="bp-cols" style={{ display: "flex", gap: 20, marginBottom: 16 }}>
+              {/* Left: 311 */}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: FONTS.body, fontSize: 12, fontWeight: 700, color: accent, borderBottom: `2px solid ${accent}`, paddingBottom: 4, marginBottom: 10 }}>
+                  {t("activity311", language)}
+                </div>
+                {pm.cats.slice(0, 4).map(([cat, count]) => (
+                  <div key={cat} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                    <span style={{ fontFamily: FONTS.body, fontSize: 11, color: "#333", width: 110, flexShrink: 0 }}>{cat}</span>
+                    <div style={{ flex: 1, height: 6, background: "#e5e7eb", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${pm.cats[0] ? (count / pm.cats[0][1]) * 100 : 0}%`, background: accent, borderRadius: 3 }} />
+                    </div>
+                    <span style={{ fontFamily: FONTS.body, fontSize: 11, fontWeight: 600, color: "#333", width: 30, textAlign: "right" }}>{count}</span>
+                  </div>
+                ))}
+                <div style={{ fontFamily: FONTS.body, fontSize: 10, fontWeight: 600, color: COLORS.warmGray, marginTop: 8, marginBottom: 4 }}>{t("topHotspots", language)}</div>
+                {pm.topAddr.slice(0, 3).map(([addr, count]) => (
+                  <div key={addr} style={{ fontFamily: FONTS.body, fontSize: 10, color: "#555", marginBottom: 2 }}>
+                    {addr} — {count}
+                  </div>
+                ))}
+              </div>
+
+              {/* Right: Permits */}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: FONTS.body, fontSize: 12, fontWeight: 700, color: accent, borderBottom: `2px solid ${accent}`, paddingBottom: 4, marginBottom: 10 }}>
+                  {t("permitActivity", language)}
+                </div>
+                {pm.pTypes.slice(0, 4).map(([type, count]) => (
+                  <div key={type} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                    <span style={{ fontFamily: FONTS.body, fontSize: 11, color: "#333", width: 120, flexShrink: 0 }}>{type.length > 22 ? type.slice(0, 20) + "..." : type}</span>
+                    <div style={{ flex: 1, height: 6, background: "#e5e7eb", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${pm.pTypes[0] ? (count / pm.pTypes[0][1]) * 100 : 0}%`, background: "#3B82F6", borderRadius: 3 }} />
+                    </div>
+                    <span style={{ fontFamily: FONTS.body, fontSize: 11, fontWeight: 600, color: "#333", width: 30, textAlign: "right" }}>{count}</span>
+                  </div>
+                ))}
+                <div style={{ fontFamily: FONTS.body, fontSize: 10, fontWeight: 600, color: COLORS.warmGray, marginTop: 8, marginBottom: 4 }}>{t("topProjects", language)}</div>
+                {pm.topProjects.slice(0, 2).map((p, i) => (
+                  <div key={i} style={{ fontFamily: FONTS.body, fontSize: 10, color: "#555", marginBottom: 2 }}>
+                    {p.address} — ${(p.cost / 1000).toFixed(0)}K
+                  </div>
+                ))}
+                {pm.topProjects.length === 0 && (
+                  <div style={{ fontFamily: FONTS.body, fontSize: 10, color: COLORS.warmGray, fontStyle: "italic" }}>No high-value permits</div>
+                )}
+              </div>
             </div>
+
+            {/* AI brief placeholder */}
             <div style={{
-              fontFamily: FONTS.body, fontSize: 13, fontWeight: 600,
-              color: "#1a1a2e", marginBottom: 4,
+              borderTop: `2px solid ${accent}`,
+              paddingTop: 10,
             }}>
-              {p.title}
-            </div>
-            <div style={{
-              fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray,
-              lineHeight: 1.4,
-            }}>
-              {p.sub}
+              <div style={{ fontFamily: FONTS.body, fontSize: 12, fontWeight: 700, color: accent, marginBottom: 6 }}>
+                {t("executiveBrief", language)}
+              </div>
+              <div style={{
+                fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray,
+                fontStyle: "italic", lineHeight: 1.5,
+              }}>
+                AI executive brief will be generated when you click the button below.
+              </div>
             </div>
           </div>
-        ))}
+        )}
       </div>
 
-      {/* Progress steps (visible during generation) */}
+      {/* Progress steps */}
       {isGenerating && (
         <div style={{
           background: COLORS.white, borderRadius: 12,
-          border: "1px solid #e5e7eb", padding: "20px 24px",
-          marginBottom: 24,
+          border: "1px solid #e5e7eb", padding: "16px 20px",
+          marginBottom: 20,
         }}>
-          <div style={{
-            fontFamily: FONTS.body, fontSize: 12, fontWeight: 600,
-            color: "#1a1a2e", marginBottom: 12,
-          }}>
-            Generating Board Packet...
-          </div>
-          {STAGE_STEPS.map(step => {
-            const stageOrder = ["fetching", "ai", "building"];
-            const currentIdx = stageOrder.indexOf(stage);
-            const stepIdx = stageOrder.indexOf(step.key);
+          {stageSteps.map(step => {
+            const order = ["fetching", "ai", "building"];
+            const currentIdx = order.indexOf(stage);
+            const stepIdx = order.indexOf(step.key);
             const isDone = stepIdx < currentIdx;
             const isActive = stepIdx === currentIdx;
-
             return (
               <div key={step.key} style={{
                 display: "flex", alignItems: "center", gap: 10,
-                padding: "6px 0",
-                fontFamily: FONTS.body, fontSize: 13,
+                padding: "5px 0", fontFamily: FONTS.body, fontSize: 13,
                 color: isDone ? "#10B981" : isActive ? "#1a1a2e" : COLORS.warmGray,
               }}>
                 {isDone ? (
@@ -785,12 +756,7 @@ Be concise, data-driven, professional. Include specific numbers and addresses. E
                 ) : isActive ? (
                   <>
                     <style>{`@keyframes bp-spin { to { transform: rotate(360deg); } }`}</style>
-                    <div style={{
-                      width: 14, height: 14, borderRadius: "50%",
-                      border: `2px solid ${COLORS.lightBorder}`,
-                      borderTopColor: accent,
-                      animation: "bp-spin 0.8s linear infinite",
-                    }} />
+                    <div style={{ width: 14, height: 14, borderRadius: "50%", border: `2px solid ${COLORS.lightBorder}`, borderTopColor: accent, animation: "bp-spin 0.8s linear infinite" }} />
                   </>
                 ) : (
                   <span style={{ width: 14, height: 14, borderRadius: "50%", border: `1px solid ${COLORS.lightBorder}`, display: "inline-block" }} />
@@ -799,12 +765,6 @@ Be concise, data-driven, professional. Include specific numbers and addresses. E
               </div>
             );
           })}
-          <div style={{
-            fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray,
-            marginTop: 8,
-          }}>
-            Estimated time: ~15 seconds
-          </div>
         </div>
       )}
 
@@ -812,37 +772,26 @@ Be concise, data-driven, professional. Include specific numbers and addresses. E
       <div style={{ textAlign: "center" }}>
         <button
           onClick={generate}
-          disabled={isGenerating}
+          disabled={isGenerating || !preview}
           style={{
-            background: isGenerating ? COLORS.warmGray : accent,
-            color: "#fff",
-            border: "none", borderRadius: 28,
-            padding: "14px 40px",
-            cursor: isGenerating ? "default" : "pointer",
+            background: isGenerating || !preview ? COLORS.warmGray : accent,
+            color: "#fff", border: "none", borderRadius: 28,
+            padding: "14px 40px", cursor: isGenerating || !preview ? "default" : "pointer",
             fontFamily: FONTS.body, fontSize: 16, fontWeight: 700,
-            boxShadow: isGenerating ? "none" : `0 4px 16px ${accent}44`,
+            boxShadow: isGenerating || !preview ? "none" : `0 4px 16px ${accent}44`,
             transition: "all 0.2s",
           }}
         >
-          {isGenerating
-            ? "Generating..."
-            : stage === "done" ? "Regenerate Packet" : "Generate Board Packet"}
+          {isGenerating ? t("generating", language) : stage === "done" ? t("regenerateBtn", language) : t("generateBtn", language)}
         </button>
 
         {stage === "done" && (
-          <p style={{
-            fontFamily: FONTS.body, fontSize: 13,
-            color: COLORS.green, marginTop: 12,
-          }}>
-            Download complete!
+          <p style={{ fontFamily: FONTS.body, fontSize: 13, color: COLORS.green, marginTop: 12 }}>
+            {t("downloadDone", language)}
           </p>
         )}
-
         {stage === "error" && (
-          <p style={{
-            fontFamily: FONTS.body, fontSize: 13,
-            color: "#DC2626", marginTop: 12,
-          }}>
+          <p style={{ fontFamily: FONTS.body, fontSize: 13, color: "#DC2626", marginTop: 12 }}>
             {error || "An error occurred. Please try again."}
           </p>
         )}
