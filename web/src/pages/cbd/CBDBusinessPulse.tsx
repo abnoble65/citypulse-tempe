@@ -15,6 +15,7 @@ import { fetchBusinessesForCBD, type CBDBusinessRow } from "../../utils/cbdFetch
 import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
 import { renderMarkdownBlock } from "../../components/MarkdownText";
 import Anthropic from "@anthropic-ai/sdk";
+import { useLanguage, getLanguageInstruction } from "../../contexts/LanguageContext";
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -33,6 +34,7 @@ function toTitleCase(str: string): string {
 
 export function CBDBusinessPulse() {
   const { config } = useCBD();
+  const { language } = useLanguage();
   const accent = config?.accent_color ?? "#E8652D";
 
   const [businesses, setBusinesses] = useState<CBDBusinessRow[]>([]);
@@ -91,6 +93,9 @@ export function CBDBusinessPulse() {
     [businesses, cutoff90],
   );
 
+  // Regenerate AI on language change
+  useEffect(() => { setAiAnalysis(""); }, [language]);
+
   // ── AI analysis ───────────────────────────────────────────────────────
   useEffect(() => {
     if (loading || !config || businesses.length === 0 || aiAnalysis) return;
@@ -131,7 +136,7 @@ DATA:
 - Zip code distribution: ${topZips || "N/A"}
 - Sample new businesses: ${newRegistrations.slice(0, 5).map(b => `${b.dba || b.name} at ${b.address}`).join("; ")}
 
-Focus on what the registration patterns mean for district health. Note any clusters of activity or areas with low registration.`;
+Focus on what the registration patterns mean for district health. Note any clusters of activity or areas with low registration.${getLanguageInstruction(language)}`;
 
     const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
     client.messages.create({
@@ -143,7 +148,7 @@ Focus on what the registration patterns mean for district health. Note any clust
     }).catch(() => {
       setAiAnalysis("*Unable to generate analysis.*");
     }).finally(() => setAiLoading(false));
-  }, [loading, config, businesses, aiAnalysis, activeBusinesses, newRegistrations, closures]);
+  }, [loading, config, businesses, aiAnalysis, activeBusinesses, newRegistrations, closures, language]);
 
   if (!config) return null;
 

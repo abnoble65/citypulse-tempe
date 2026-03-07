@@ -11,6 +11,7 @@ import type { DistrictConfig } from "./districts";
 import { CityPulseLogo } from "./components/Icons";
 import { CityPulseChat } from "./components/CityPulseChat";
 import { CBDPortal } from "./components/CBDPortal";
+import { useLanguage } from "./contexts/LanguageContext";
 
 // ── Stale chunk auto-reload ──────────────────────────────────────────────────
 // After a deploy, old chunk filenames no longer exist on the server.
@@ -182,6 +183,8 @@ function pathFromPage(pageName: string): string {
 }
 
 export default function App() {
+  const { language } = useLanguage();
+
   // ── CBD Portal route detection ──────────────────────────────────────────
   const cbdMatch = window.location.pathname.match(/^\/cbd\/([a-z0-9-]+)/);
   if (cbdMatch) {
@@ -314,7 +317,7 @@ export default function App() {
     history.pushState(null, "", pathFromPage("Briefing"));
     setPage("Briefing");
     try {
-      const { text, data } = await generateBriefing(district);
+      const { text, data } = await generateBriefing(district, language);
       if (controller.signal.aborted) return;
       setBriefingText(text);
       setAggregatedData(data);

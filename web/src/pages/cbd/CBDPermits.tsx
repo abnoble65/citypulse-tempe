@@ -23,6 +23,7 @@ import { fetchPermitsForCBD, type CBDPermitRow } from "../../utils/cbdFetch";
 import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
 import { renderMarkdownBlock } from "../../components/MarkdownText";
 import Anthropic from "@anthropic-ai/sdk";
+import { useLanguage, getLanguageInstruction } from "../../contexts/LanguageContext";
 
 const MAPBOX_TILE = (token: string) =>
   `https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/{z}/{x}/{y}?access_token=${token}`;
@@ -115,6 +116,7 @@ function fmtCost(cost: number): string {
 
 export function CBDPermits() {
   const { config } = useCBD();
+  const { language } = useLanguage();
   const accent = config?.accent_color ?? "#E8652D";
 
   const [permits, setPermits] = useState<CBDPermitRow[]>([]);
@@ -150,6 +152,9 @@ export function CBDPermits() {
     return () => { clearTimeout(timeout); controller.abort(); };
   }, [config]);
 
+  // Regenerate AI on language change
+  useEffect(() => { setAiSummary(""); }, [language]);
+
   // ── AI notable projects ───────────────────────────────────────────────
   useEffect(() => {
     if (loading || !config || permits.length === 0 || aiSummary) return;
@@ -183,7 +188,7 @@ DATA (last 12 months within ${config.name}):
 - Top permits by cost:
 ${topList}
 
-Focus on what these permits mean for the district: new construction, major renovations, potential disruption. End with a brief outlook.`;
+Focus on what these permits mean for the district: new construction, major renovations, potential disruption. End with a brief outlook.${getLanguageInstruction(language)}`;
 
     const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
     client.messages.create({
@@ -195,7 +200,7 @@ Focus on what these permits mean for the district: new construction, major renov
     }).catch(() => {
       setAiSummary("*Unable to generate analysis.*");
     }).finally(() => setAiLoading(false));
-  }, [loading, config, permits, aiSummary]);
+  }, [loading, config, permits, aiSummary, language]);
 
   // ── Derived data ──────────────────────────────────────────────────────
 

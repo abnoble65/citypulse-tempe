@@ -8,6 +8,7 @@
 import { useState, useEffect } from "react";
 import { useCBD } from "../contexts/CBDContext";
 import { CityPulseLogo } from "./Icons";
+import { LanguageSelector } from "./LanguageSelector";
 import { COLORS, FONTS } from "../theme";
 
 const CBD_PAGES = [
@@ -105,11 +106,12 @@ export function CBDNavBar({ activePath, onNavigate }: CBDNavBarProps) {
           </div>
         )}
 
-        {/* Right: Powered by CityPulse */}
+        {/* Right: Language + Powered by CityPulse */}
         <div style={{
-          display: "flex", alignItems: "center", gap: 6,
+          display: "flex", alignItems: "center", gap: 8,
           marginLeft: "auto", flexShrink: 0,
         }}>
+          <LanguageSelector />
           <CityPulseLogo size={20} bg={COLORS.warmGray} fg={COLORS.white} />
           {!isMobile && (
             <span style={{

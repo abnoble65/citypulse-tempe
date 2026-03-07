@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
 import { CityPulseLogo } from "./Icons";
+import { LanguageSelector } from "./LanguageSelector";
 import type { DistrictConfig } from "../districts";
 
 interface NavBarProps {
@@ -173,9 +174,10 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
           ))}
         </div>
 
-        {/* District badge + live indicator */}
+        {/* District badge + live indicator + language */}
         <div style={{ flexShrink: 0, marginLeft: 12, display: "flex", alignItems: "center", gap: 8 }}>
           <LiveBadge />
+          <LanguageSelector />
           <span style={{
             background: COLORS.cream, color: COLORS.charcoal,
             padding: "5px 12px", borderRadius: 20,
@@ -221,6 +223,7 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <LiveBadge />
+            <LanguageSelector />
             <span style={{
               background: COLORS.cream, color: COLORS.charcoal,
               padding: "4px 10px", borderRadius: 20,

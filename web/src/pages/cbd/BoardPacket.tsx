@@ -13,6 +13,7 @@ import { COLORS, FONTS } from "../../theme";
 import { isPointInCBD, type CBDBoundaryEntry } from "../../utils/geoFilter";
 import { fetchBusinessesForCBD, type CBDBusinessRow } from "../../utils/cbdFetch";
 import Anthropic from "@anthropic-ai/sdk";
+import { useLanguage, getLanguageInstruction } from "../../contexts/LanguageContext";
 
 const DATASF = "https://data.sfgov.org/resource";
 
@@ -474,6 +475,7 @@ const STAGE_STEPS = [
 
 export function BoardPacket() {
   const { config } = useCBD();
+  const { language } = useLanguage();
   const accent = config?.accent_color ?? "#E8652D";
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState("");
@@ -618,7 +620,7 @@ DATA (last 90 days within ${config.name} boundary):
 - Active businesses: ${activeBiz.length}, New: ${newBiz.length}, Closures: ${closedBiz.length}
 ${topByVal.length > 0 ? `- Highest-value permits: ${topByVal.map(p => `${p.address} ($${(p.cost / 1000).toFixed(0)}K)`).join(", ")}` : ""}
 
-Be concise, data-driven, professional. Include specific numbers and addresses. Each section should be 2-3 sentences.`,
+Be concise, data-driven, professional. Include specific numbers and addresses. Each section should be 2-3 sentences.${getLanguageInstruction(language)}`,
           }],
         });
         aiSummary = res.content[0]?.type === "text" ? res.content[0].text : "";

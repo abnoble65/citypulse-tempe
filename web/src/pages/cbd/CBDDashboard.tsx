@@ -23,6 +23,7 @@ import { renderMarkdownBlock } from "../../components/MarkdownText";
 import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
 import { fetch311ForCBD } from "../../utils/cbdFetch";
 import Anthropic from "@anthropic-ai/sdk";
+import { useLanguage, getLanguageInstruction } from "../../contexts/LanguageContext";
 
 const DATASF = "https://data.sfgov.org/resource";
 const MAPBOX_TILE = (token: string) =>
@@ -371,6 +372,7 @@ interface CBDDashboardProps {
 
 export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
   const { config } = useCBD();
+  const { language } = useLanguage();
   const accent = config?.accent_color ?? "#E8652D";
 
   const [stats, setStats] = useState<CBDStats>({ permits: [], threeOneOne: [], evictions: [] });
@@ -455,7 +457,11 @@ export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
     return () => { clearTimeout(timeout); controller.abort(); };
   }, [config, cbdBoundaries]);
 
-  // Generate AI summary once stats are loaded
+  // Generate AI summary once stats are loaded (regenerates on language change)
+  useEffect(() => {
+    setAiSummary("");
+  }, [language]);
+
   useEffect(() => {
     if (statsLoading || !config || aiSummary) return;
     const apiKey = (import.meta as any).env?.VITE_ANTHROPIC_API_KEY;
@@ -475,7 +481,7 @@ DATA (last 90 days within CBD boundary):
 - Top 311 categories: ${topCats || "none"}
 - Eviction notices: ${stats.evictions.length}
 
-Focus on: permit activity within the district, 311 service request trends, and any notable developments. Be data-driven and actionable. Keep it under 200 words.`;
+Focus on: permit activity within the district, 311 service request trends, and any notable developments. Be data-driven and actionable. Keep it under 200 words.${getLanguageInstruction(language)}`;
 
     const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
     client.messages.create({
@@ -489,7 +495,7 @@ Focus on: permit activity within the district, 311 service request trends, and a
       console.warn("[CBDDashboard] AI summary failed:", err);
       setAiSummary("*Unable to generate AI summary at this time.*");
     }).finally(() => setAiLoading(false));
-  }, [statsLoading, config, stats, aiSummary]);
+  }, [statsLoading, config, stats, aiSummary, language]);
 
   if (!config) return null;
 

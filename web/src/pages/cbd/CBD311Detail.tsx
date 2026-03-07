@@ -18,6 +18,7 @@ import { fetch311ForCBD, type CBD311Row } from "../../utils/cbdFetch";
 import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
 import { renderMarkdownBlock } from "../../components/MarkdownText";
 import Anthropic from "@anthropic-ai/sdk";
+import { useLanguage, getLanguageInstruction } from "../../contexts/LanguageContext";
 
 // ── Categories ──────────────────────────────────────────────────────────
 
@@ -72,6 +73,7 @@ type SortDir = "asc" | "desc";
 
 export function CBD311Detail() {
   const { config } = useCBD();
+  const { language } = useLanguage();
   const accent = config?.accent_color ?? "#E8652D";
 
   const [rawRows, setRawRows] = useState<Row311[]>([]);
@@ -122,6 +124,9 @@ export function CBD311Detail() {
     return () => { clearTimeout(timeout); controller.abort(); };
   }, [config]);
 
+  // Regenerate AI on language change
+  useEffect(() => { setAiInsight(""); }, [language]);
+
   // ── AI insight ────────────────────────────────────────────────────────
   useEffect(() => {
     if (loading || !config || rawRows.length === 0 || aiInsight) return;
@@ -164,7 +169,7 @@ DATA:
 - Resolution outliers:
 ${outliers.slice(0, 8).join("\n") || "None detected"}
 
-Identify patterns and recommend which categories/locations need attention.`;
+Identify patterns and recommend which categories/locations need attention.${getLanguageInstruction(language)}`;
 
     const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
     client.messages.create({
@@ -176,7 +181,7 @@ Identify patterns and recommend which categories/locations need attention.`;
     }).catch(() => {
       setAiInsight("*Unable to generate insight.*");
     }).finally(() => setAiLoading(false));
-  }, [loading, config, rawRows, aiInsight]);
+  }, [loading, config, rawRows, aiInsight, language]);
 
   // ── Derived data ──────────────────────────────────────────────────────
 

@@ -10,6 +10,7 @@ import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { SupervisorAvatar } from "../components/SupervisorAvatar";
 import { supabase } from "../services/supabase";
 import type { DistrictConfig } from "../districts";
+import { useLanguage } from "../contexts/LanguageContext";
 
 /** Format an ISO date string (YYYY-MM-DD or ISO timestamp) as "Feb 25, 2026" */
 function fmtDate(iso: string | null | undefined): string {
@@ -44,6 +45,7 @@ function formatOverviewTimestamp(iso: string | null): string | null {
 }
 
 export function Briefing({ briefingText, aggregatedData, districtConfig, onNavigate }: BriefingProps) {
+  const { language } = useLanguage();
   const [filter, setFilter]             = useState(districtConfig.allLabel);
   const [localText, setLocalText]       = useState(briefingText);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -79,7 +81,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
     const neighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
     const focus = neighborhood ? { zip: neighborhood.zip, name: neighborhood.name } : undefined;
 
-    const cached = getCachedBriefingOverview(districtConfig, focus);
+    const cached = getCachedBriefingOverview(districtConfig, focus, language);
     if (cached) {
       setOverview(cached.overview);
       setOverviewGeneratedAt(cached.generatedAt);
@@ -87,7 +89,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
     }
 
     setOverviewLoading(true);
-    generateBriefingOverview(aggregatedData, districtConfig, focus)
+    generateBriefingOverview(aggregatedData, districtConfig, focus, language)
       .then(({ overview: o, generatedAt }) => {
         setOverview(o);
         setOverviewGeneratedAt(generatedAt);
@@ -95,7 +97,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
       .catch(err => console.error("[Briefing] overview generation failed:", err))
       .finally(() => setOverviewLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, aggregatedData]);
+  }, [filter, aggregatedData, language]);
 
   // When a new district-wide briefing arrives (new generation or district change),
   // reset to it and clear any neighborhood filter.
@@ -121,7 +123,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
 
     setIsGenerating(true);
     setGenError(null);
-    generateBriefingFromData(aggregatedData, districtConfig, { zip: neighborhood.zip, name: neighborhood.name })
+    generateBriefingFromData(aggregatedData, districtConfig, { zip: neighborhood.zip, name: neighborhood.name }, language)
       .then(text => setLocalText(text))
       .catch(err => {
         console.error("[Briefing] neighborhood generation failed:", err);
@@ -129,7 +131,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
       })
       .finally(() => setIsGenerating(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]); // intentionally only re-run when filter changes, not on every prop update
+  }, [filter, language]); // intentionally only re-run when filter or language changes
 
   const sections = parseBriefingSections(localText);
 

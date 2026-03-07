@@ -23,6 +23,7 @@ import {
 import type { DistrictData, Signal, PublicConcern } from "../services/briefing";
 import type { DistrictConfig } from "../districts";
 import { getSupervisorName } from "../components/SupervisorAvatar";
+import { useLanguage } from "../contexts/LanguageContext";
 import { ViewIn3DButton } from "../components/ViewIn3D";
 import type { CC3DPayload } from "../components/ViewIn3D";
 
@@ -315,6 +316,7 @@ function ActionRow({ cardId, shareTitle, shareText, sharePath, bookmarks,
 // ── Component ───────────────────────────────────────────────────────────────────
 
 export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: MorningGlanceProps) {
+  const { language } = useLanguage();
 
   // ── Mobile detection ──────────────────────────────────────────────────────────
   const [isMobile, setIsMobile] = useState(
@@ -343,13 +345,13 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
 
   // ── AI data ───────────────────────────────────────────────────────────────────
   const [overview,   setOverview]   = useState<string | null>(
-    () => getCachedBriefingOverview(districtConfig)?.overview ?? null,
+    () => getCachedBriefingOverview(districtConfig, undefined, language)?.overview ?? null,
   );
   const [topSignal,  setTopSignal]  = useState<Signal | null>(
-    () => getCachedSignals(districtConfig)?.signals?.[0] ?? null,
+    () => getCachedSignals(districtConfig, undefined, language)?.signals?.[0] ?? null,
   );
   const [topConcern, setTopConcern] = useState<PublicConcern | null>(
-    () => getCachedConcerns(districtConfig)?.concerns?.[0] ?? null,
+    () => getCachedConcerns(districtConfig, undefined, language)?.concerns?.[0] ?? null,
   );
   const [overviewLoading,  setOverviewLoading]  = useState(false);
   const [signalsLoading,   setSignalsLoading]   = useState(false);
@@ -357,29 +359,34 @@ export function MorningGlance({ aggregatedData, districtConfig, onNavigate }: Mo
 
   useEffect(() => {
     if (!aggregatedData) return;
-    if (!overview) {
+    // Clear stale content when language changes
+    setOverview(getCachedBriefingOverview(districtConfig, undefined, language)?.overview ?? null);
+    setTopSignal(getCachedSignals(districtConfig, undefined, language)?.signals?.[0] ?? null);
+    setTopConcern(getCachedConcerns(districtConfig, undefined, language)?.concerns?.[0] ?? null);
+
+    if (!getCachedBriefingOverview(districtConfig, undefined, language)) {
       setOverviewLoading(true);
-      generateBriefingOverview(aggregatedData, districtConfig)
+      generateBriefingOverview(aggregatedData, districtConfig, undefined, language)
         .then(({ overview: o }) => setOverview(o))
         .catch(() => {})
         .finally(() => setOverviewLoading(false));
     }
-    if (!topSignal) {
+    if (!getCachedSignals(districtConfig, undefined, language)) {
       setSignalsLoading(true);
-      generateSignals(aggregatedData, districtConfig)
+      generateSignals(aggregatedData, districtConfig, undefined, language)
         .then(({ signals }) => setTopSignal(signals[0] ?? null))
         .catch(() => {})
         .finally(() => setSignalsLoading(false));
     }
-    if (!topConcern) {
+    if (!getCachedConcerns(districtConfig, undefined, language)) {
       setConcernsLoading(true);
-      generatePublicConcerns(aggregatedData, districtConfig)
+      generatePublicConcerns(aggregatedData, districtConfig, undefined, language)
         .then(({ concerns }) => setTopConcern(concerns[0] ?? null))
         .catch(() => {})
         .finally(() => setConcernsLoading(false));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aggregatedData]);
+  }, [aggregatedData, language]);
 
   // ── Resident quote ────────────────────────────────────────────────────────────
   const [quote, setQuote]           = useState<string | null>(null);

@@ -24,6 +24,7 @@ import { fetch311ForCBD, type CBD311Row } from "../../utils/cbdFetch";
 import { renderMarkdownBlock } from "../../components/MarkdownText";
 import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
 import Anthropic from "@anthropic-ai/sdk";
+import { useLanguage, getLanguageInstruction } from "../../contexts/LanguageContext";
 
 const DATASF = "https://data.sfgov.org/resource";
 const MAPBOX_TILE = (token: string) =>
@@ -195,6 +196,7 @@ function CategoryFilters({ active, onChange }: {
 
 export function CleanSafeReport() {
   const { config } = useCBD();
+  const { language } = useLanguage();
   const accent = config?.accent_color ?? "#E8652D";
 
   const [rows311, setRows311] = useState<ThreeOneOneRow[]>([]);
@@ -287,6 +289,9 @@ export function CleanSafeReport() {
     return () => { clearTimeout(timeout); controller.abort(); };
   }, [config]);
 
+  // Regenerate AI on language change
+  useEffect(() => { setAiAnalysis(""); }, [language]);
+
   // ── AI operational analysis ──────────────────────────────────────────────
   useEffect(() => {
     if (loading || !config || rows311.length === 0 || aiAnalysis) return;
@@ -353,7 +358,7 @@ RESOLUTION DATA:
 - Average days to resolution: ${avgResDays}
 - Resolution speed by category: ${catResBreakdown || "no data"}
 
-Flag any categories with slow resolution times vs others and recommend resource reallocation. Write 2-3 paragraphs of analysis. Include specific addresses and numbers. End with 3 bullet-point recommendations.`;
+Flag any categories with slow resolution times vs others and recommend resource reallocation. Write 2-3 paragraphs of analysis. Include specific addresses and numbers. End with 3 bullet-point recommendations.${getLanguageInstruction(language)}`;
 
     const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
     client.messages.create({
@@ -366,7 +371,7 @@ Flag any categories with slow resolution times vs others and recommend resource 
       console.warn("[CleanSafe] AI failed:", err);
       setAiAnalysis("*Unable to generate AI analysis at this time.*");
     }).finally(() => setAiLoading(false));
-  }, [loading, config, rows311, permits, aiAnalysis]);
+  }, [loading, config, rows311, permits, aiAnalysis, language]);
 
   // ── Derived data ─────────────────────────────────────────────────────────
 

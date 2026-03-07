@@ -15,6 +15,7 @@ import type {
 } from "../services/briefing";
 import type { DistrictData } from "../services/aggregator";
 import type { DistrictConfig } from "../districts";
+import { useLanguage } from "../contexts/LanguageContext";
 
 interface OutlookProps {
   aggregatedData: DistrictData | null;
@@ -211,25 +212,26 @@ function formatLastUpdated(iso: string | null): string | null {
 /* ─── Page ───────────────────────────────────── */
 
 export function Outlook({ aggregatedData, districtConfig }: OutlookProps) {
+  const { language } = useLanguage();
   console.log("[OUTLOOK] RENDER", { hasData: !!aggregatedData, filter: districtConfig.allLabel });
 
   const [filter, setFilter]               = useState(districtConfig.allLabel);
   const [outlook, setOutlook]             = useState<OutlookData | null>(
-    () => getCachedOutlook(districtConfig, undefined)?.outlook ?? null,
+    () => getCachedOutlook(districtConfig, undefined, language)?.outlook ?? null,
   );
   const [lastUpdated, setLastUpdated]     = useState<string | null>(
-    () => getCachedOutlook(districtConfig, undefined)?.generatedAt ?? null,
+    () => getCachedOutlook(districtConfig, undefined, language)?.generatedAt ?? null,
   );
   const [isGenerating, setIsGenerating]   = useState(
-    () => !!aggregatedData && !getCachedOutlook(districtConfig, undefined),
+    () => !!aggregatedData && !getCachedOutlook(districtConfig, undefined, language),
   );
   const [genError, setGenError]           = useState<string | null>(null);
 
   const [concerns, setConcerns]                             = useState<PublicConcern[] | null>(
-    () => getCachedConcerns(districtConfig, undefined)?.concerns ?? null,
+    () => getCachedConcerns(districtConfig, undefined, language)?.concerns ?? null,
   );
   const [isConcernsGenerating, setIsConcernsGenerating]     = useState(
-    () => !!aggregatedData && !getCachedConcerns(districtConfig, undefined),
+    () => !!aggregatedData && !getCachedConcerns(districtConfig, undefined, language),
   );
   const [concernsError, setConcernsError]                   = useState<string | null>(null);
 
@@ -246,7 +248,7 @@ export function Outlook({ aggregatedData, districtConfig }: OutlookProps) {
     setGenError(null);
     setConcernsError(null);
 
-    generateOutlook(aggregatedData, districtConfig, focus)
+    generateOutlook(aggregatedData, districtConfig, focus, language)
       .then(({ outlook: o, generatedAt }) => {
         setOutlook(o);
         setLastUpdated(generatedAt);
@@ -257,7 +259,7 @@ export function Outlook({ aggregatedData, districtConfig }: OutlookProps) {
       })
       .finally(() => setIsGenerating(false));
 
-    generatePublicConcerns(aggregatedData, districtConfig, focus)
+    generatePublicConcerns(aggregatedData, districtConfig, focus, language)
       .then(({ concerns: c }) => setConcerns(c))
       .catch(err => {
         console.error("[Outlook] concerns generation failed:", err);
@@ -277,8 +279,8 @@ export function Outlook({ aggregatedData, districtConfig }: OutlookProps) {
     const focus = neighborhood ? { zip: neighborhood.zip, name: neighborhood.name } : undefined;
 
     // Synchronous cache check — instant display, no loading flash
-    const cachedOutlook  = getCachedOutlook(districtConfig, focus);
-    const cachedConcerns = getCachedConcerns(districtConfig, focus);
+    const cachedOutlook  = getCachedOutlook(districtConfig, focus, language);
+    const cachedConcerns = getCachedConcerns(districtConfig, focus, language);
 
     if (cachedOutlook) {
       setOutlook(cachedOutlook.outlook);
@@ -297,7 +299,7 @@ export function Outlook({ aggregatedData, districtConfig }: OutlookProps) {
 
     const timer = setTimeout(() => {
       if (!cachedOutlook) {
-        generateOutlook(aggregatedData, districtConfig, focus)
+        generateOutlook(aggregatedData, districtConfig, focus, language)
           .then(({ outlook: o, generatedAt }) => {
             setOutlook(o);
             setLastUpdated(generatedAt);
@@ -309,7 +311,7 @@ export function Outlook({ aggregatedData, districtConfig }: OutlookProps) {
           .finally(() => setIsGenerating(false));
       }
       if (!cachedConcerns) {
-        generatePublicConcerns(aggregatedData, districtConfig, focus)
+        generatePublicConcerns(aggregatedData, districtConfig, focus, language)
           .then(({ concerns: c }) => setConcerns(c))
           .catch(err => {
             console.error("[Outlook] concerns generation failed:", err);
@@ -320,7 +322,7 @@ export function Outlook({ aggregatedData, districtConfig }: OutlookProps) {
     }, 300);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, aggregatedData]); // re-run when filter changes OR when data first arrives after refresh
+  }, [filter, aggregatedData, language]); // re-run when filter, language, or data changes
 
   // aggregatedData is null when the user lands directly via URL (refresh/bookmark).
   // App.tsx auto-fetches it behind the LoadingOverlay; show skeletons here as fallback.

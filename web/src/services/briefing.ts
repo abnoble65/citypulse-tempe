@@ -10,6 +10,7 @@ import { aggregateDistrictData, aggregateCitywideData, type DistrictData } from 
 import { supabase } from './supabase';
 import type { DistrictConfig } from '../districts';
 import { getSupervisorName } from '../components/SupervisorAvatar';
+import { type AppLanguage, getLanguageInstruction, langCacheKey } from '../contexts/LanguageContext';
 
 // ── Anti-hallucination rules (appended to every AI prompt) ──────────────────
 const ANTI_HALLUCINATION_RULES = `
@@ -517,32 +518,36 @@ async function writeConcernsToDB(
 function contentCacheKey(
   district: DistrictConfig,
   focus?: { zip: string; name: string },
+  lang: AppLanguage = "en",
 ): string {
-  return `D${district.number}:${focus?.zip ?? 'all'}`;
+  return langCacheKey(`D${district.number}:${focus?.zip ?? 'all'}`, lang);
 }
 
 /** Synchronous cache read — use in lazy useState initialisers to skip loading flash. */
 export function getCachedSignals(
   district: DistrictConfig,
   focus?: { zip: string; name: string },
+  lang: AppLanguage = "en",
 ): { signals: Signal[]; generatedAt: string | null } | null {
-  return _signalsCache.get(contentCacheKey(district, focus)) ?? null;
+  return _signalsCache.get(contentCacheKey(district, focus, lang)) ?? null;
 }
 
 /** Synchronous cache read — use in lazy useState initialisers to skip loading flash. */
 export function getCachedOutlook(
   district: DistrictConfig,
   focus?: { zip: string; name: string },
+  lang: AppLanguage = "en",
 ): { outlook: OutlookData; generatedAt: string | null } | null {
-  return _outlookCache.get(contentCacheKey(district, focus)) ?? null;
+  return _outlookCache.get(contentCacheKey(district, focus, lang)) ?? null;
 }
 
 /** Synchronous cache read for public concerns — use to skip loading flash. */
 export function getCachedConcerns(
   district: DistrictConfig,
   focus?: { zip: string; name: string },
+  lang: AppLanguage = "en",
 ): { concerns: PublicConcern[]; generatedAt: string | null } | null {
-  return _concernsCache.get(contentCacheKey(district, focus)) ?? null;
+  return _concernsCache.get(contentCacheKey(district, focus, lang)) ?? null;
 }
 
 function briefingSystemPrompt(district: DistrictConfig): string {
@@ -658,12 +663,12 @@ export function parseBriefingSections(text: string): BriefingSections {
   return result;
 }
 
-export async function generateBriefing(district: DistrictConfig): Promise<{ text: string; data: DistrictData }> {
+export async function generateBriefing(district: DistrictConfig, lang: AppLanguage = "en"): Promise<{ text: string; data: DistrictData }> {
   const t0 = performance.now();
   const data = district.number === '0'
     ? await aggregateCitywideData()
     : await aggregateDistrictData(district);
-  const text = await generateBriefingFromData(data, district);
+  const text = await generateBriefingFromData(data, district, undefined, lang);
   console.log(`[briefing] full generate (data + text): ${(performance.now() - t0).toFixed(0)}ms`);
   return { text, data };
 }
@@ -677,8 +682,9 @@ export async function generateBriefingFromData(
   data: DistrictData,
   district: DistrictConfig,
   focus?: { zip: string; name: string },
+  lang: AppLanguage = "en",
 ): Promise<string> {
-  const key = contentCacheKey(district, focus);
+  const key = contentCacheKey(district, focus, lang);
   const cached = _briefingCache.get(key);
   if (cached) { console.log(`[briefing] cache hit ${key}`); return cached; }
 
@@ -718,10 +724,10 @@ export async function generateBriefingFromData(
   const message = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1024,
-    system: briefingSystemPrompt(district),
+    system: briefingSystemPrompt(district) + getLanguageInstruction(lang),
     messages: [{ role: 'user', content: userContent }],
   });
-  console.log(`[briefing] claude-sonnet-4-6: ${(performance.now() - t0).toFixed(0)}ms`);
+  console.log(`[briefing] claude-sonnet-4-6 (${lang}): ${(performance.now() - t0).toFixed(0)}ms`);
 
   const block = message.content[0];
   if (block.type !== 'text') throw new Error(`Unexpected response block type: ${block.type}`);
@@ -742,8 +748,9 @@ export async function generateSignals(
   data: DistrictData,
   district: DistrictConfig,
   focus?: { zip: string; name: string },
+  lang: AppLanguage = "en",
 ): Promise<{ signals: Signal[]; generatedAt: string | null }> {
-  const key = contentCacheKey(district, focus);
+  const key = contentCacheKey(district, focus, lang);
 
   // 1 — In-memory cache (instant, no async)
   const memCached = _signalsCache.get(key);
@@ -845,10 +852,10 @@ Return ONLY a JSON object in this exact shape (no other text):
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
-    system: signalsSystemPrompt(district),
+    system: signalsSystemPrompt(district) + getLanguageInstruction(lang),
     messages: [{ role: 'user', content: userContent }],
   });
-  console.log(`[signals] claude-haiku: ${(performance.now() - t0).toFixed(0)}ms`);
+  console.log(`[signals] claude-haiku (${lang}): ${(performance.now() - t0).toFixed(0)}ms`);
 
   const block = message.content[0];
   if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
@@ -922,8 +929,9 @@ export async function generateOutlook(
   data: DistrictData,
   district: DistrictConfig,
   focus?: { zip: string; name: string },
+  lang: AppLanguage = "en",
 ): Promise<{ outlook: OutlookData; generatedAt: string | null }> {
-  const key = contentCacheKey(district, focus);
+  const key = contentCacheKey(district, focus, lang);
 
   // 1 — In-memory cache (instant, no async)
   const memCached = _outlookCache.get(key);
@@ -1066,11 +1074,11 @@ IMPORTANT: ${shadowTotal > 0 ? `Include one risk about shadow impact (☀️ ico
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
-    system: outlookSystemPrompt(district),
+    system: outlookSystemPrompt(district) + getLanguageInstruction(lang),
     messages: [{ role: 'user', content: userContent }],
   });
 
-  console.log(`[generateOutlook] STEP 3: Claude responded in ${(performance.now() - t0outlook).toFixed(0)}ms — stop_reason: ${message.stop_reason}, content blocks: ${message.content.length}`);
+  console.log(`[generateOutlook] STEP 3 (${lang}): Claude responded in ${(performance.now() - t0outlook).toFixed(0)}ms — stop_reason: ${message.stop_reason}, content blocks: ${message.content.length}`);
 
   const block = message.content[0];
   if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
@@ -1105,8 +1113,9 @@ export async function generatePublicConcerns(
   data: DistrictData,
   district: DistrictConfig,
   focus?: { zip: string; name: string },
+  lang: AppLanguage = "en",
 ): Promise<{ concerns: PublicConcern[]; generatedAt: string | null }> {
-  const key = contentCacheKey(district, focus);
+  const key = contentCacheKey(district, focus, lang);
 
   // 1 — In-memory cache (instant, no async)
   const memCached = _concernsCache.get(key);
@@ -1189,10 +1198,10 @@ Return ONLY a JSON object in this exact shape (no other text):
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
-    system: concernsSystemPrompt(district),
+    system: concernsSystemPrompt(district) + getLanguageInstruction(lang),
     messages: [{ role: 'user', content: userContent }],
   });
-  console.log(`[concerns] claude-haiku: ${(performance.now() - t0).toFixed(0)}ms`);
+  console.log(`[concerns] claude-haiku (${lang}): ${(performance.now() - t0).toFixed(0)}ms`);
 
   const block = message.content[0];
   if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
@@ -1257,16 +1266,18 @@ const _overviewCache = new Map<string, { overview: string; generatedAt: string |
 export function getCachedBriefingOverview(
   district: DistrictConfig,
   focus?: { zip: string; name: string },
+  lang: AppLanguage = "en",
 ): { overview: string; generatedAt: string | null } | null {
-  return _overviewCache.get(contentCacheKey(district, focus)) ?? null;
+  return _overviewCache.get(contentCacheKey(district, focus, lang)) ?? null;
 }
 
 export async function generateBriefingOverview(
   data: DistrictData,
   district: DistrictConfig,
   focus?: { zip: string; name: string },
+  lang: AppLanguage = "en",
 ): Promise<{ overview: string; generatedAt: string | null }> {
-  const key = contentCacheKey(district, focus);
+  const key = contentCacheKey(district, focus, lang);
 
   // 1 — in-memory cache
   const memCached = _overviewCache.get(key);
@@ -1363,7 +1374,7 @@ Paragraph 3: Community context — evictions, affordable housing pipeline, any h
 
 Paragraph 4 (optional): One forward-looking observation residents should watch.
 
-Each paragraph should be 2–3 sentences max. Write for a busy reader scanning on their phone. Be specific: use real numbers, real addresses, real neighborhoods. Tone: trusted local journalist, not activist. No advocacy language (no "crisis", "severe", "alarming"). No markdown formatting, no bullet points. Plain prose only, with blank lines between paragraphs.${ANTI_HALLUCINATION_RULES}`,
+Each paragraph should be 2–3 sentences max. Write for a busy reader scanning on their phone. Be specific: use real numbers, real addresses, real neighborhoods. Tone: trusted local journalist, not activist. No advocacy language (no "crisis", "severe", "alarming"). No markdown formatting, no bullet points. Plain prose only, with blank lines between paragraphs.${ANTI_HALLUCINATION_RULES}${getLanguageInstruction(lang)}`,
     }],
   });
 

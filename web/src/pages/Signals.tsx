@@ -12,6 +12,7 @@ import type { DistrictData } from "../services/aggregator";
 import type { DistrictConfig } from "../districts";
 import { ViewIn3DButton } from "../components/ViewIn3D";
 import type { CC3DPayload } from "../components/ViewIn3D";
+import { useLanguage } from "../contexts/LanguageContext";
 
 interface SignalsProps {
   aggregatedData: DistrictData | null;
@@ -140,6 +141,7 @@ function formatLastUpdated(iso: string | null): string | null {
 }
 
 export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
+  const { language } = useLanguage();
   const [filter, setFilter]             = useState(districtConfig.allLabel);
   const [signals, setSignals]           = useState<Signal[] | null>(null);
   const [lastUpdated, setLastUpdated]   = useState<string | null>(null);
@@ -159,7 +161,7 @@ export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
     const focus = neighborhood ? { zip: neighborhood.zip, name: neighborhood.name } : undefined;
 
     // Synchronous cache check — instant display, no loading flash
-    const cached = getCachedSignals(districtConfig, focus);
+    const cached = getCachedSignals(districtConfig, focus, language);
     if (cached) {
       setSignals(cached.signals);
       setLastUpdated(cached.generatedAt);
@@ -171,7 +173,7 @@ export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
     setIsGenerating(true);
     setGenError(null);
     const timer = setTimeout(() => {
-      generateSignals(aggregatedData, districtConfig, focus)
+      generateSignals(aggregatedData, districtConfig, focus, language)
         .then(({ signals: s, generatedAt }) => {
           setSignals(s);
           setLastUpdated(generatedAt);
@@ -184,7 +186,7 @@ export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
     }, 300);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, aggregatedData]); // re-run when filter changes OR when data first arrives after refresh
+  }, [filter, aggregatedData, language]); // re-run when filter, language, or data changes
 
   // aggregatedData is null when the user lands directly via URL (refresh/bookmark).
   // App.tsx auto-fetches it behind the LoadingOverlay; show skeletons here as fallback.
