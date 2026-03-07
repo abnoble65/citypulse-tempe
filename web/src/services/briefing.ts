@@ -731,7 +731,8 @@ export async function generateBriefingFromData(
 
   const block = message.content[0];
   if (block.type !== 'text') throw new Error(`Unexpected response block type: ${block.type}`);
-  console.log('[briefing] raw response:', block.text);
+  console.log('[briefing] raw response length:', block.text.length, 'chars');
+  console.log('[briefing] last 100 chars:', block.text.slice(-100));
   warnIfHallucinated(block.text, userContent, 'briefing');
   _briefingCache.set(key, block.text);
   return block.text;

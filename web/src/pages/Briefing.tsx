@@ -4,7 +4,7 @@ import { renderMarkdownBlock } from "../components/MarkdownText";
 import { linkifyText } from "../utils/linkifyBriefing";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
-import { parseBriefingSections, generateBriefingFromData, generateBriefingOverview, getCachedBriefingOverview } from "../services/briefing";
+import { generateBriefingFromData, generateBriefingOverview, getCachedBriefingOverview } from "../services/briefing";
 import type { DistrictData } from "../services/briefing";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { SupervisorAvatar } from "../components/SupervisorAvatar";
@@ -132,8 +132,6 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
       .finally(() => setIsGenerating(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, language]); // intentionally only re-run when filter or language changes
-
-  const sections = parseBriefingSections(localText);
 
   /** Pulsing placeholders shown while the AI is writing the briefing. */
   function BriefingSkeletons({ bgColors }: { bgColors: string[] }) {
@@ -331,7 +329,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
               </div>
             )}
 
-            {sections.briefing.trim() && (
+            {localText.trim() && (
               <div style={{
                 background: COLORS.white,
                 borderRadius: 20, padding: "clamp(20px, 5vw, 40px)",
@@ -341,7 +339,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
                 color: COLORS.charcoal,
                 boxShadow: "0 2px 12px rgba(0,0,0,0.03)",
               }}>
-                {renderMarkdownBlock(sections.briefing, briefingLinkify)}
+                {renderMarkdownBlock(localText, briefingLinkify)}
               </div>
             )}
           </>
