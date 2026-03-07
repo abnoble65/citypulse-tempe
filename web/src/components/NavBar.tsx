@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { COLORS, FONTS } from "../theme";
 import { CityPulseLogo } from "./Icons";
 import { LanguageSelector } from "./LanguageSelector";
+import { fetchAllCBDProfiles, type CBDListItem } from "../utils/cbdProfiles";
 import type { DistrictConfig } from "../districts";
 
 interface NavBarProps {
@@ -107,6 +108,24 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
     return () => mq.removeEventListener("change", handler);
   }, []);
 
+  const [cbdPortals, setCbdPortals] = useState<CBDListItem[]>([]);
+  const [cbdDropdownOpen, setCbdDropdownOpen] = useState(false);
+  const cbdDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetchAllCBDProfiles().then(all => setCbdPortals(all.filter(p => p.is_active)));
+  }, []);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (cbdDropdownRef.current && !cbdDropdownRef.current.contains(e.target as Node)) {
+        setCbdDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
   const activeGroup = NAV_GROUPS.find(g => g.pages.includes(activePage)) ?? NAV_GROUPS[0];
   const districtBadge = districtConfig.label;
 
@@ -172,6 +191,82 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
               ))}
             </div>
           ))}
+
+          {/* PORTALS dropdown (desktop only) */}
+          {cbdPortals.length > 0 && (
+            <div ref={cbdDropdownRef} style={{ display: "flex", alignItems: "center", flexShrink: 0, position: "relative" }}>
+              <div style={{
+                width: 1, height: 18, background: COLORS.lightBorder,
+                margin: "0 10px", flexShrink: 0,
+              }} />
+              <span style={{
+                fontSize: 9, fontWeight: 700, color: COLORS.warmGray,
+                letterSpacing: "0.12em", textTransform: "uppercase",
+                fontFamily: FONTS.body, marginRight: 2, flexShrink: 0,
+                userSelect: "none",
+              }}>
+                PORTALS
+              </span>
+              <button
+                onClick={() => setCbdDropdownOpen(o => !o)}
+                style={{
+                  background: cbdDropdownOpen ? COLORS.orangePale : "transparent",
+                  color: cbdDropdownOpen ? COLORS.orange : COLORS.midGray,
+                  border: "none", borderRadius: 20,
+                  padding: "6px 13px", fontSize: 13, fontWeight: 600,
+                  cursor: "pointer", transition: "all 0.15s",
+                  fontFamily: FONTS.body, whiteSpace: "nowrap",
+                }}
+              >
+                Business ▾
+              </button>
+              {cbdDropdownOpen && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 8px)", left: 10,
+                  background: COLORS.white, borderRadius: 12,
+                  border: `1px solid ${COLORS.lightBorder}`,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
+                  padding: "8px 0", minWidth: 200, zIndex: 200,
+                  animation: "cp-expand-in 0.15s ease-out",
+                }}>
+                  {cbdPortals.map(p => (
+                    <a
+                      key={p.id}
+                      href={`/cbd/${p.slug}`}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        padding: "8px 16px", textDecoration: "none",
+                        fontFamily: FONTS.body, fontSize: 13, fontWeight: 500,
+                        color: COLORS.charcoal,
+                        transition: "background 0.1s",
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = COLORS.cream)}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <span style={{
+                        width: 8, height: 8, borderRadius: "50%",
+                        background: p.accent_color, flexShrink: 0,
+                      }} />
+                      {p.short_name}
+                    </a>
+                  ))}
+                  <div style={{ height: 1, background: COLORS.lightBorder, margin: "4px 0" }} />
+                  <a
+                    href="/cbd"
+                    style={{
+                      display: "block", padding: "8px 16px",
+                      fontFamily: FONTS.body, fontSize: 12, fontWeight: 600,
+                      color: COLORS.orange, textDecoration: "none",
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = COLORS.cream)}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                  >
+                    View all portals →
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* District badge + live indicator + language */}

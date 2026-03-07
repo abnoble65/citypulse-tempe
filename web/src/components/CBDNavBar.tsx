@@ -53,6 +53,20 @@ export function CBDNavBar({ activePath, onNavigate }: CBDNavBarProps) {
         height: isMobile ? 48 : 56,
         gap: 12,
       }}>
+        {/* Back link */}
+        <a
+          href="/"
+          style={{
+            fontFamily: FONTS.body, fontSize: 12, fontWeight: 600,
+            color: COLORS.warmGray, textDecoration: "none",
+            flexShrink: 0, transition: "color 0.15s",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = COLORS.charcoal)}
+          onMouseLeave={e => (e.currentTarget.style.color = COLORS.warmGray)}
+        >
+          {isMobile ? "←" : "← CityPulse"}
+        </a>
+
         {/* Left: CBD brand */}
         <button
           onClick={() => onNavigate("")}
@@ -74,6 +88,16 @@ export function CBDNavBar({ activePath, onNavigate }: CBDNavBarProps) {
             </span>
           )}
         </button>
+        {/* OPS badge */}
+        <span style={{
+          background: accent, color: "#fff",
+          fontSize: 9, fontWeight: 700, textTransform: "uppercase",
+          borderRadius: 6, padding: "2px 7px",
+          fontFamily: FONTS.body, letterSpacing: "0.04em",
+          flexShrink: 0,
+        }}>
+          OPS
+        </span>
 
         {/* Center: page links (desktop only) */}
         {!isMobile && (
@@ -112,15 +136,25 @@ export function CBDNavBar({ activePath, onNavigate }: CBDNavBarProps) {
           marginLeft: "auto", flexShrink: 0,
         }}>
           <LanguageSelector />
-          <CityPulseLogo size={20} bg={COLORS.warmGray} fg={COLORS.white} />
-          {!isMobile && (
-            <span style={{
-              fontFamily: FONTS.body, fontSize: 11,
-              color: COLORS.warmGray, whiteSpace: "nowrap",
-            }}>
-              Powered by CityPulse
-            </span>
-          )}
+          <a
+            href="/"
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              textDecoration: "none", transition: "opacity 0.15s",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = "0.7")}
+            onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
+          >
+            <CityPulseLogo size={20} bg={COLORS.warmGray} fg={COLORS.white} />
+            {!isMobile && (
+              <span style={{
+                fontFamily: FONTS.body, fontSize: 11,
+                color: COLORS.warmGray, whiteSpace: "nowrap",
+              }}>
+                Powered by CityPulse
+              </span>
+            )}
+          </a>
         </div>
       </div>
 

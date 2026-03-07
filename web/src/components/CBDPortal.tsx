@@ -138,7 +138,7 @@ function CBDTransition({ name, accent, onDone }: {
           opacity: 0,
           marginTop: 8,
         }}>
-          Powered by CityPulse
+          CityPulse for Business
         </div>
       </div>
     </>
@@ -163,7 +163,7 @@ function CBDFooter() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <CityPulseLogo size={20} bg={COLORS.warmGray} fg={COLORS.white} />
           <span style={{ fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray }}>
-            Powered by CityPulse
+            CityPulse for Business
           </span>
         </div>
 

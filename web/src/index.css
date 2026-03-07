@@ -169,6 +169,15 @@ input:focus {
   }
 }
 
+/* ── CBD portal grid ──────────────────────────────────── */
+.cp-cbd-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+@media (max-width: 767px) { .cp-cbd-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 479px) { .cp-cbd-grid { grid-template-columns: 1fr; } }
+
 /* ── Mobile tap targets ─────────────────────────────────── */
 /* WCAG 2.5.5: interactive controls ≥ 44×44 CSS px on touch  */
 @media (hover: none) and (pointer: coarse) {
