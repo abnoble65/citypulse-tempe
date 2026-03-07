@@ -113,7 +113,12 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
   const cbdDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetchAllCBDProfiles().then(all => setCbdPortals(all.filter(p => p.is_active)));
+    fetchAllCBDProfiles()
+      .then(all => {
+        console.log("[NavBar] CBD profiles loaded:", all.length, all);
+        setCbdPortals(all.filter(p => p.is_active));
+      })
+      .catch(err => console.error("[NavBar] CBD fetch failed:", err));
   }, []);
 
   useEffect(() => {
@@ -193,8 +198,7 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
           ))}
 
           {/* PORTALS dropdown (desktop only) */}
-          {cbdPortals.length > 0 && (
-            <div ref={cbdDropdownRef} style={{ display: "flex", alignItems: "center", flexShrink: 0, position: "relative" }}>
+          <div ref={cbdDropdownRef} style={{ display: "flex", alignItems: "center", flexShrink: 0, position: "relative" }}>
               <div style={{
                 width: 1, height: 18, background: COLORS.lightBorder,
                 margin: "0 10px", flexShrink: 0,
@@ -229,7 +233,7 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
                   padding: "8px 0", minWidth: 200, zIndex: 200,
                   animation: "cp-expand-in 0.15s ease-out",
                 }}>
-                  {cbdPortals.map(p => (
+                  {cbdPortals.length > 0 ? cbdPortals.map(p => (
                     <a
                       key={p.id}
                       href={`/cbd/${p.slug}`}
@@ -249,7 +253,27 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
                       }} />
                       {p.short_name}
                     </a>
-                  ))}
+                  )) : (
+                    /* Fallback: static link when fetch returns empty */
+                    <a
+                      href="/cbd/downtown"
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        padding: "8px 16px", textDecoration: "none",
+                        fontFamily: FONTS.body, fontSize: 13, fontWeight: 500,
+                        color: COLORS.charcoal,
+                        transition: "background 0.1s",
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = COLORS.cream)}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <span style={{
+                        width: 8, height: 8, borderRadius: "50%",
+                        background: COLORS.orange, flexShrink: 0,
+                      }} />
+                      Downtown SF
+                    </a>
+                  )}
                   <div style={{ height: 1, background: COLORS.lightBorder, margin: "4px 0" }} />
                   <a
                     href="/cbd"
@@ -266,7 +290,6 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
                 </div>
               )}
             </div>
-          )}
         </div>
 
         {/* District badge + live indicator + language */}

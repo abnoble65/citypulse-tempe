@@ -5,10 +5,12 @@ export type CBDListItem = Pick<CBDConfig,
   "id" | "slug" | "name" | "short_name" | "accent_color" | "is_active" | "description">;
 
 export async function fetchAllCBDProfiles(): Promise<CBDListItem[]> {
+  console.log("[cbdProfiles] fetching...");
   const { data, error } = await supabase
     .from("cbd_profiles")
     .select("id, slug, name, short_name, accent_color, is_active, description")
     .order("name");
-  if (error) { console.warn("[cbdProfiles]", error.message); return []; }
+  if (error) { console.warn("[cbdProfiles] error:", error.message); return []; }
+  console.log("[cbdProfiles] loaded:", data?.length, data);
   return (data ?? []) as CBDListItem[];
 }
