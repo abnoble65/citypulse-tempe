@@ -14,6 +14,7 @@ import { isPointInCBD, type CBDBoundaryEntry } from "../../utils/geoFilter";
 import { fetchBusinessesForCBD, type CBDBusinessRow } from "../../utils/cbdFetch";
 import Anthropic from "@anthropic-ai/sdk";
 import { useLanguage, getLanguageInstruction, type AppLanguage } from "../../contexts/LanguageContext";
+import { cleanPermitLabel } from "../../services/aggregator";
 
 const DATASF = "https://data.sfgov.org/resource";
 
@@ -81,6 +82,17 @@ function truncate(text: string, max: number): string {
   return text.slice(0, max - 3) + "...";
 }
 
+function cleanAddress(raw: string): string {
+  return raw
+    .replace(/,?\s*(SAN FRANCISCO|SF)\s*,?\s*(CA\s*)?\d{0,5}\s*$/i, "")
+    .replace(/,?\s*CA\s*\d{5}\s*$/i, "")
+    .trim();
+}
+
+function toTitleCase(str: string): string {
+  return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
 // ── PDF data shape ────────────────────────────────────────────────────
 
 interface PacketData {
@@ -115,17 +127,22 @@ function buildPDF(d: PacketData) {
     const c = normalize311Cat(r.category);
     catCounts[c] = (catCounts[c] ?? 0) + 1;
   }
-  const catEntries = Object.entries(catCounts).sort(([, a], [, b]) => b - a);
+  const catEntries = Object.entries(catCounts)
+    .filter(([cat]) => cat !== "Other")
+    .sort(([, a], [, b]) => b - a);
 
   const addrCounts: Record<string, number> = {};
   for (const r of rows311) {
-    const a = r.address.toUpperCase().trim();
+    const a = toTitleCase(cleanAddress(r.address.trim()));
     if (a) addrCounts[a] = (addrCounts[a] ?? 0) + 1;
   }
   const topAddresses = Object.entries(addrCounts).sort(([, a], [, b]) => b - a).slice(0, 5);
 
   const permitTypes: Record<string, number> = {};
-  for (const p of permits) permitTypes[p.type || "Other"] = (permitTypes[p.type || "Other"] ?? 0) + 1;
+  for (const p of permits) {
+    const label = cleanPermitLabel(p.type || "Other");
+    permitTypes[label] = (permitTypes[label] ?? 0) + 1;
+  }
   const topByValue = [...permits].sort((a, b) => b.cost - a.cost).slice(0, 3);
 
   const closedRows = rows311.filter(r => r.closedDate);
@@ -279,7 +296,7 @@ function buildPDF(d: PacketData) {
   doc.text(t("resByCategory", lang), leftX + 2, ly);
   ly += 4;
 
-  for (const [cat] of catEntries.slice(0, 5)) {
+  for (const [cat] of catEntries.slice(0, 4)) {
     const days = catResDays[cat];
     const avg = days ? (days.reduce((s, d) => s + d, 0) / days.length).toFixed(1) : "—";
     doc.setFont("helvetica", "normal");
@@ -343,7 +360,7 @@ function buildPDF(d: PacketData) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6.5);
     doc.setTextColor(50, 50, 50);
-    const projLine = truncate(`${p.address}  —  $${(p.cost / 1000).toFixed(0)}K  (${p.type})`, 60);
+    const projLine = truncate(`${toTitleCase(cleanAddress(p.address))}  —  $${(p.cost / 1000).toFixed(0)}K  (${cleanPermitLabel(p.type)})`, 60);
     doc.text(projLine, rightX + 2, ry + 3);
     ry += 5.5;
   }
@@ -367,9 +384,9 @@ function buildPDF(d: PacketData) {
   doc.setTextColor(60, 60, 60);
   doc.text(`${activeBiz.length} active  ·  ${newBiz.length} new (90d)  ·  ${businesses.filter(b => b.endDate && b.endDate >= cutoff90Str).length} closures`, rightX + 2, ry + 3);
 
-  // ─── ROW 3: AI EXECUTIVE BRIEF (y: 120–200) ────────────────────────
+  // ─── ROW 3: AI EXECUTIVE BRIEF ─────────────────────────────────────
 
-  const briefY = 122;
+  const briefY = Math.max(ly, ry) + 6;
   doc.setDrawColor(...accent);
   doc.setLineWidth(0.6);
   doc.line(M, briefY - 2, W - M, briefY - 2);
@@ -584,12 +601,12 @@ Be concise and data-driven. 150 words maximum.${getLanguageInstruction(language)
     const newBiz = businesses.filter(b => b.startDate >= cutoffStr);
     const catCounts: Record<string, number> = {};
     for (const r of rows311) catCounts[normalize311Cat(r.category)] = (catCounts[normalize311Cat(r.category)] ?? 0) + 1;
-    const cats = Object.entries(catCounts).sort(([, a], [, b]) => b - a);
+    const cats = Object.entries(catCounts).filter(([cat]) => cat !== "Other").sort(([, a], [, b]) => b - a);
     const addrCounts: Record<string, number> = {};
-    for (const r of rows311) { const a = r.address.toUpperCase().trim(); if (a) addrCounts[a] = (addrCounts[a] ?? 0) + 1; }
+    for (const r of rows311) { const a = toTitleCase(cleanAddress(r.address.trim())); if (a) addrCounts[a] = (addrCounts[a] ?? 0) + 1; }
     const topAddr = Object.entries(addrCounts).sort(([, a], [, b]) => b - a).slice(0, 4);
     const permitTypes: Record<string, number> = {};
-    for (const p of permits) permitTypes[p.type || "Other"] = (permitTypes[p.type || "Other"] ?? 0) + 1;
+    for (const p of permits) { const label = cleanPermitLabel(p.type || "Other"); permitTypes[label] = (permitTypes[label] ?? 0) + 1; }
     const pTypes = Object.entries(permitTypes).sort(([, a], [, b]) => b - a);
     const topProjects = [...permits].sort((a, b) => b.cost - a.cost).slice(0, 3);
 
@@ -694,7 +711,7 @@ Be concise and data-driven. 150 words maximum.${getLanguageInstruction(language)
                 </div>
                 {pm.pTypes.slice(0, 4).map(([type, count]) => (
                   <div key={type} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-                    <span style={{ fontFamily: FONTS.body, fontSize: 11, color: "#333", width: 120, flexShrink: 0 }}>{type.length > 22 ? type.slice(0, 20) + "..." : type}</span>
+                    <span style={{ fontFamily: FONTS.body, fontSize: 11, color: "#333", width: 120, flexShrink: 0 }}>{truncate(type, 22)}</span>
                     <div style={{ flex: 1, height: 6, background: "#e5e7eb", borderRadius: 3, overflow: "hidden" }}>
                       <div style={{ height: "100%", width: `${pm.pTypes[0] ? (count / pm.pTypes[0][1]) * 100 : 0}%`, background: "#3B82F6", borderRadius: 3 }} />
                     </div>
@@ -704,7 +721,7 @@ Be concise and data-driven. 150 words maximum.${getLanguageInstruction(language)
                 <div style={{ fontFamily: FONTS.body, fontSize: 10, fontWeight: 600, color: COLORS.warmGray, marginTop: 8, marginBottom: 4 }}>{t("topProjects", language)}</div>
                 {pm.topProjects.slice(0, 2).map((p, i) => (
                   <div key={i} style={{ fontFamily: FONTS.body, fontSize: 10, color: "#555", marginBottom: 2 }}>
-                    {p.address} — ${(p.cost / 1000).toFixed(0)}K
+                    {toTitleCase(cleanAddress(p.address))} — ${(p.cost / 1000).toFixed(0)}K ({cleanPermitLabel(p.type)})
                   </div>
                 ))}
                 {pm.topProjects.length === 0 && (
