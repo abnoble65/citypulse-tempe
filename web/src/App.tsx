@@ -73,7 +73,7 @@ function LoadingOverlay({ loading, onCancel }: { loading: boolean; onCancel?: ()
   useEffect(() => {
     if (!loading) { setMsgIndex(0); setSlow(false); return; }
     const id = setInterval(() => setMsgIndex(i => (i + 1) % LOADING_MESSAGES.length), 2200);
-    const slowTimer = setTimeout(() => setSlow(true), 20_000);
+    const slowTimer = setTimeout(() => setSlow(true), 90_000);
     return () => { clearInterval(id); clearTimeout(slowTimer); };
   }, [loading]);
   if (!loading) return null;

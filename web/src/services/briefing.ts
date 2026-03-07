@@ -723,7 +723,7 @@ export async function generateBriefingFromData(
   const t0 = performance.now();
   const message = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
+    max_tokens: 2000,
     system: briefingSystemPrompt(district) + getLanguageInstruction(lang),
     messages: [{ role: 'user', content: userContent }],
   });
