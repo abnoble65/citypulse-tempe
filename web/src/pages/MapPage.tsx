@@ -149,7 +149,6 @@ interface PermitRow {
   filed_date?:             string;
   issued_date?:            string;
   completed_date?:         string;
-  permit_expiration_date?: string;
   neighborhoods_analysis_boundaries?: string;
   existing_use?:           string;
   proposed_use?:           string;
@@ -217,7 +216,7 @@ interface ThreeOneOneRow {
   service_subtype?:    string;
   service_details?:    string;
   address?:            string;
-  neighborhood?:       string;
+  neighborhoods_sffind_boundaries?: string;
   agency_responsible?: string;
   lat?:  string;
   long?: string;
@@ -477,19 +476,21 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
 
     const params = new URLSearchParams({
       $where:  distWhere,
-      $select: "permit_number,street_number,street_name,street_suffix,permit_type_definition,estimated_cost,revised_cost,status,description,filed_date,issued_date,completed_date,permit_expiration_date,neighborhoods_analysis_boundaries,existing_use,proposed_use,location",
+      $select: "permit_number,street_number,street_name,street_suffix,permit_type_definition,estimated_cost,revised_cost,status,description,filed_date,issued_date,completed_date,neighborhoods_analysis_boundaries,existing_use,proposed_use,location",
       $limit:  "1500",
       $order:  "estimated_cost DESC",
     });
 
     fetch(`${DATASF}/i98e-djp9.json?${params}`)
-      .then(r => r.json())
-      .then((rows: PermitRow[]) => {
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((data: unknown) => {
+        if (!Array.isArray(data)) { console.error("[MapPage] permits: unexpected response", data); return; }
+        const rows = data as PermitRow[];
         const valid = rows.filter(r => r.location?.coordinates);
         console.log(`[MapPage] permits: ${rows.length} total, ${valid.length} with coords`);
         setPermits(valid);
       })
-      .catch(err => console.warn("[MapPage] permits fetch failed:", err));
+      .catch(err => console.error("[MapPage] permits fetch failed:", err));
   }, [districtConfig]);
 
   // ── Fetch evictions (DataSF 5cei-gny5) ───────────────────────────────────────
@@ -511,7 +512,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
         console.log(`[MapPage] evictions: ${rows.length} total, ${valid.length} with coords`);
         setEvictions(valid);
       })
-      .catch(err => console.warn("[MapPage] evictions fetch failed:", err));
+      .catch(err => console.error("[MapPage] evictions fetch failed:", err));
   }, [districtConfig]);
 
   // ── Fetch affordable housing + geocode ─────────────────────────────────────
@@ -557,7 +558,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
           });
         setAhMarkers(markers);
       })
-      .catch(err => console.warn("[MapPage] affordable housing fetch failed:", err));
+      .catch(err => console.error("[MapPage] affordable housing fetch failed:", err));
   }, [districtConfig]);
 
   // ── Fetch 311 requests (DataSF vw6y-z8j6) — re-fetches on dateRange change ──
@@ -572,19 +573,21 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
 
     const params = new URLSearchParams({
       $where:  distWhere,
-      $select: "service_request_id,requested_datetime,updated_datetime,closed_date,status_description,service_name,service_subtype,service_details,address,neighborhood,agency_responsible,lat,long",
+      $select: "service_request_id,requested_datetime,updated_datetime,closed_date,status_description,service_name,service_subtype,service_details,address,neighborhoods_sffind_boundaries,agency_responsible,lat,long",
       $limit:  "2000",
       $order:  "requested_datetime DESC",
     });
 
     fetch(`${DATASF}/vw6y-z8j6.json?${params}`)
-      .then(r => r.json())
-      .then((rows: ThreeOneOneRow[]) => {
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((data: unknown) => {
+        if (!Array.isArray(data)) { console.error("[MapPage] 311: unexpected response", data); return; }
+        const rows = data as ThreeOneOneRow[];
         const valid = rows.filter(r => r.lat && r.long && !isNaN(parseFloat(r.lat)) && !isNaN(parseFloat(r.long)));
         console.log(`[MapPage] 311 (${dateRange}d): ${rows.length} total, ${valid.length} with coords`);
         setThreeOneOne(valid);
       })
-      .catch(err => console.warn("[MapPage] 311 fetch failed:", err));
+      .catch(err => console.error("[MapPage] 311 fetch failed:", err));
   }, [districtConfig, dateRange]);
 
   // ── Fetch CBD boundaries (DataSF c28a-f6gs) ────────────────────────────────
@@ -601,7 +604,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
         console.log(`[MapPage] CBDs: ${rows.length} total, ${valid.length} with boundaries`);
         setCbdRows(valid);
       })
-      .catch(err => console.warn("[MapPage] CBD boundaries fetch failed:", err));
+      .catch(err => console.error("[MapPage] CBD boundaries fetch failed:", err));
   }, []);
 
   // ── Fetch neighborhood boundaries GeoJSON ──────────────────────────────────
@@ -616,7 +619,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
         }
         setNhGeoJSON(geojson as GeoJSON.FeatureCollection);
       })
-      .catch(err => console.warn("[MapPage] neighborhoods fetch failed:", err));
+      .catch(err => console.error("[MapPage] neighborhoods fetch failed:", err));
   }, []);
 
   // ── Fetch supervisor district boundary ────────────────────────────────────
@@ -1198,7 +1201,6 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
                         <DRow label="Filed" value={fmtDate(r.filed_date)} />
                         <DRow label="Issued" value={fmtDate(r.issued_date)} />
                         <DRow label="Completed" value={fmtDate(r.completed_date)} />
-                        <DRow label="Expires" value={fmtDate(r.permit_expiration_date)} />
                         <DRow label="Neighborhood" value={r.neighborhoods_analysis_boundaries} />
                         <DRow label="Estimated Cost" value={estCost} />
                         {revCost && revCost !== estCost && <DRow label="Revised Cost" value={revCost} />}
@@ -1330,7 +1332,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
                         <DRow label="Opened" value={fmtDate(r.requested_datetime)} />
                         <DRow label="Updated" value={fmtDate(r.updated_datetime)} />
                         <DRow label="Closed" value={fmtDate(r.closed_date)} />
-                        <DRow label="Neighborhood" value={r.neighborhood} />
+                        <DRow label="Neighborhood" value={r.neighborhoods_sffind_boundaries} />
                         <DRow label="Agency" value={r.agency_responsible} />
                         {r.service_details && (
                           <div style={{
