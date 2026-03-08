@@ -6,9 +6,11 @@ interface FilterBarProps {
   districtConfig: DistrictConfig;
   selected: string;
   onSelect: (name: string) => void;
+  /** When true, pills wrap to multiple lines instead of horizontal scrolling */
+  wrap?: boolean;
 }
 
-export function FilterBar({ districtConfig, selected, onSelect }: FilterBarProps) {
+export function FilterBar({ districtConfig, selected, onSelect, wrap = false }: FilterBarProps) {
   const pills = [
     { name: districtConfig.allLabel, Icon: DistrictIcon },
     ...districtConfig.neighborhoods.map(n => ({ name: n.name, Icon: n.Icon })),
@@ -19,10 +21,10 @@ export function FilterBar({ districtConfig, selected, onSelect }: FilterBarProps
       display: "flex", gap: 8, padding: "10px 16px",
       background: COLORS.white,
       borderBottom: `1px solid ${COLORS.lightBorder}`,
-      overflowX: "auto",
-      WebkitOverflowScrolling: "touch",
-      flexWrap: "nowrap",
-      scrollbarWidth: "none" as const,
+      ...(wrap
+        ? { flexWrap: "wrap" as const }
+        : { overflowX: "auto" as const, WebkitOverflowScrolling: "touch" as const, flexWrap: "nowrap" as const, scrollbarWidth: "none" as const }
+      ),
     }}>
       {pills.map(({ name, Icon }) => {
         const active = selected === name;

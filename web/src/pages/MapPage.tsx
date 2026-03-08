@@ -712,6 +712,17 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
           box-shadow: 2px 0 8px rgba(0,0,0,0.06);
         }
         .cp-map-toggle:hover { background: #f9fafb; }
+        /* ── Right-side detail panel ── */
+        .cp-detail-panel {
+          position: absolute; top: 0; right: 0; bottom: 0;
+          width: 340px; max-width: 100%;
+          background: #fff; border-left: 1px solid #e5e7eb;
+          z-index: 500; box-shadow: -4px 0 16px rgba(0,0,0,0.08);
+          transform: translateX(100%);
+          transition: transform 0.25s ease;
+          overflow-y: auto;
+        }
+        .cp-detail-panel.open { transform: translateX(0); }
         @media (max-width: 768px) {
           .cp-map-sidebar {
             position: fixed !important; bottom: 0 !important; left: 0 !important;
@@ -725,6 +736,18 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
           }
           .cp-map-toggle { display: none !important; }
           .cp-map-area { width: 100% !important; }
+          .cp-detail-panel {
+            position: fixed !important; bottom: 0 !important; left: 0 !important;
+            right: 0 !important; top: auto !important;
+            width: 100% !important; max-height: 55vh !important;
+            border-radius: 16px 16px 0 0 !important;
+            border-left: none !important;
+            box-shadow: 0 -4px 16px rgba(0,0,0,0.12) !important;
+            transform: translateY(100%) !important;
+          }
+          .cp-detail-panel.open {
+            transform: translateY(0) !important;
+          }
         }
       `}</style>
 
@@ -752,170 +775,10 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
 
           {/* Neighborhood filter header */}
           <div style={{ borderBottom: "1px solid #e5e7eb", flexShrink: 0 }}>
-            <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
+            <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} wrap />
           </div>
 
-          {selected ? (
-            /* ── Detail panel ─────────────────────────────────── */
-            <div style={{ padding: "16px 18px", flex: 1 }}>
-              <div style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                marginBottom: 14,
-              }}>
-                <span style={{
-                  fontFamily: FONTS.body, fontSize: 11, fontWeight: 700, color: COLORS.charcoal,
-                  textTransform: "uppercase", letterSpacing: "0.05em",
-                }}>
-                  {selected.type === "permit" ? "Building Permit"
-                    : selected.type === "eviction" ? "Eviction Notice"
-                    : selected.type === "affordable" ? "Affordable Housing"
-                    : "311 Request"}
-                </span>
-                <button onClick={() => setSelected(null)} style={{
-                  background: "none", border: `1px solid ${COLORS.lightBorder}`,
-                  borderRadius: 6, padding: "2px 10px", cursor: "pointer",
-                  fontFamily: FONTS.body, fontSize: 11, color: COLORS.midGray,
-                }}>
-                  Close
-                </button>
-              </div>
-
-              {/* Permit detail */}
-              {selected.type === "permit" && (() => {
-                const r = selected.data;
-                const addr = [r.street_number, r.street_name, r.street_suffix].filter(Boolean).join(" ") || "Unknown";
-                const cost = r.estimated_cost != null ? parseFloat(String(r.estimated_cost)) : null;
-                return (
-                  <div>
-                    <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
-                      {addr}
-                    </div>
-                    {[
-                      ["Type", cleanPermitLabel(r.permit_type_definition ?? "Permit")],
-                      ["Status", (r.status ?? "—").replace(/\b\w/g, c => c.toUpperCase())],
-                      ["Est. Cost", fmtCost(cost)],
-                      ["Permit #", r.permit_number ?? "—"],
-                    ].map(([label, val]) => (
-                      <div key={label} style={{
-                        display: "flex", justifyContent: "space-between",
-                        padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
-                        fontFamily: FONTS.body, fontSize: 12,
-                      }}>
-                        <span style={{ color: COLORS.warmGray }}>{label}</span>
-                        <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
-                      </div>
-                    ))}
-                    {r.description && (
-                      <div style={{
-                        marginTop: 12, padding: "10px 12px",
-                        background: COLORS.cream, borderRadius: 8,
-                        fontFamily: FONTS.body, fontSize: 12, color: COLORS.midGray,
-                        lineHeight: 1.5,
-                      }}>
-                        {(r.description).slice(0, 200)}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* Eviction detail */}
-              {selected.type === "eviction" && (() => {
-                const r = selected.data;
-                const fmtBool = (v: boolean | undefined) => v === true ? "Yes" : v === false ? "No" : "—";
-                return (
-                  <div>
-                    <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
-                      {r.address ?? "Unknown address"}
-                    </div>
-                    {[
-                      ["Date Filed", fmtDate(r.file_date)],
-                      ["Non-Payment", fmtBool(r.non_payment)],
-                      ["Owner Move-In", fmtBool(r.owner_move_in)],
-                      ["Ellis Act", fmtBool(r.ellis_act_withdrawal)],
-                      ["Breach", fmtBool(r.breach)],
-                      ["Neighborhood", r.neighborhood ?? "—"],
-                    ].map(([label, val]) => (
-                      <div key={label} style={{
-                        display: "flex", justifyContent: "space-between",
-                        padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
-                        fontFamily: FONTS.body, fontSize: 12,
-                      }}>
-                        <span style={{ color: COLORS.warmGray }}>{label}</span>
-                        <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-
-              {/* Affordable housing detail */}
-              {selected.type === "affordable" && (() => {
-                const m = selected.data;
-                return (
-                  <div>
-                    <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
-                      {m.name}
-                    </div>
-                    {[
-                      ["Address", m.address],
-                      ["Status", m.status],
-                      ["Affordable Units", m.units],
-                      ["% Affordable", m.pct],
-                      ["Est. Completion", m.completion],
-                    ].map(([label, val]) => (
-                      <div key={label} style={{
-                        display: "flex", justifyContent: "space-between",
-                        padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
-                        fontFamily: FONTS.body, fontSize: 12,
-                      }}>
-                        <span style={{ color: COLORS.warmGray }}>{label}</span>
-                        <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-
-              {/* 311 detail */}
-              {selected.type === "311" && (() => {
-                const r = selected.data;
-                const cat = normalize311(r.service_name);
-                const catColor = CAT_311[cat] ?? "#6B7280";
-                return (
-                  <div>
-                    <div style={{
-                      display: "inline-flex", alignItems: "center", gap: 5,
-                      padding: "3px 10px", borderRadius: 10, fontSize: 12,
-                      background: catColor + "18", color: catColor, fontWeight: 600,
-                      marginBottom: 10,
-                    }}>
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: catColor }} />
-                      {cat}
-                    </div>
-                    <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
-                      {r.address ?? "Unknown"}
-                    </div>
-                    {[
-                      ["Date", fmtDate(r.requested_datetime)],
-                      ["Status", r.status_description ?? "—"],
-                      ["Subcategory", r.service_subtype ?? "—"],
-                    ].map(([label, val]) => (
-                      <div key={label} style={{
-                        display: "flex", justifyContent: "space-between",
-                        padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
-                        fontFamily: FONTS.body, fontSize: 12,
-                      }}>
-                        <span style={{ color: COLORS.warmGray }}>{label}</span>
-                        <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
-          ) : (
-            /* ── Filter / legend panel ────────────────────────── */
+          {/* ── Filter / legend panel (always visible) ──────── */}
             <div style={{ padding: "16px 18px", flex: 1 }}>
               {/* Layers */}
               <SidebarHeading text="Layers" />
@@ -1011,7 +874,6 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
                 </div>
               )}
             </div>
-          )}
         </div>
 
         {/* ── Map area ─────────────────────────────────────────── */}
@@ -1216,6 +1078,206 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
               );
             })}
           </MapContainer>
+
+          {/* ── Right-side detail panel (slides over map) ──── */}
+          <div className={`cp-detail-panel ${selected ? "open" : ""}`}>
+            {selected && (
+              <div style={{ padding: "18px 20px" }}>
+                <div style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  marginBottom: 14,
+                }}>
+                  <span style={{
+                    fontFamily: FONTS.body, fontSize: 11, fontWeight: 700, color: COLORS.charcoal,
+                    textTransform: "uppercase", letterSpacing: "0.05em",
+                  }}>
+                    {selected.type === "permit" ? "Building Permit"
+                      : selected.type === "eviction" ? "Eviction Notice"
+                      : selected.type === "affordable" ? "Affordable Housing"
+                      : "311 Request"}
+                  </span>
+                  <button onClick={() => setSelected(null)} style={{
+                    background: "none", border: `1px solid ${COLORS.lightBorder}`,
+                    borderRadius: 6, padding: "2px 10px", cursor: "pointer",
+                    fontFamily: FONTS.body, fontSize: 11, color: COLORS.midGray,
+                  }}>
+                    Close
+                  </button>
+                </div>
+
+                {/* Permit detail */}
+                {selected.type === "permit" && (() => {
+                  const r = selected.data;
+                  const addr = [r.street_number, r.street_name, r.street_suffix].filter(Boolean).join(" ") || "Unknown";
+                  const cost = r.estimated_cost != null ? parseFloat(String(r.estimated_cost)) : null;
+                  return (
+                    <div>
+                      <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
+                        {addr}
+                      </div>
+                      {[
+                        ["Type", cleanPermitLabel(r.permit_type_definition ?? "Permit")],
+                        ["Status", (r.status ?? "—").replace(/\b\w/g, c => c.toUpperCase())],
+                        ["Est. Cost", fmtCost(cost)],
+                        ["Permit #", r.permit_number ?? "—"],
+                      ].map(([label, val]) => (
+                        <div key={label} style={{
+                          display: "flex", justifyContent: "space-between",
+                          padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
+                          fontFamily: FONTS.body, fontSize: 12,
+                        }}>
+                          <span style={{ color: COLORS.warmGray }}>{label}</span>
+                          <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
+                        </div>
+                      ))}
+                      {r.description && (
+                        <div style={{
+                          marginTop: 12, padding: "10px 12px",
+                          background: COLORS.cream, borderRadius: 8,
+                          fontFamily: FONTS.body, fontSize: 12, color: COLORS.midGray,
+                          lineHeight: 1.5,
+                        }}>
+                          {(r.description).slice(0, 200)}
+                        </div>
+                      )}
+                      {r.permit_number && (
+                        <a
+                          href={`https://dbiweb02.sfgov.org/dbipts/default.aspx?page=Permit&PermitNumber=${r.permit_number}`}
+                          target="_blank" rel="noopener noreferrer"
+                          style={{
+                            display: "inline-block", marginTop: 14,
+                            fontFamily: FONTS.body, fontSize: 12, fontWeight: 600,
+                            color: COLORS.orange, textDecoration: "none",
+                          }}
+                        >
+                          View official record &rarr;
+                        </a>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Eviction detail */}
+                {selected.type === "eviction" && (() => {
+                  const r = selected.data;
+                  const fmtBool = (v: boolean | undefined) => v === true ? "Yes" : v === false ? "No" : "—";
+                  return (
+                    <div>
+                      <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
+                        {r.address ?? "Unknown address"}
+                      </div>
+                      {[
+                        ["Date Filed", fmtDate(r.file_date)],
+                        ["Non-Payment", fmtBool(r.non_payment)],
+                        ["Owner Move-In", fmtBool(r.owner_move_in)],
+                        ["Ellis Act", fmtBool(r.ellis_act_withdrawal)],
+                        ["Breach", fmtBool(r.breach)],
+                        ["Neighborhood", r.neighborhood ?? "—"],
+                      ].map(([label, val]) => (
+                        <div key={label} style={{
+                          display: "flex", justifyContent: "space-between",
+                          padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
+                          fontFamily: FONTS.body, fontSize: 12,
+                        }}>
+                          <span style={{ color: COLORS.warmGray }}>{label}</span>
+                          <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
+                        </div>
+                      ))}
+                      <a
+                        href="https://data.sfgov.org/Housing-and-Buildings/Eviction-Notices/5cei-gny5"
+                        target="_blank" rel="noopener noreferrer"
+                        style={{
+                          display: "inline-block", marginTop: 14,
+                          fontFamily: FONTS.body, fontSize: 12, fontWeight: 600,
+                          color: COLORS.orange, textDecoration: "none",
+                        }}
+                      >
+                        View eviction records on DataSF &rarr;
+                      </a>
+                    </div>
+                  );
+                })()}
+
+                {/* Affordable housing detail */}
+                {selected.type === "affordable" && (() => {
+                  const m = selected.data;
+                  return (
+                    <div>
+                      <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
+                        {m.name}
+                      </div>
+                      {[
+                        ["Address", m.address],
+                        ["Status", m.status],
+                        ["Affordable Units", m.units],
+                        ["% Affordable", m.pct],
+                        ["Est. Completion", m.completion],
+                      ].map(([label, val]) => (
+                        <div key={label} style={{
+                          display: "flex", justifyContent: "space-between",
+                          padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
+                          fontFamily: FONTS.body, fontSize: 12,
+                        }}>
+                          <span style={{ color: COLORS.warmGray }}>{label}</span>
+                          <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
+                {/* 311 detail */}
+                {selected.type === "311" && (() => {
+                  const r = selected.data;
+                  const cat = normalize311(r.service_name);
+                  const catColor = CAT_311[cat] ?? "#6B7280";
+                  return (
+                    <div>
+                      <div style={{
+                        display: "inline-flex", alignItems: "center", gap: 5,
+                        padding: "3px 10px", borderRadius: 10, fontSize: 12,
+                        background: catColor + "18", color: catColor, fontWeight: 600,
+                        marginBottom: 10,
+                      }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: catColor }} />
+                        {cat}
+                      </div>
+                      <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
+                        {r.address ?? "Unknown"}
+                      </div>
+                      {[
+                        ["Date", fmtDate(r.requested_datetime)],
+                        ["Status", r.status_description ?? "—"],
+                        ["Subcategory", r.service_subtype ?? "—"],
+                      ].map(([label, val]) => (
+                        <div key={label} style={{
+                          display: "flex", justifyContent: "space-between",
+                          padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
+                          fontFamily: FONTS.body, fontSize: 12,
+                        }}>
+                          <span style={{ color: COLORS.warmGray }}>{label}</span>
+                          <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
+                        </div>
+                      ))}
+                      {r.service_request_id && (
+                        <a
+                          href={`https://sf311.org/report/${r.service_request_id}`}
+                          target="_blank" rel="noopener noreferrer"
+                          style={{
+                            display: "inline-block", marginTop: 14,
+                            fontFamily: FONTS.body, fontSize: 12, fontWeight: 600,
+                            color: COLORS.orange, textDecoration: "none",
+                          }}
+                        >
+                          View official record &rarr;
+                        </a>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>
