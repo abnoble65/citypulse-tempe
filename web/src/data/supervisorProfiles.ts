@@ -40,6 +40,8 @@ export interface SupervisorProfile {
   altName?: string;
   termStart: string;
   termEnd: string;
+  /** Optional note displayed beside term dates (e.g. "Final term"). */
+  termNote?: string;
   /** Short background paragraph. */
   background: string;
   education: string;
@@ -64,6 +66,7 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
     altName: "陳詩敏",
     termStart: "January 8, 2025",
     termEnd: "January 8, 2029",
+    termNote: "Final term",
     background:
       "Born in Hong Kong, Chan moved to San Francisco at age 13 with her mother and younger brother. Her family obtained a rent-controlled Chinatown apartment, and her mother worked as a claims processor at Chinese Hospital. She graduated from Galileo High School and earned her bachelor's degree from UC Davis. She began her career as a volunteer interpreter with the SF Bar Association's Volunteer Legal Outreach and in community organizer roles with SF SAFE and Community Youth Center.",
     education: "UC Davis (bachelor's degree). Galileo High School graduate.",
@@ -615,6 +618,7 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
     name: "Rafael Mandelman",
     termStart: "January 8, 2023",
     termEnd: "January 8, 2027",
+    termNote: "Final term",
     background:
       "Represents District 8, including Castro, Glen Park, Noe Valley, Diamond Heights, Mission Dolores, and Cole Valley. One of the LGBTQ members of the Board of Supervisors and was one of the only LGBTQ Supervisors in Northern California during his first term. Currently serves as President of the Board of Supervisors.",
     education: "",

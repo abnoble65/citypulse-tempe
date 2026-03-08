@@ -217,8 +217,20 @@ export function SupervisorProfileCard({
           <div style={{
             fontFamily: FONTS.body, fontSize: 13,
             color: "#999", marginTop: 1,
+            display: "flex", alignItems: "center", gap: 8,
           }}>
             {profile.termStart} – {profile.termEnd}
+            {profile.termNote && (
+              <span style={{
+                fontSize: 10, fontWeight: 600,
+                color: "#9CA3AF",
+                background: "#F3F4F6",
+                borderRadius: 4, padding: "1px 6px",
+                letterSpacing: "0.03em",
+              }}>
+                {profile.termNote}
+              </span>
+            )}
           </div>
           {/* Divider + top committee */}
           <div style={{
