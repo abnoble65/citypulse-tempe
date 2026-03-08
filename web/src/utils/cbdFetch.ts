@@ -20,8 +20,14 @@ export interface CBDPermitRow {
   description: string;
   status: string;
   cost: number;
+  revisedCost: number;
   address: string;
   filedDate: string;
+  issuedDate: string;
+  completedDate: string;
+  neighborhood: string;
+  existingUse: string;
+  proposedUse: string;
   month: string;
 }
 
@@ -38,14 +44,18 @@ export interface CBDBusinessRow {
 export interface CBD311Row {
   lat: number;
   lng: number;
+  serviceRequestId: string;
   category: string;
   address: string;
   neighborhood?: string;
   date: string;
+  updatedDate: string;
   closedDate: string | null;
   month: string;
   status?: string;
   subtype?: string;
+  serviceDetails?: string;
+  agencyResponsible?: string;
 }
 
 // ── Bounding box from GeoJSON ───────────────────────────────────────────────
@@ -87,7 +97,7 @@ export async function fetch311ForCBD(
 
   const params = new URLSearchParams({
     $where,
-    $select: "lat,long,service_name,service_subtype,address,neighborhoods_sffind_boundaries,requested_datetime,closed_date,status_description",
+    $select: "service_request_id,lat,long,service_name,service_subtype,service_details,address,neighborhoods_sffind_boundaries,requested_datetime,updated_datetime,closed_date,status_description,agency_responsible",
     $limit: String(limit),
     $order: "requested_datetime DESC",
   });
@@ -98,7 +108,9 @@ export async function fetch311ForCBD(
   const res = await fetch(url, { signal });
 
   if (!res.ok) throw new Error(`DataSF returned ${res.status}`);
-  const raw: any[] = await res.json();
+  const data = await res.json();
+  if (!Array.isArray(data)) { console.error("[fetch311ForCBD] unexpected response", data); return []; }
+  const raw: any[] = data;
 
   const rows: CBD311Row[] = [];
   for (const r of raw) {
@@ -106,17 +118,22 @@ export async function fetch311ForCBD(
     const lng = parseFloat(r.long);
     if (isNaN(lat) || isNaN(lng)) continue;
     const dt = r.requested_datetime ?? "";
+    const ud = r.updated_datetime ?? "";
     const cd = r.closed_date ?? null;
     rows.push({
       lat, lng,
+      serviceRequestId: r.service_request_id ?? "",
       category: r.service_name ?? "",
       address: r.address ?? "",
       neighborhood: r.neighborhoods_sffind_boundaries ?? undefined,
       date: dt.split("T")[0],
+      updatedDate: ud ? ud.split("T")[0] : "",
       closedDate: cd ? cd.split("T")[0] : null,
       month: dt.slice(0, 7),
       status: r.status_description,
       subtype: r.service_subtype,
+      serviceDetails: r.service_details ?? undefined,
+      agencyResponsible: r.agency_responsible ?? undefined,
     });
   }
 
@@ -147,7 +164,7 @@ export async function fetchPermitsForCBD(
 
   const params = new URLSearchParams({
     $where,
-    $select: "permit_number,permit_type_definition,description,status,estimated_cost,street_number,street_name,street_suffix,filed_date,location",
+    $select: "permit_number,permit_type_definition,description,status,estimated_cost,revised_cost,street_number,street_name,street_suffix,filed_date,issued_date,completed_date,neighborhoods_analysis_boundaries,existing_use,proposed_use,location",
     $limit: String(limit),
     $order: "filed_date DESC",
   });
@@ -157,7 +174,9 @@ export async function fetchPermitsForCBD(
   const t0 = performance.now();
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`DataSF permits returned ${res.status}`);
-  const raw: any[] = await res.json();
+  const data = await res.json();
+  if (!Array.isArray(data)) { console.error("[fetchPermitsForCBD] unexpected response", data); return []; }
+  const raw: any[] = data;
 
   const rows: CBDPermitRow[] = [];
   for (const r of raw) {
@@ -166,6 +185,8 @@ export async function fetchPermitsForCBD(
     const lat = coords[1], lng = coords[0];
     if (isNaN(lat) || isNaN(lng)) continue;
     const dt = r.filed_date ?? "";
+    const id = r.issued_date ?? "";
+    const cd = r.completed_date ?? "";
     rows.push({
       lat, lng,
       permitNumber: r.permit_number ?? "",
@@ -173,8 +194,14 @@ export async function fetchPermitsForCBD(
       description: r.description ?? "",
       status: r.status ?? "",
       cost: parseFloat(r.estimated_cost) || 0,
+      revisedCost: parseFloat(r.revised_cost) || 0,
       address: [r.street_number, r.street_name, r.street_suffix].filter(Boolean).join(" "),
       filedDate: dt.split("T")[0],
+      issuedDate: id ? id.split("T")[0] : "",
+      completedDate: cd ? cd.split("T")[0] : "",
+      neighborhood: r.neighborhoods_analysis_boundaries ?? "",
+      existingUse: r.existing_use ?? "",
+      proposedUse: r.proposed_use ?? "",
       month: dt.slice(0, 7),
     });
   }

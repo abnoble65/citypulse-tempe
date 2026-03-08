@@ -123,6 +123,17 @@ function fmtCost(cost: number): string {
   return cost > 0 ? `$${cost.toFixed(0)}` : "\u2014";
 }
 
+function fmtCostFull(cost: number): string {
+  if (!cost || cost <= 0) return "";
+  return cost.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+}
+
+function fmtDate(d: string | undefined | null): string {
+  if (!d) return "";
+  try { return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
+  catch { return d; }
+}
+
 // ── Selected feature types ──────────────────────────────────────────────
 
 type SelectedFeature =
@@ -161,7 +172,7 @@ export function CBDMap() {
       setPermits(rPermit);
       setLoading(false);
     }).catch(err => {
-      if (err?.name !== "AbortError") console.warn("[CBDMap] fetch error:", err);
+      if (err?.name !== "AbortError") console.error("[CBDMap] fetch error:", err);
       setLoading(false);
     });
 
@@ -202,6 +213,16 @@ export function CBDMap() {
           box-shadow: 2px 0 8px rgba(0,0,0,0.06);
         }
         .cbd-map-toggle:hover { background: #f9fafb; }
+        .cbd-detail-panel {
+          position: absolute; top: 0; right: 0; bottom: 0;
+          width: 340px; max-width: 100%;
+          background: #fff; border-left: 1px solid #e5e7eb;
+          z-index: 500; box-shadow: -4px 0 16px rgba(0,0,0,0.08);
+          transform: translateX(100%);
+          transition: transform 0.25s ease;
+          overflow-y: auto;
+        }
+        .cbd-detail-panel.open { transform: translateX(0); }
         @media (max-width: 768px) {
           .cbd-map-sidebar {
             position: fixed !important; bottom: 0 !important; left: 0 !important;
@@ -215,6 +236,18 @@ export function CBDMap() {
           }
           .cbd-map-toggle { display: none !important; }
           .cbd-map-area { width: 100% !important; }
+          .cbd-detail-panel {
+            position: fixed !important; bottom: 0 !important; left: 0 !important;
+            right: 0 !important; top: auto !important;
+            width: 100% !important; max-height: 55vh !important;
+            border-radius: 16px 16px 0 0 !important;
+            border-left: none !important;
+            box-shadow: 0 -4px 16px rgba(0,0,0,0.12) !important;
+            transform: translateY(100%) !important;
+          }
+          .cbd-detail-panel.open {
+            transform: translateY(0) !important;
+          }
         }
       `}</style>
 
@@ -259,102 +292,7 @@ export function CBDMap() {
             </div>
           </div>
 
-          {/* Layer toggles */}
-          {selected ? (
-            /* Detail card for selected feature */
-            <div style={{ padding: "16px 20px", flex: 1 }}>
-              <div style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                marginBottom: 12,
-              }}>
-                <span style={{ fontFamily: FONTS.body, fontSize: 12, fontWeight: 700, color: "#1a1a2e", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  {selected.type === "311" ? "311 Request" : "Permit"}
-                </span>
-                <button onClick={() => setSelected(null)} style={{
-                  background: "none", border: `1px solid ${COLORS.lightBorder}`,
-                  borderRadius: 6, padding: "2px 10px", cursor: "pointer",
-                  fontFamily: FONTS.body, fontSize: 11, color: COLORS.midGray,
-                }}>
-                  Close
-                </button>
-              </div>
-
-              {selected.type === "311" && (() => {
-                const r = selected.data;
-                const cat = normalize311(r.category);
-                const catColor = CAT_311[cat] ?? "#6B7280";
-                return (
-                  <div>
-                    <div style={{
-                      display: "inline-flex", alignItems: "center", gap: 5,
-                      padding: "3px 10px", borderRadius: 10, fontSize: 12,
-                      background: catColor + "18", color: catColor, fontWeight: 600,
-                      marginBottom: 10,
-                    }}>
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: catColor }} />
-                      {cat}
-                    </div>
-                    <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: "#1a1a2e", marginBottom: 12 }}>
-                      {r.address}
-                    </div>
-                    {[
-                      ["Date", r.date],
-                      ["Status", r.status ?? "\u2014"],
-                      ["Subtype", r.subtype ?? "\u2014"],
-                      ["Neighborhood", r.neighborhood ?? "\u2014"],
-                      ["Resolution", r.closedDate ? `Closed ${r.closedDate}` : "Open"],
-                    ].map(([label, val]) => (
-                      <div key={label} style={{
-                        display: "flex", justifyContent: "space-between",
-                        padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
-                        fontFamily: FONTS.body, fontSize: 12,
-                      }}>
-                        <span style={{ color: COLORS.warmGray }}>{label}</span>
-                        <span style={{ color: "#1a1a2e", fontWeight: 500 }}>{val}</span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-
-              {selected.type === "permit" && (() => {
-                const p = selected.data;
-                return (
-                  <div>
-                    <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: "#1a1a2e", marginBottom: 12 }}>
-                      {p.address}
-                    </div>
-                    {[
-                      ["Type", p.type],
-                      ["Status", p.status],
-                      ["Est. Cost", fmtCost(p.cost)],
-                      ["Filed", p.filedDate],
-                      ["Permit #", p.permitNumber],
-                    ].map(([label, val]) => (
-                      <div key={label} style={{
-                        display: "flex", justifyContent: "space-between",
-                        padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
-                        fontFamily: FONTS.body, fontSize: 12,
-                      }}>
-                        <span style={{ color: COLORS.warmGray }}>{label}</span>
-                        <span style={{ color: "#1a1a2e", fontWeight: 500 }}>{val}</span>
-                      </div>
-                    ))}
-                    {p.description && (
-                      <div style={{
-                        marginTop: 12, padding: "10px 12px",
-                        background: COLORS.cream, borderRadius: 8,
-                        fontFamily: FONTS.body, fontSize: 12, color: COLORS.midGray,
-                        lineHeight: 1.5,
-                      }}>
-                        {p.description}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-          ) : (
+          {/* Layer toggles (always visible) */}
             <div style={{ padding: "16px 20px", flex: 1 }}>
               {/* Layers */}
               <div style={{
@@ -469,7 +407,6 @@ export function CBDMap() {
                 </div>
               ))}
             </div>
-          )}
         </div>
 
         {/* Map area */}
@@ -539,11 +476,158 @@ export function CBDMap() {
             ))}
           </MapContainer>
 
+          {/* ── Right-side detail panel (slides over map) ──── */}
+          <div className={`cbd-detail-panel ${selected ? "open" : ""}`}>
+            {selected && (() => {
+              const DRow = ({ label, value }: { label: string; value: string | undefined | null }) => {
+                if (!value) return null;
+                return (
+                  <div style={{
+                    display: "flex", justifyContent: "space-between", gap: 12,
+                    padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
+                    fontFamily: FONTS.body, fontSize: 12,
+                  }}>
+                    <span style={{
+                      color: COLORS.warmGray, fontSize: 10, fontWeight: 700,
+                      textTransform: "uppercase", letterSpacing: "0.04em",
+                      flexShrink: 0, paddingTop: 1,
+                    }}>{label}</span>
+                    <span style={{ color: COLORS.charcoal, fontWeight: 500, textAlign: "right" }}>{value}</span>
+                  </div>
+                );
+              };
+
+              const RecordLink = ({ href, label }: { href: string; label: string }) => (
+                <>
+                  <div style={{ borderTop: `1px solid ${COLORS.lightBorder}`, margin: "16px 0 12px" }} />
+                  <a href={href} target="_blank" rel="noopener noreferrer" style={{
+                    fontFamily: FONTS.body, fontSize: 12, fontWeight: 600,
+                    color: COLORS.orange, textDecoration: "none",
+                  }}>
+                    {label} &rarr;
+                  </a>
+                </>
+              );
+
+              const typeLabel = selected.type === "311" ? "311 Request" : "Building Permit";
+
+              return (
+                <div style={{ padding: "18px 20px" }}>
+                  <div style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    marginBottom: 4,
+                  }}>
+                    <span style={{
+                      fontFamily: FONTS.body, fontSize: 10, fontWeight: 700, color: COLORS.warmGray,
+                      textTransform: "uppercase", letterSpacing: "0.06em",
+                    }}>
+                      {typeLabel}
+                    </span>
+                    <button onClick={() => setSelected(null)} style={{
+                      background: "none", border: `1px solid ${COLORS.lightBorder}`,
+                      borderRadius: 6, padding: "2px 10px", cursor: "pointer",
+                      fontFamily: FONTS.body, fontSize: 11, color: COLORS.midGray,
+                    }}>
+                      Close
+                    </button>
+                  </div>
+
+                  {/* ── Permit detail ───────────────── */}
+                  {selected.type === "permit" && (() => {
+                    const p = selected.data;
+                    const estCost = fmtCostFull(p.cost);
+                    const revCost = fmtCostFull(p.revisedCost);
+                    return (
+                      <>
+                        <div style={{ fontFamily: FONTS.body, fontSize: 16, fontWeight: 700, color: COLORS.charcoal, marginBottom: 14, lineHeight: 1.3 }}>
+                          {p.address || "Unknown"}
+                        </div>
+                        <DRow label="Permit #" value={p.permitNumber} />
+                        <DRow label="Type" value={p.type} />
+                        <DRow label="Status" value={p.status ? p.status.replace(/\b\w/g, c => c.toUpperCase()) : undefined} />
+                        <DRow label="Filed" value={fmtDate(p.filedDate)} />
+                        <DRow label="Issued" value={fmtDate(p.issuedDate)} />
+                        <DRow label="Completed" value={fmtDate(p.completedDate)} />
+                        <DRow label="Neighborhood" value={p.neighborhood} />
+                        <DRow label="Estimated Cost" value={estCost} />
+                        {revCost && revCost !== estCost && <DRow label="Revised Cost" value={revCost} />}
+                        <DRow label="Existing Use" value={p.existingUse} />
+                        <DRow label="Proposed Use" value={p.proposedUse} />
+                        {p.description && (
+                          <div style={{
+                            marginTop: 14, padding: "10px 12px",
+                            background: COLORS.cream, borderRadius: 8,
+                            fontFamily: FONTS.body, fontSize: 12, color: COLORS.midGray,
+                            lineHeight: 1.55, fontStyle: "italic",
+                          }}>
+                            {p.description}
+                          </div>
+                        )}
+                        {p.permitNumber && (
+                          <RecordLink
+                            href={`https://dbiweb02.sfgov.org/dbipts/default.aspx?page=Permit&PermitNumber=${p.permitNumber}`}
+                            label="View official record"
+                          />
+                        )}
+                      </>
+                    );
+                  })()}
+
+                  {/* ── 311 detail ──────────────────── */}
+                  {selected.type === "311" && (() => {
+                    const r = selected.data;
+                    const cat = normalize311(r.category);
+                    const catColor = CAT_311[cat] ?? "#6B7280";
+                    return (
+                      <>
+                        <div style={{
+                          display: "inline-flex", alignItems: "center", gap: 5,
+                          padding: "3px 10px", borderRadius: 10, fontSize: 11,
+                          background: catColor + "18", color: catColor, fontWeight: 600,
+                          marginBottom: 8,
+                        }}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: catColor }} />
+                          {cat}
+                        </div>
+                        <div style={{ fontFamily: FONTS.body, fontSize: 16, fontWeight: 700, color: COLORS.charcoal, marginBottom: 14, lineHeight: 1.3 }}>
+                          {r.address || "Unknown"}
+                        </div>
+                        <DRow label="Request #" value={r.serviceRequestId} />
+                        <DRow label="Category" value={r.subtype || r.category} />
+                        <DRow label="Status" value={r.status} />
+                        <DRow label="Opened" value={fmtDate(r.date)} />
+                        <DRow label="Updated" value={fmtDate(r.updatedDate)} />
+                        <DRow label="Closed" value={fmtDate(r.closedDate)} />
+                        <DRow label="Neighborhood" value={r.neighborhood} />
+                        <DRow label="Agency" value={r.agencyResponsible} />
+                        {r.serviceDetails && (
+                          <div style={{
+                            marginTop: 14, padding: "10px 12px",
+                            background: COLORS.cream, borderRadius: 8,
+                            fontFamily: FONTS.body, fontSize: 12, color: COLORS.midGray,
+                            lineHeight: 1.55, fontStyle: "italic",
+                          }}>
+                            {r.serviceDetails}
+                          </div>
+                        )}
+                        {r.serviceRequestId && (
+                          <RecordLink
+                            href={`https://sf311.org/report/${r.serviceRequestId}`}
+                            label="View official record"
+                          />
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              );
+            })()}
+          </div>
+
           {/* Reset view button */}
           <button
             onClick={() => {
               setFlyTo(null);
-              // Force re-fit by toggling
               setTimeout(() => setFlyTo(mapCenter), 10);
             }}
             style={{
