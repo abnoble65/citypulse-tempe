@@ -73,9 +73,60 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
       { name: "Budget & Finance Committee", role: "Chair" },
       { name: "Budget & Appropriations Committee", role: "Chair" },
       { name: "SF County Transportation Authority", role: "Member" },
+      { name: "Local Agency Formation Commission", role: "Member" },
+      { name: "Free City College Oversight Committee", role: "Member" },
     ],
-    statedPriorities: [], // To be populated from supervisor's published materials
-    communityRecord: [], // To be populated from supervisor's published materials
+    statedPriorities: [
+      {
+        topic: "Budget Oversight",
+        position: "Chairs both Budget & Finance and Budget & Appropriations committees, leading fiscal oversight for the city.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-chan-district-1",
+        icon: "building",
+      },
+      {
+        topic: "API Equity",
+        position: "Established the API Equity Fund in 2022 to provide capital investments in Asian and Pacific Islander–serving community organizations.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-chan-district-1",
+        icon: "storefront",
+      },
+      {
+        topic: "LGBTQIA+ Protections",
+        position: "Supports gender-affirming care access and LGBTQIA+ youth protections citywide.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-chan-district-1",
+        icon: "shield",
+      },
+      {
+        topic: "Free City College",
+        position: "Serves on the Free City College Oversight Committee, supporting affordable education access for San Francisco residents.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-chan-district-1",
+        icon: "storefront",
+      },
+      {
+        topic: "Community Investment",
+        position: "Administers the Community Opportunity Fund to direct resources to underserved neighborhoods in the Richmond District.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-chan-district-1",
+        icon: "home",
+      },
+      {
+        topic: "Transportation",
+        position: "Serves on the SF County Transportation Authority, working on transit improvements for the westside.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-chan-district-1",
+        icon: "building",
+      },
+    ],
+    communityRecord: [
+      "Volunteer interpreter, SF Bar Association's Volunteer Legal Outreach",
+      "Community organizer, SF SAFE and Community Youth Center",
+      "Legislative aide to Supervisor Sophie Maxwell, DA Kamala Harris, Supervisor Aaron Peskin, and Assemblymember Kevin Mullin",
+      "Administrative roles at SF Recreation & Parks and City College of SF",
+      "Richmond District homeowner raising a son in public school",
+    ],
     contact: {
       office: "City Hall, Room 244, 1 Dr. Carlton B. Goodlett Place, SF 94102",
       phone: "(415) 554-7410",
@@ -83,6 +134,7 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
     },
     sources: [
       { label: "Official Board page", url: "https://sfbos.org/supervisor-chan-district-1" },
+      { label: "SF Board committee assignments", url: "https://sfbos.org/committees" },
     ],
   },
 
@@ -95,7 +147,7 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
     background:
       "Sherrill served as Director of the Mayor's Office of Innovation under Mayor London Breed, developing ASTRID to integrate housing, health, and emergency response data. Previously, he was a senior policy advisor in New York City under Mayor Michael Bloomberg, working on clean streets, disaster response, and sustainability initiatives including Hurricane Sandy relief efforts. Father of two young children.",
     education: "",
-    residency: "District 2 resident.",
+    residency: "District 2 resident. Frequently found at Marina Green, local coffee shops, and meeting with small business owners.",
     priorRole: "Director, Mayor's Office of Innovation. Senior policy advisor, New York City (under Mayor Michael Bloomberg).",
     committees: [
       { name: "Rules Committee", role: "Vice Chair" },
@@ -103,8 +155,57 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
       { name: "SF Downtown Revitalization & Economic Recovery Financing District", role: "Member" },
       { name: "SF County Transportation Authority", role: "Member" },
     ],
-    statedPriorities: [], // To be populated from supervisor's published materials
-    communityRecord: [], // To be populated from supervisor's published materials
+    statedPriorities: [
+      {
+        topic: "Public Safety",
+        position: "Committed to enhancing public safety across District 2 neighborhoods including the Marina, Pacific Heights, and Cow Hollow.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-sherrill-district-2",
+        icon: "shield",
+      },
+      {
+        topic: "Clean Neighborhoods",
+        position: "Prioritizes ensuring clean, safe neighborhoods through improved city services and accountability.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-sherrill-district-2",
+        icon: "trash",
+      },
+      {
+        topic: "Small Business",
+        position: "Supports small businesses through initiatives like 'First Year Free' to reduce barriers for new entrepreneurs.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-sherrill-district-2",
+        icon: "storefront",
+      },
+      {
+        topic: "Commercial Corridors",
+        position: "Focuses on improving commercial corridors to strengthen neighborhood vitality and economic activity.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-sherrill-district-2",
+        icon: "building",
+      },
+      {
+        topic: "Family-Friendly City",
+        position: "Works to make raising a family in San Francisco more feasible and joyful, as a father of two young children.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-sherrill-district-2",
+        icon: "home",
+      },
+      {
+        topic: "Data-Driven Government",
+        position: "Created ASTRID to integrate housing, health, and emergency response data as Director of the Mayor's Office of Innovation.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-sherrill-district-2",
+        icon: "building",
+      },
+    ],
+    communityRecord: [
+      "Director, Mayor's Office of Innovation under Mayor London Breed",
+      "Created ASTRID system integrating housing, health, and emergency response data",
+      "Senior policy advisor in NYC under Mayor Michael Bloomberg",
+      "Led Hurricane Sandy emergency response and sustainability initiatives in NYC",
+      "Father of two young children, active in District 2 community",
+    ],
     contact: {
       office: "City Hall, Room 244, 1 Dr. Carlton B. Goodlett Place, SF 94102",
       phone: "(415) 554-7752",
@@ -112,6 +213,7 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
     },
     sources: [
       { label: "Official Board page", url: "https://sfbos.org/supervisor-sherrill-district-2" },
+      { label: "SF Board committee assignments", url: "https://sfbos.org/committees" },
     ],
   },
 
@@ -212,8 +314,50 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
       { name: "Public Safety and Neighborhood Services Committee", role: "Member" },
       { name: "SF County Transportation Authority", role: "Member" },
     ],
-    statedPriorities: [], // To be populated from supervisor's published materials
-    communityRecord: [], // To be populated from supervisor's published materials
+    statedPriorities: [
+      {
+        topic: "Free City College",
+        position: "Champions preserving Free City College as an accessible educational resource for all San Francisco residents.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-wong-district-4",
+        icon: "storefront",
+      },
+      {
+        topic: "Language Access",
+        position: "Advocates for protecting Cantonese language programs to serve the district's large Chinese-speaking community.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-wong-district-4",
+        icon: "building",
+      },
+      {
+        topic: "Affordable Education",
+        position: "Works to keep educational opportunities affordable and accessible for San Francisco residents at all levels.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-wong-district-4",
+        icon: "storefront",
+      },
+      {
+        topic: "Public Safety",
+        position: "Completed SFPD Community Police Academy and serves on the Public Safety and Neighborhood Services Committee.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-wong-district-4",
+        icon: "shield",
+      },
+      {
+        topic: "Emergency Preparedness",
+        position: "Trained in SF Fire Department's Neighborhood Emergency Response Team (NERT) program for community disaster readiness.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-wong-district-4",
+        icon: "shield",
+      },
+    ],
+    communityRecord: [
+      "City College Board of Trustees – 5 years, two terms as board president",
+      "California Army National Guard – 15+ years, paralegal specialist to public affairs commander",
+      "Legislative aide, Board of Supervisors",
+      "Children's Council of San Francisco – assisting families with child care services",
+      "SF Fire Department NERT training and SFPD Community Police Academy graduate",
+    ],
     contact: {
       office: "City Hall, Room 244, 1 Dr. Carlton B. Goodlett Place, SF 94102",
       phone: "(415) 554-7460",
@@ -221,6 +365,7 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
     },
     sources: [
       { label: "Official Board page", url: "https://sfbos.org/supervisor-wong-district-4" },
+      { label: "SF Board committee assignments", url: "https://sfbos.org/committees" },
     ],
   },
 
@@ -241,8 +386,58 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
       { name: "Land Use and Transportation Committee", role: "Member" },
       { name: "SF County Transportation Authority", role: "Member" },
     ],
-    statedPriorities: [], // To be populated from supervisor's published materials
-    communityRecord: [], // To be populated from supervisor's published materials
+    statedPriorities: [
+      {
+        topic: "Street Safety",
+        position: "Leading a Street Safety Investment Priorities Survey to allocate $700,000 in Neighborhood Transportation Program funds toward painted safety zones, speed humps, and raised crosswalks.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-mahmood-district-5",
+        icon: "shield",
+      },
+      {
+        topic: "Housing Crisis",
+        position: "Advancing resolutions to address the housing crisis through increased production and affordability measures.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-mahmood-district-5",
+        icon: "home",
+      },
+      {
+        topic: "Fentanyl Crisis",
+        position: "Advancing resolutions to address the fentanyl and substance abuse crisis in the Tenderloin and citywide.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-mahmood-district-5",
+        icon: "pill",
+      },
+      {
+        topic: "Public Safety",
+        position: "Serves as Vice-Chair of the Public Safety and Neighborhood Services Committee, focusing on community safety in District 5.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-mahmood-district-5",
+        icon: "shield",
+      },
+      {
+        topic: "Zero-Emission Buildings",
+        position: "Advocates for zero-emission buildings as part of San Francisco's climate goals and sustainability efforts.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-mahmood-district-5",
+        icon: "trash",
+      },
+      {
+        topic: "Small Business",
+        position: "Cofounded a software company to democratize AI access for small and medium-sized businesses; focused on economic innovation in the Obama Administration.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-mahmood-district-5",
+        icon: "storefront",
+      },
+    ],
+    communityRecord: [
+      "First South Asian and Muslim-American elected to the SF Board of Supervisors",
+      "Policy analyst, Obama Administration US Office of Innovation and Entrepreneurship",
+      "Cofounded AI software company serving small and medium-sized businesses",
+      "Funded guaranteed income programs for restaurant workers during the pandemic",
+      "Organized AAPI bystander training programs and domestic violence awareness campaigns",
+      "Elected member, SF Democratic County Central Committee",
+    ],
     contact: {
       office: "City Hall, Room 244, 1 Dr. Carlton B. Goodlett Place, SF 94102",
       phone: "(415) 554-7630",
@@ -250,6 +445,7 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
     },
     sources: [
       { label: "Official Board page", url: "https://sfbos.org/supervisor-mahmood-district-5" },
+      { label: "SF Board committee assignments", url: "https://sfbos.org/committees" },
     ],
   },
 
@@ -272,8 +468,57 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
       { name: "SF County Transportation Authority", role: "Member" },
       { name: "Treasure Island Mobility Management Agency", role: "President" },
     ],
-    statedPriorities: [], // To be populated from supervisor's published materials
-    communityRecord: [], // To be populated from supervisor's published materials
+    statedPriorities: [
+      {
+        topic: "Recovery & Addiction",
+        position: "Committed to providing recovery pathways for individuals struggling with addiction, drawing on personal experience with substance-use disorder.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-dorsey-district-6",
+        icon: "pill",
+      },
+      {
+        topic: "Housing",
+        position: "Supports expanding housing at all affordability levels across District 6 and citywide.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-dorsey-district-6",
+        icon: "home",
+      },
+      {
+        topic: "Public Safety",
+        position: "Chairs the Public Safety and Neighborhood Services Committee, investing in resources to enhance community safety in SoMa and the Tenderloin.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-dorsey-district-6",
+        icon: "shield",
+      },
+      {
+        topic: "Public Health",
+        position: "Handled public health cases during 14 years in the City Attorney's Office; only openly HIV positive member of the Board.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-dorsey-district-6",
+        icon: "pill",
+      },
+      {
+        topic: "Tenant Protections",
+        position: "Worked on tenants rights and worker protections cases during his tenure in the City Attorney's Office.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-dorsey-district-6",
+        icon: "home",
+      },
+      {
+        topic: "Tobacco & Vaping",
+        position: "Led communications strategy for the 2019 campaign that successfully defeated JUUL-backed Proposition C.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-dorsey-district-6",
+        icon: "shield",
+      },
+    ],
+    communityRecord: [
+      "San Francisco City Attorney's Office – 14 years handling marriage equality, education, public health, and tenant rights cases",
+      "SFPD communications director",
+      "Led communications for 2019 No on Prop C campaign defeating JUUL-backed measure",
+      "Openly HIV positive Board member advocating for health equity",
+      "Recovery advocate drawing on personal experience with substance-use disorder",
+    ],
     contact: {
       office: "City Hall, Room 244, 1 Dr. Carlton B. Goodlett Place, SF 94102",
       phone: "(415) 554-7970",
@@ -281,6 +526,7 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
     },
     sources: [
       { label: "Official Board page", url: "https://sfbos.org/supervisor-dorsey-district-6" },
+      { label: "SF Board committee assignments", url: "https://sfbos.org/committees" },
     ],
   },
 
@@ -291,8 +537,8 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
     termStart: "January 8, 2025",
     termEnd: "January 8, 2029",
     background:
-      "An urban planner, economic development and housing policy expert who has served in various city government roles. Fluent in English, Spanish, and French, and speaks Swedish proficiently. Lives in Ingleside Terraces with husband Sean Donahue and three daughters.",
-    education: "Bachelor's in Liberal Arts, Excelsior College. Master's in Urban Planning (housing development concentration), Columbia University. Also attended San Francisco State University.",
+      "An urban planner, economic development and housing policy expert who has served in various city government roles. Family immigrated from El Salvador during the 1980s civil war. Fluent in English, Spanish, and French, and speaks Swedish proficiently. Lives in Ingleside Terraces with husband Sean Donahue and three daughters.",
+    education: "Bachelor's in Liberal Arts, Excelsior College. Master's in Urban Planning (housing development concentration), Columbia University.",
     residency: "Ingleside Terraces resident.",
     priorRole: "Executive Director, Jamestown Community Center. Deputy Director, Mission Economic Development Agency. Director of Homeownership Programs, Mayor's Office of Housing. President, City Planning Commission. Vice President, Building Inspection Commission.",
     committees: [
@@ -300,8 +546,58 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
       { name: "SF County Transportation Authority", role: "Vice Chair" },
       { name: "Treasure Island Mobility Management Agency", role: "Member" },
     ],
-    statedPriorities: [], // To be populated from supervisor's published materials
-    communityRecord: [], // To be populated from supervisor's published materials
+    statedPriorities: [
+      {
+        topic: "Homelessness",
+        position: "Prioritizes reducing homelessness through expanded services and housing-first approaches on the westside.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-melgar-district-7",
+        icon: "home",
+      },
+      {
+        topic: "Housing & Homeownership",
+        position: "Works to increase affordable housing and homeownership opportunities while strengthening rent control protections.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-melgar-district-7",
+        icon: "home",
+      },
+      {
+        topic: "Small Business",
+        position: "Supports small businesses and worker rights to strengthen neighborhood commercial corridors across District 7.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-melgar-district-7",
+        icon: "storefront",
+      },
+      {
+        topic: "Transportation Safety",
+        position: "Chairs the Land Use and Transportation Committee, focusing on pedestrian, bicycle, and transit safety improvements.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-melgar-district-7",
+        icon: "building",
+      },
+      {
+        topic: "Climate & Environment",
+        position: "Advocates for reducing the city's carbon footprint and investing in sustainable infrastructure.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-melgar-district-7",
+        icon: "trash",
+      },
+      {
+        topic: "Senior Services",
+        position: "Expands access to senior services and education for disadvantaged youth on the westside of San Francisco.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-melgar-district-7",
+        icon: "shield",
+      },
+    ],
+    communityRecord: [
+      "Executive Director, Jamestown Community Center",
+      "Deputy Director, Mission Economic Development Agency",
+      "Director of Homeownership Programs, Mayor's Office of Housing (Newsom Administration)",
+      "President, City Planning Commission",
+      "Vice President, Building Inspection Commission",
+      "Board member of multiple San Francisco nonprofit human service organizations",
+    ],
     contact: {
       office: "City Hall, Room 244, 1 Dr. Carlton B. Goodlett Place, SF 94102",
       phone: "(415) 554-6516",
@@ -309,6 +605,7 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
     },
     sources: [
       { label: "Official Board page", url: "https://sfbos.org/supervisor-melgar-district-7" },
+      { label: "SF Board committee assignments", url: "https://sfbos.org/committees" },
     ],
   },
 
@@ -327,11 +624,63 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
       { name: "Board of Supervisors", role: "President" },
       { name: "SF County Transportation Authority", role: "Chair" },
       { name: "Treasure Island Mobility Management Agency", role: "Vice Chair" },
+      { name: "Transbay Joint Powers Authority", role: "Vice Chair" },
       { name: "Budget & Appropriations Committee", role: "Member" },
       { name: "Rules Committee", role: "Member" },
+      { name: "Association of Bay Area Governments Executive Board", role: "Member" },
     ],
-    statedPriorities: [], // To be populated from supervisor's published materials
-    communityRecord: [], // To be populated from supervisor's published materials
+    statedPriorities: [
+      {
+        topic: "Climate Action",
+        position: "Led legislation requiring all-electric major renovations (effective July 2026) and prohibiting gas-powered landscaping equipment (effective January 2026).",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-mandelman-district-8",
+        icon: "trash",
+      },
+      {
+        topic: "Immigrant Defense",
+        position: "Led a $3.5 million plan to fund immigrant defense services in San Francisco.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-mandelman-district-8",
+        icon: "shield",
+      },
+      {
+        topic: "LGBTQ Preservation",
+        position: "Requested city landmarks designation for 16 LGBTQ historic sites to preserve the community's cultural heritage.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-mandelman-district-8",
+        icon: "building",
+      },
+      {
+        topic: "Public Safety",
+        position: "Co-hosts community town halls on safety issues throughout District 8 neighborhoods.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-mandelman-district-8",
+        icon: "shield",
+      },
+      {
+        topic: "Charter Reform",
+        position: "Collaborating on a potential 2026 ballot measure to streamline city governance and improve government efficiency.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-mandelman-district-8",
+        icon: "building",
+      },
+      {
+        topic: "Transportation",
+        position: "Chairs the SF County Transportation Authority, overseeing regional transit planning and investment.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-mandelman-district-8",
+        icon: "building",
+      },
+    ],
+    communityRecord: [
+      "President, Board of Supervisors",
+      "Led all-electric renovation requirement legislation (effective July 2026)",
+      "Led gas-powered landscaping equipment prohibition (effective January 2026)",
+      "Secured $3.5 million in immigrant defense funding",
+      "Requested city landmark designation for 16 LGBTQ historic sites",
+      "Hosts regular office hours and community town halls across District 8",
+    ],
     contact: {
       office: "City Hall, Room 244, 1 Dr. Carlton B. Goodlett Place, SF 94102",
       phone: "(415) 554-6968",
@@ -339,6 +688,7 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
     },
     sources: [
       { label: "Official Board page", url: "https://sfbos.org/supervisor-mandelman-district-8" },
+      { label: "SF Board committee assignments", url: "https://sfbos.org/committees" },
     ],
   },
 
@@ -358,8 +708,57 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
       { name: "Local Agency Formation Commission", role: "Chair" },
       { name: "SF County Transportation Authority", role: "Member" },
     ],
-    statedPriorities: [], // To be populated from supervisor's published materials
-    communityRecord: [], // To be populated from supervisor's published materials
+    statedPriorities: [
+      {
+        topic: "Environmental Justice",
+        position: "Champions climate and environmental justice advocacy, co-founding the SF Defund DAPL Coalition to oppose fossil fuel pipeline financing.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-fielder-district-9",
+        icon: "trash",
+      },
+      {
+        topic: "Public Banking",
+        position: "Co-founded the SF Public Bank Coalition to establish the nation's first city-owned bank to support small businesses, affordable housing, and renewable energy.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-fielder-district-9",
+        icon: "storefront",
+      },
+      {
+        topic: "Affordable Housing",
+        position: "Advocates for affordable housing protections and tenant rights in the Mission District and citywide.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-fielder-district-9",
+        icon: "home",
+      },
+      {
+        topic: "Renewable Energy",
+        position: "Served as Commissioner and Vice Chair of SFLAFCo overseeing Clean Power SF, advancing renewable energy citywide.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-fielder-district-9",
+        icon: "trash",
+      },
+      {
+        topic: "Small Business",
+        position: "Supports small businesses through the proposed city-owned public bank and equitable economic development policies.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-fielder-district-9",
+        icon: "storefront",
+      },
+      {
+        topic: "Government Oversight",
+        position: "Chairs the Government Audit & Oversight Committee, ensuring transparency and accountability in city operations.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-fielder-district-9",
+        icon: "building",
+      },
+    ],
+    communityRecord: [
+      "Co-founded SF Defund DAPL Coalition (2017) opposing Wall Street bank financing of the Dakota Access Pipeline",
+      "Co-founded SF Public Bank Coalition to establish the nation's first city-owned bank",
+      "Commissioner and Vice Chair, SFLAFCo (2021–2024), overseeing Clean Power SF",
+      "Co-Director, Stop the Money Pipeline – national coalition disrupting fossil fuel financing",
+      "Taught 'Race, Women, and Class' at SF State University's College of Ethnic Studies (2018–2020)",
+    ],
     contact: {
       office: "City Hall, Room 244, 1 Dr. Carlton B. Goodlett Place, SF 94102",
       phone: "(415) 554-5144",
@@ -367,6 +766,7 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
     },
     sources: [
       { label: "Official Board page", url: "https://sfbos.org/supervisor-fielder-district-9" },
+      { label: "SF Board committee assignments", url: "https://sfbos.org/committees" },
     ],
   },
 
@@ -387,8 +787,58 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
       { name: "SF County Transportation Authority", role: "Member" },
       { name: "Treasure Island Mobility Management Agency", role: "Member" },
     ],
-    statedPriorities: [], // To be populated from supervisor's published materials
-    communityRecord: [], // To be populated from supervisor's published materials
+    statedPriorities: [
+      {
+        topic: "Violence Reduction",
+        position: "Prioritizes reducing violence in District 10 communities including Bayview, Potrero Hill, and Visitacion Valley.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-walton-district-10",
+        icon: "shield",
+      },
+      {
+        topic: "Affordable Housing",
+        position: "Advanced affordable housing developments including Doris Vincent and Oscar James Apartments in Shipyard, Sophie Maxwell Building at Power Station, and 25th Street development in Potrero Hill.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-walton-district-10",
+        icon: "home",
+      },
+      {
+        topic: "Community Infrastructure",
+        position: "Secured community infrastructure improvements including a playground and YMCA at Crane Cove Park.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-walton-district-10",
+        icon: "building",
+      },
+      {
+        topic: "Commercial Corridors",
+        position: "Invests in commercial corridor development on 3rd Street, Leland Avenue, and 22nd and 18th Streets to strengthen local economies.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-walton-district-10",
+        icon: "storefront",
+      },
+      {
+        topic: "Reparations",
+        position: "Secured a funding mechanism for reparations to address historical inequities in San Francisco.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-walton-district-10",
+        icon: "building",
+      },
+      {
+        topic: "Education Equity",
+        position: "Led efforts on the Board of Education to close the achievement gap for Black, Latino, and special needs students and secured funding for the African American Achievement and Leadership Initiative.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-walton-district-10",
+        icon: "storefront",
+      },
+    ],
+    communityRecord: [
+      "President and member, San Francisco Board of Education",
+      "Secured funding for the school district's first African American Achievement and Leadership Initiative",
+      "Advocated for educator housing and Mission Bay school development",
+      "Advanced affordable housing: Doris Vincent, Oscar James Apartments, Sophie Maxwell Building",
+      "Secured playground and YMCA at Crane Cove Park",
+      "Lifelong San Francisco resident with deep roots in Bayview and Potrero Hill",
+    ],
     contact: {
       office: "City Hall, Room 244, 1 Dr. Carlton B. Goodlett Place, SF 94102",
       phone: "(415) 554-7670",
@@ -396,6 +846,7 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
     },
     sources: [
       { label: "Official Board page", url: "https://sfbos.org/supervisor-walton-district-10" },
+      { label: "SF Board committee assignments", url: "https://sfbos.org/committees" },
     ],
   },
 
@@ -414,8 +865,42 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
       { name: "Land Use and Transportation Committee", role: "Vice-Chair" },
       { name: "SF County Transportation Authority", role: "Member" },
     ],
-    statedPriorities: [], // To be populated from supervisor's published materials
-    communityRecord: [], // To be populated from supervisor's published materials
+    statedPriorities: [
+      {
+        topic: "Land Use & Planning",
+        position: "Serves as Vice-Chair of the Land Use and Transportation Committee, overseeing development and planning decisions for District 11.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-chen-district-11",
+        icon: "building",
+      },
+      {
+        topic: "Transportation",
+        position: "Serves on the SF County Transportation Authority, working on transit infrastructure for the Excelsior, Outer Mission, and Oceanview neighborhoods.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-chen-district-11",
+        icon: "building",
+      },
+      {
+        topic: "Immigrant Communities",
+        position: "Draws on personal experience as an immigrant from China to advocate for District 11's diverse immigrant communities.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-chen-district-11",
+        icon: "shield",
+      },
+      {
+        topic: "Family Support",
+        position: "As a mother of two daughters and caregiver to elderly parents, advocates for family support services and senior care resources.",
+        source: "sfbos.org",
+        sourceUrl: "https://sfbos.org/supervisor-chen-district-11",
+        icon: "home",
+      },
+    ],
+    communityRecord: [
+      "District 11 resident for over two decades",
+      "Immigrated from China at age 15, navigating public school system as a newcomer",
+      "Mother of two daughters and caregiver to elderly parents",
+      "Pursuing doctoral degree while serving on the Board of Supervisors",
+    ],
     contact: {
       office: "City Hall, Room 244, 1 Dr. Carlton B. Goodlett Place, SF 94102",
       phone: "(415) 554-6975",
@@ -423,6 +908,7 @@ export const SUPERVISOR_PROFILES: Record<string, SupervisorProfile> = {
     },
     sources: [
       { label: "Official Board page", url: "https://sfbos.org/supervisor-chen-district-11" },
+      { label: "SF Board committee assignments", url: "https://sfbos.org/committees" },
     ],
   },
 };
