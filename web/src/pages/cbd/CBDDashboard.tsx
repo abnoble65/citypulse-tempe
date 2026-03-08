@@ -387,10 +387,16 @@ export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
 
   // Fetch data: 311 via server-side spatial filter, permits/evictions via district
   useEffect(() => {
-    if (!config?.boundary_geojson || !cbdBoundaries.length) return;
+    if (!config) return;
+    if (!config.boundary_geojson || !cbdBoundaries.length) {
+      console.error(`[CBDDashboard] ${config.name}: boundary_geojson is missing — cannot fetch spatial data`);
+      setStatsLoading(false);
+      return;
+    }
     setStatsLoading(true);
 
     const district = config.supervisor_district ? String(config.supervisor_district) : null;
+    console.log(`[CBDDashboard] ${config.name}: fetching data (district=${district}, boundary pts=${config.boundary_geojson.coordinates?.[0]?.[0]?.length ?? 0})`);
 
     const permitWhere = district
       ? `supervisor_district='${district}' AND location IS NOT NULL`
@@ -407,16 +413,23 @@ export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
         $where: permitWhere,
         $select: "location,permit_type_definition,estimated_cost,street_number,street_name,street_suffix,status",
         $limit: "2000",
-      })}`, { signal: controller.signal }).then(r => r.json()).catch(() => []),
+      })}`, { signal: controller.signal }).then(r => {
+        if (!r.ok) console.error(`[CBDDashboard] permits fetch HTTP ${r.status}`);
+        return r.json();
+      }).catch(err => { console.error("[CBDDashboard] permits fetch failed:", err); return []; }),
 
       // 311: server-side lat/lng bounding box filter — no client-side polygon
-      fetch311ForCBD(config, { days: 90, limit: 2000, signal: controller.signal }),
+      fetch311ForCBD(config, { days: 90, limit: 2000, signal: controller.signal })
+        .catch(err => { console.error("[CBDDashboard] 311 fetch failed:", err); return []; }),
 
       fetch(`${DATASF}/5cei-gny5.json?${new URLSearchParams({
         $where: evictionWhere,
         $select: "shape,address,file_date",
         $limit: "500",
-      })}`, { signal: controller.signal }).then(r => r.json()).catch(() => []),
+      })}`, { signal: controller.signal }).then(r => {
+        if (!r.ok) console.error(`[CBDDashboard] evictions fetch HTTP ${r.status}`);
+        return r.json();
+      }).catch(err => { console.error("[CBDDashboard] evictions fetch failed:", err); return []; }),
     ]).then(([permitRows, threeOneOneRows, evictionRows]) => {
       clearTimeout(timeout);
 
@@ -431,7 +444,7 @@ export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
         .filter(p => isPointInCBD(p.lat, p.lng, cbdBoundaries) !== null);
 
       // 311 already filtered server-side by bounding box — map to local type
-      const threeOneOne: ThreeOneOnePoint[] = threeOneOneRows.map(r => ({
+      const threeOneOne: ThreeOneOnePoint[] = (threeOneOneRows ?? []).map((r: any) => ({
         lat: r.lat, lng: r.lng,
         category: r.category, address: r.address,
         date: r.date, status: r.status,
@@ -450,7 +463,7 @@ export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
       setStatsLoading(false);
     }).catch(err => {
       clearTimeout(timeout);
-      console.warn("[CBDDashboard] fetch failed:", err);
+      console.error("[CBDDashboard] fetch failed:", err);
       setStatsLoading(false);
     });
 

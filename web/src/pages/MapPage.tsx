@@ -1,14 +1,16 @@
 /**
  * MapPage.tsx — Full-screen Leaflet map at /map.
  *
- * Layers (toggleable):
- *   • Building Permits    — DataSF 83ki-hu3p, color by type, size by cost
- *   • Eviction Notices    — DataSF 5cei-gny5, red circles
- *   • Affordable Housing  — DataSF aaxw-2cb8, geocoded, green squares
- *   • Neighborhoods       — DataSF jwn9-ihcz, outline + labels
+ * Layout: collapsible left sidebar (layers, date range, categories, detail panel)
+ *         + full-height map with all existing layers.
  *
- * FilterBar selects neighborhood → map zooms to polygon.
- * Map fills calc(100vh - 60px) with FilterBar inside via flex.
+ * Layers (toggleable):
+ *   • Building Permits    — DataSF i98e-djp9, color by type, size by cost
+ *   • Eviction Notices    — DataSF 5cei-gny5, red diamonds
+ *   • Affordable Housing  — DataSF aaxw-2cb8, geocoded, green circles
+ *   • 311 Requests        — DataSF vw6y-z8j6, color by category
+ *   • Community Benefit Districts — DataSF c28a-f6gs
+ *   • Neighborhood Boundaries     — DataSF jwn9-ihcz
  */
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
@@ -29,7 +31,6 @@ import { FilterBar } from "../components/FilterBar";
 import { geocodeAddresses } from "../services/geocoder";
 import type { DistrictConfig } from "../districts";
 import { loadNeighborhoodBoundaries } from "../utils/geoFilter";
-import { ViewIn3DButton } from "../components/ViewIn3D";
 import { cleanPermitLabel } from "../services/aggregator";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -89,6 +90,12 @@ function fmtCost(cost: number | null): string {
   if (cost >= 1_000_000) return `$${(cost / 1_000_000).toFixed(2)}M`;
   if (cost >= 1_000)     return `$${Math.round(cost / 1_000)}K`;
   return `$${cost}`;
+}
+
+function fmtDate(d?: string): string {
+  if (!d) return "—";
+  try { return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
+  catch { return d; }
 }
 
 // ── Geometry helpers ───────────────────────────────────────────────────────────
@@ -192,229 +199,54 @@ function cbdSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
-function threeOneOneColor(category: string | undefined): string {
+// ── 311 category colors ──────────────────────────────────────────────────
+
+const CAT_311: Record<string, string> = {
+  Graffiti:          "#7C3AED",
+  "Street Cleaning": "#92400E",
+  Encampments:       "#DC2626",
+  "Blocked Sidewalk":"#EA580C",
+  Other:             "#6B7280",
+};
+
+function normalize311(category: string | undefined): string {
   const s = (category ?? "").toLowerCase();
-  if (s.includes("graffiti"))                        return "#7C3AED"; // purple
-  if (s.includes("street") && s.includes("clean"))   return "#92400E"; // brown
-  if (s.includes("sidewalk") && s.includes("clean")) return "#92400E"; // brown
-  if (s.includes("encampment"))                       return "#DC2626"; // red
-  return "#6B7280"; // gray
+  if (s.includes("graffiti")) return "Graffiti";
+  if ((s.includes("street") || s.includes("sidewalk")) && s.includes("clean")) return "Street Cleaning";
+  if (s.includes("encampment")) return "Encampments";
+  if (s.includes("sidewalk") || s.includes("block")) return "Blocked Sidewalk";
+  return "Other";
 }
 
-// ── Layer toggle panel ────────────────────────────────────────────────────────
+function threeOneOneColor(category: string | undefined): string {
+  return CAT_311[normalize311(category)] ?? "#6B7280";
+}
 
 const THREE_ONE_ONE_COLOR = "#7C3AED";
-
 const CBD_COLOR = "#E8652D";
+
+type DateRange = 30 | 90 | 180;
+
+// ── Layer metadata ───────────────────────────────────────────────────────
 
 const LAYER_META: { key: keyof LayerState; label: string; color: string }[] = [
   { key: "permits",       label: "Building Permits",        color: "#4A7FD0" },
-  { key: "affordable",    label: "Affordable Housing",      color: AFFORDABLE_COLOR },
-  { key: "evictions",     label: "Eviction Notices",        color: EVICTION_COLOR },
   { key: "threeOneOne",   label: "311 Requests",            color: THREE_ONE_ONE_COLOR },
+  { key: "evictions",     label: "Eviction Notices",        color: EVICTION_COLOR },
+  { key: "affordable",    label: "Affordable Housing",      color: AFFORDABLE_COLOR },
   { key: "cbds",          label: "Community Benefit Districts", color: CBD_COLOR },
   { key: "neighborhoods", label: "Neighborhood Boundaries", color: "#94a3b8" },
 ];
 
-function LayerPanel({
-  layers, onChange,
-}: {
-  layers:   LayerState;
-  onChange: (key: keyof LayerState, val: boolean) => void;
-}) {
-  const [open, setOpen] = useState(true);
-  return (
-    <div style={{
-      position: "absolute", top: 12, right: 12, zIndex: 1000,
-      background: "rgba(255,255,255,0.97)", borderRadius: 12,
-      border: `1px solid ${COLORS.lightBorder}`,
-      boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
-      overflow: "hidden", minWidth: 218,
-    }}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{
-          width: "100%", display: "flex", alignItems: "center",
-          justifyContent: "space-between", padding: "10px 14px",
-          background: "none", border: "none", cursor: "pointer",
-          fontFamily: FONTS.heading, fontWeight: 700, fontSize: 13,
-          color: COLORS.charcoal,
-          borderBottom: open ? `1px solid ${COLORS.lightBorder}` : "none",
-        }}
-      >
-        Layers
-        <span style={{ fontSize: 10, color: COLORS.warmGray }}>{open ? "▲" : "▼"}</span>
-      </button>
+// ── Selected feature for detail panel ─────────────────────────────────────
 
-      {open && (
-        <div style={{ padding: "8px 14px 12px" }}>
-          {LAYER_META.map(({ key, label, color }) => (
-            <label key={key} style={{
-              display: "flex", alignItems: "center", gap: 9,
-              padding: "5px 0", cursor: "pointer", userSelect: "none",
-              fontFamily: FONTS.body, fontSize: 12, color: COLORS.charcoal,
-            }}>
-              <input
-                type="checkbox" checked={layers[key]}
-                onChange={e => onChange(key, e.target.checked)}
-                style={{ accentColor: color, width: 14, height: 14, cursor: "pointer" }}
-              />
-              <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <span style={{
-                  width: 10, height: 10, borderRadius: 2,
-                  background: color, flexShrink: 0,
-                }} />
-                {label}
-              </span>
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+type SelectedFeature =
+  | { type: "permit"; data: PermitRow }
+  | { type: "eviction"; data: EvictionRow }
+  | { type: "affordable"; data: AHMarker }
+  | { type: "311"; data: ThreeOneOneRow };
 
-// ── Map legend (bottom-left) ──────────────────────────────────────────────────
-
-function MapLegend({ layers }: { layers: LayerState }) {
-  return (
-    <div style={{
-      position: "absolute", bottom: 36, left: 12, zIndex: 1000,
-      background: "rgba(255,255,255,0.95)", borderRadius: 10,
-      border: `1px solid ${COLORS.lightBorder}`,
-      boxShadow: "0 2px 10px rgba(0,0,0,0.10)",
-      padding: "8px 12px",
-    }}>
-      {/* Permit sub-types */}
-      {layers.permits && (
-        <>
-          <div style={{
-            fontFamily: FONTS.body, fontSize: 10, fontWeight: 700,
-            color: COLORS.warmGray, textTransform: "uppercase",
-            letterSpacing: "0.08em", marginBottom: 5,
-          }}>
-            Permits
-          </div>
-          {([
-            { label: "New Construction", color: PERMIT_COLOR.new },
-            { label: "Alteration",       color: PERMIT_COLOR.alteration },
-            { label: "Demolition",       color: PERMIT_COLOR.demolition },
-            { label: "Other",            color: PERMIT_COLOR.other },
-          ] as const).map(({ label, color }) => (
-            <div key={label} style={{
-              display: "flex", alignItems: "center", gap: 7,
-              padding: "2px 0", fontFamily: FONTS.body,
-              fontSize: 11, color: COLORS.charcoal,
-            }}>
-              <span style={{
-                width: 10, height: 10, borderRadius: "50%",
-                background: color, flexShrink: 0,
-              }} />
-              {label}
-            </div>
-          ))}
-          <div style={{
-            fontFamily: FONTS.body, fontSize: 10,
-            color: COLORS.warmGray, marginTop: 4, fontStyle: "italic",
-          }}>
-            Circle size = estimated cost
-          </div>
-        </>
-      )}
-
-      {/* Affordable Housing */}
-      {layers.affordable && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 7,
-          marginTop: layers.permits ? 8 : 0, paddingTop: layers.permits ? 6 : 0,
-          borderTop: layers.permits ? `1px solid ${COLORS.lightBorder}` : "none",
-          fontFamily: FONTS.body, fontSize: 11, color: COLORS.charcoal,
-        }}>
-          <span style={{
-            width: 10, height: 10, borderRadius: "50%",
-            background: AFFORDABLE_COLOR, flexShrink: 0,
-          }} />
-          Affordable Housing
-        </div>
-      )}
-
-      {/* Eviction Notices */}
-      {layers.evictions && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 7,
-          marginTop: (layers.permits || layers.affordable) ? 6 : 0,
-          paddingTop: (layers.permits || layers.affordable) ? 6 : 0,
-          borderTop: (layers.permits || layers.affordable) ? `1px solid ${COLORS.lightBorder}` : "none",
-          fontFamily: FONTS.body, fontSize: 11, color: COLORS.charcoal,
-        }}>
-          <span style={{
-            width: 10, height: 10,
-            background: EVICTION_COLOR,
-            flexShrink: 0,
-            transform: "rotate(45deg)",
-          }} />
-          Eviction Notice
-        </div>
-      )}
-
-      {/* 311 Requests */}
-      {layers.threeOneOne && (
-        <>
-          <div style={{
-            fontFamily: FONTS.body, fontSize: 10, fontWeight: 700,
-            color: COLORS.warmGray, textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            marginTop: (layers.permits || layers.affordable || layers.evictions) ? 8 : 0,
-            paddingTop: (layers.permits || layers.affordable || layers.evictions) ? 6 : 0,
-            borderTop: (layers.permits || layers.affordable || layers.evictions) ? `1px solid ${COLORS.lightBorder}` : "none",
-            marginBottom: 5,
-          }}>
-            311 Requests
-          </div>
-          {([
-            { label: "Graffiti",                    color: "#7C3AED" },
-            { label: "Street/Sidewalk Cleaning",    color: "#92400E" },
-            { label: "Encampments",                 color: "#DC2626" },
-            { label: "Other",                       color: "#6B7280" },
-          ] as const).map(({ label, color }) => (
-            <div key={label} style={{
-              display: "flex", alignItems: "center", gap: 7,
-              padding: "2px 0", fontFamily: FONTS.body,
-              fontSize: 11, color: COLORS.charcoal,
-            }}>
-              <span style={{
-                width: 8, height: 8, borderRadius: "50%",
-                background: color, flexShrink: 0,
-              }} />
-              {label}
-            </div>
-          ))}
-        </>
-      )}
-
-      {/* Community Benefit Districts */}
-      {layers.cbds && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 7,
-          marginTop: (layers.permits || layers.affordable || layers.evictions || layers.threeOneOne) ? 6 : 0,
-          paddingTop: (layers.permits || layers.affordable || layers.evictions || layers.threeOneOne) ? 6 : 0,
-          borderTop: (layers.permits || layers.affordable || layers.evictions || layers.threeOneOne) ? `1px solid ${COLORS.lightBorder}` : "none",
-          fontFamily: FONTS.body, fontSize: 11, color: COLORS.charcoal,
-        }}>
-          <span style={{
-            width: 10, height: 10,
-            border: `2px dashed ${CBD_COLOR}`,
-            borderRadius: 2,
-            flexShrink: 0,
-          }} />
-          CBD Boundary
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Map view controller (flies to neighborhood on filter change) ──────────────
+// ── Map view controller ──────────────────────────────────────────────────────
 
 function MapController({
   districtConfig, filter,
@@ -463,7 +295,6 @@ function NeighborhoodLabels({ geojson }: { geojson: GeoJSON.FeatureCollection | 
     for (const feat of geojson.features) {
       const name = feat.properties?.name;
       if (!name) continue;
-      // Compute centroid from coordinates
       const coords = flatCoords((feat.geometry as any).coordinates);
       if (!coords.length) continue;
       let sumLat = 0, sumLng = 0;
@@ -552,6 +383,19 @@ function CBDLabels({ geojson }: { geojson: GeoJSON.FeatureCollection | null }) {
   return null;
 }
 
+// ── Sidebar section heading ─────────────────────────────────────────────────
+
+function SidebarHeading({ text }: { text: string }) {
+  return (
+    <div style={{
+      fontFamily: FONTS.body, fontSize: 10, fontWeight: 700, color: COLORS.warmGray,
+      textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8,
+    }}>
+      {text}
+    </div>
+  );
+}
+
 // ── Main page component ───────────────────────────────────────────────────────
 
 export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
@@ -559,6 +403,10 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
   const [layers, setLayers] = useState<LayerState>({
     permits: true, evictions: false, affordable: true, threeOneOne: false, cbds: false, neighborhoods: true,
   });
+
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [dateRange, setDateRange] = useState<DateRange>(90);
+  const [selected, setSelected] = useState<SelectedFeature | null>(null);
 
   const [permits, setPermits]       = useState<PermitRow[]>([]);
   const [evictions, setEvictions]   = useState<EvictionRow[]>([]);
@@ -570,6 +418,8 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
 
   const center = DISTRICT_CENTERS[districtConfig.number] ?? DISTRICT_CENTERS["3"];
   const zoom   = DISTRICT_ZOOM[districtConfig.number]   ?? 14;
+
+  const sidebarW = 300;
 
   // ── Commission popup link handler ─────────────────────────────────────────
   useEffect(() => {
@@ -672,10 +522,10 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
       .catch(err => console.warn("[MapPage] affordable housing fetch failed:", err));
   }, [districtConfig]);
 
-  // ── Fetch 311 requests (DataSF vw6y-z8j6) ────────────────────────────────────
+  // ── Fetch 311 requests (DataSF vw6y-z8j6) — re-fetches on dateRange change ──
   useEffect(() => {
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 90);
+    cutoff.setDate(cutoff.getDate() - dateRange);
     const dateStr = cutoff.toISOString().split('T')[0];
 
     const distWhere = districtConfig.number === "0"
@@ -693,11 +543,11 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
       .then(r => r.json())
       .then((rows: ThreeOneOneRow[]) => {
         const valid = rows.filter(r => r.lat && r.long && !isNaN(parseFloat(r.lat)) && !isNaN(parseFloat(r.long)));
-        console.log(`[MapPage] 311: ${rows.length} total, ${valid.length} with coords`);
+        console.log(`[MapPage] 311 (${dateRange}d): ${rows.length} total, ${valid.length} with coords`);
         setThreeOneOne(valid);
       })
       .catch(err => console.warn("[MapPage] 311 fetch failed:", err));
-  }, [districtConfig]);
+  }, [districtConfig, dateRange]);
 
   // ── Fetch CBD boundaries (DataSF c28a-f6gs) ────────────────────────────────
   useEffect(() => {
@@ -731,14 +581,13 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
       .catch(err => console.warn("[MapPage] neighborhoods fetch failed:", err));
   }, []);
 
-  // ── Fetch supervisor district boundary (for "All District X" outline) ────
+  // ── Fetch supervisor district boundary ────────────────────────────────────
   useEffect(() => {
     if (districtConfig.number === "0") { setDistrictGeoJSON(null); return; }
     const url = `${DATASF}/f2zs-jevy.geojson?$where=sup_dist_num='${districtConfig.number}'&$limit=1`;
     fetch(url)
       .then(r => r.json())
       .then((geojson: unknown) => {
-        // Validate: must be a FeatureCollection with at least one feature
         const g = geojson as { type?: string; features?: unknown[]; error?: boolean };
         if (g.error || g.type !== "FeatureCollection" || !Array.isArray(g.features) || g.features.length === 0) {
           console.warn("[MapPage] district boundary: invalid GeoJSON or no features", g);
@@ -769,16 +618,15 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
     return boundsFromCoords((feat.geometry as any).coordinates);
   }, [selectedGeoName, nhGeoJSON]);
 
-  // Pre-filter marker data by bounds so React sees different arrays (not nulls inside .map)
+  // Pre-filter marker data by bounds
   const filteredPermits = useMemo(() => {
-    const valid = permits.filter(r => {
+    return permits.filter(r => {
       if (!r.location?.coordinates) return false;
       const [lng, lat] = r.location.coordinates;
       if (isNaN(lat) || isNaN(lng)) return false;
       if (selectedBounds && !selectedBounds.contains(L.latLng(lat, lng))) return false;
       return true;
     });
-    return valid;
   }, [permits, selectedBounds]);
 
   const filteredEvictions = useMemo(() => {
@@ -804,7 +652,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
     });
   }, [threeOneOne, selectedBounds]);
 
-  // GeoJSON key must change when data OR selection changes to force re-render
+  // GeoJSON key
   const nhKey = useMemo(
     () => `nh-${nhGeoJSON ? nhGeoJSON.features.length : 0}-${selectedGeoName ?? "all"}`,
     [nhGeoJSON, selectedGeoName],
@@ -820,7 +668,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
     return { ...base, interactive: false };
   }, [selectedGeoName]);
 
-  // Build CBD FeatureCollection from raw rows
+  // Build CBD FeatureCollection
   const cbdGeoJSON = useMemo<GeoJSON.FeatureCollection | null>(() => {
     if (!cbdRows.length) return null;
     return {
@@ -838,279 +686,538 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
     };
   }, [cbdRows]);
 
+  // ── Layer counts for sidebar ──────────────────────────────────────────────
+  const layerCounts: Record<keyof LayerState, number> = useMemo(() => ({
+    permits: filteredPermits.length,
+    threeOneOne: filtered311.length,
+    evictions: filteredEvictions.length,
+    affordable: filteredAffordable.length,
+    cbds: cbdRows.length,
+    neighborhoods: nhGeoJSON?.features.length ?? 0,
+  }), [filteredPermits, filtered311, filteredEvictions, filteredAffordable, cbdRows, nhGeoJSON]);
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 60px)" }}>
-      <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
+    <>
+      <style>{`
+        .cp-map-sidebar { transition: transform 0.25s ease; }
+        .cp-map-toggle {
+          position: absolute; top: 50%; z-index: 1000;
+          transform: translateY(-50%);
+          width: 26px; height: 52px; border-radius: 0 8px 8px 0;
+          background: #fff; border: 1px solid #e5e7eb; border-left: none;
+          cursor: pointer; display: flex; align-items: center; justify-content: center;
+          font-size: 13px; color: ${COLORS.midGray};
+          box-shadow: 2px 0 8px rgba(0,0,0,0.06);
+        }
+        .cp-map-toggle:hover { background: #f9fafb; }
+        @media (max-width: 768px) {
+          .cp-map-sidebar {
+            position: fixed !important; bottom: 0 !important; left: 0 !important;
+            right: 0 !important; top: auto !important;
+            width: 100% !important; max-height: 50vh !important;
+            border-radius: 16px 16px 0 0 !important;
+            transform: translateY(0) !important;
+          }
+          .cp-map-sidebar.closed {
+            transform: translateY(calc(100% - 44px)) !important;
+          }
+          .cp-map-toggle { display: none !important; }
+          .cp-map-area { width: 100% !important; }
+        }
+      `}</style>
 
-      <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
-        <MapContainer
-          center={center}
-          zoom={zoom}
-          style={{ width: "100%", height: "100%" }}
-          zoomControl={true}
-          attributionControl={true}
+      <div style={{ display: "flex", height: "calc(100vh - 60px)", position: "relative", overflow: "hidden" }}>
+        {/* ── Sidebar ──────────────────────────────────────────── */}
+        <div
+          className={`cp-map-sidebar ${sidebarOpen ? "" : "closed"}`}
+          style={{
+            width: sidebarW, flexShrink: 0,
+            background: "#fff", borderRight: "1px solid #e5e7eb",
+            display: "flex", flexDirection: "column",
+            transform: sidebarOpen ? "translateX(0)" : `translateX(-${sidebarW}px)`,
+            position: "relative", zIndex: 10,
+            overflowY: "auto",
+          }}
         >
-          <TileLayer
-            url={MAPBOX_TILE_URL}
-            attribution='&copy; <a href="https://www.mapbox.com/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            maxZoom={19}
-            tileSize={512}
-            zoomOffset={-1}
-          />
+          {/* Toggle button */}
+          <button
+            className="cp-map-toggle"
+            onClick={() => setSidebarOpen(p => !p)}
+            style={{ left: sidebarOpen ? sidebarW : 0 }}
+          >
+            {sidebarOpen ? "\u25C0" : "\u25B6"}
+          </button>
 
-          <MapController districtConfig={districtConfig} filter={filter} />
+          {/* Neighborhood filter header */}
+          <div style={{ borderBottom: "1px solid #e5e7eb", flexShrink: 0 }}>
+            <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
+          </div>
 
-          {/* District boundary outline (shown when "All District X" is selected) */}
-          {!selectedGeoName && districtGeoJSON && layers.neighborhoods && (
-            <GeoJSON
-              key={`dist-${districtConfig.number}`}
-              data={districtGeoJSON}
-              style={() => ({
-                color: "#E8652D", weight: 3,
-                fillColor: "#E8652D", fillOpacity: 0.04,
-                interactive: false,
-              })}
-            />
-          )}
+          {selected ? (
+            /* ── Detail panel ─────────────────────────────────── */
+            <div style={{ padding: "16px 18px", flex: 1 }}>
+              <div style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                marginBottom: 14,
+              }}>
+                <span style={{
+                  fontFamily: FONTS.body, fontSize: 11, fontWeight: 700, color: COLORS.charcoal,
+                  textTransform: "uppercase", letterSpacing: "0.05em",
+                }}>
+                  {selected.type === "permit" ? "Building Permit"
+                    : selected.type === "eviction" ? "Eviction Notice"
+                    : selected.type === "affordable" ? "Affordable Housing"
+                    : "311 Request"}
+                </span>
+                <button onClick={() => setSelected(null)} style={{
+                  background: "none", border: `1px solid ${COLORS.lightBorder}`,
+                  borderRadius: 6, padding: "2px 10px", cursor: "pointer",
+                  fontFamily: FONTS.body, fontSize: 11, color: COLORS.midGray,
+                }}>
+                  Close
+                </button>
+              </div>
 
-          {/* Neighborhood Boundaries */}
-          {layers.neighborhoods && nhGeoJSON && (
-            <>
-              <GeoJSON
-                key={nhKey}
-                data={nhGeoJSON}
-                style={nhStyle}
-              />
-              <NeighborhoodLabels geojson={nhGeoJSON} />
-            </>
-          )}
-
-          {/* Community Benefit Districts */}
-          {layers.cbds && cbdGeoJSON && (
-            <>
-              <GeoJSON
-                key={`cbd-${cbdGeoJSON.features.length}`}
-                data={cbdGeoJSON}
-                style={() => ({
-                  color: CBD_COLOR,
-                  weight: 2,
-                  dashArray: "6 4",
-                  fillColor: "transparent",
-                  fillOpacity: 0,
-                })}
-                onEachFeature={(feature, layer) => {
-                  const name = feature.properties?.name ?? "CBD";
-                  const slug = feature.properties?.slug ?? "";
-                  const revenue = feature.properties?.revenue;
-                  const revStr = revenue
-                    ? `$${(revenue / 1_000_000).toFixed(1)}M`
-                    : "—";
-                  layer.bindPopup(`
-                    <div style="font-family: ${FONTS.body}; font-size: 13px;">
-                      <strong>${name}</strong>
-                      <table style="margin-top: 6px; font-size: 12px; border-collapse: collapse;">
-                        <tbody>
-                          <tr><td style="color: #999; padding-right: 10px;">Revenue</td><td>${revStr}</td></tr>
-                          <tr><td style="color: #999; padding-right: 10px;">Districts</td><td>${feature.properties?.sup_districts ?? "—"}</td></tr>
-                        </tbody>
-                      </table>
-                      <a href="/cbd/${slug}" style="
-                        display: inline-block; margin-top: 8px;
-                        font-size: 12px; color: ${CBD_COLOR}; font-weight: 600;
-                        text-decoration: none;
-                      ">View CBD Portal &rarr;</a>
+              {/* Permit detail */}
+              {selected.type === "permit" && (() => {
+                const r = selected.data;
+                const addr = [r.street_number, r.street_name, r.street_suffix].filter(Boolean).join(" ") || "Unknown";
+                const cost = r.estimated_cost != null ? parseFloat(String(r.estimated_cost)) : null;
+                return (
+                  <div>
+                    <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
+                      {addr}
                     </div>
-                  `);
-                }}
-              />
-              <CBDLabels geojson={cbdGeoJSON} />
-            </>
-          )}
-
-          {/* Building Permits */}
-          {layers.permits && filteredPermits.map((r) => {
-            const [lng, lat] = r.location!.coordinates;
-            const cost  = r.estimated_cost != null ? parseFloat(String(r.estimated_cost)) : null;
-            const ptype = classifyPermit(r.permit_type_definition ?? null);
-            const color = PERMIT_COLOR[ptype];
-            const addr = [r.street_number, r.street_name, r.street_suffix].filter(Boolean).join(" ") || "Unknown address";
-
-            return (
-              <CircleMarker
-                key={`p-${r.permit_number ?? `${lat},${lng}`}`}
-                center={[lat, lng]}
-                radius={permitRadius(cost)}
-                pathOptions={{
-                  color: "#ffffff",
-                  weight: 2,
-                  fillColor: color,
-                  fillOpacity: 0.9,
-                }}
-              >
-                <Popup>
-                  <div style={{ fontFamily: FONTS.body, fontSize: 13 }}>
-                    <strong>{addr}</strong>
-                    <table style={{ marginTop: 6, fontSize: 12, borderCollapse: "collapse" }}>
-                      <tbody>
-                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Type</td><td>{cleanPermitLabel(r.permit_type_definition ?? "Permit")}</td></tr>
-                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Status</td><td>{(r.status ?? "—").replace(/\b\w/g, c => c.toUpperCase())}</td></tr>
-                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Est. Cost</td><td>{fmtCost(cost)}</td></tr>
-                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Permit #</td><td>{r.permit_number ?? ""}</td></tr>
-                      </tbody>
-                    </table>
+                    {[
+                      ["Type", cleanPermitLabel(r.permit_type_definition ?? "Permit")],
+                      ["Status", (r.status ?? "—").replace(/\b\w/g, c => c.toUpperCase())],
+                      ["Est. Cost", fmtCost(cost)],
+                      ["Permit #", r.permit_number ?? "—"],
+                    ].map(([label, val]) => (
+                      <div key={label} style={{
+                        display: "flex", justifyContent: "space-between",
+                        padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
+                        fontFamily: FONTS.body, fontSize: 12,
+                      }}>
+                        <span style={{ color: COLORS.warmGray }}>{label}</span>
+                        <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
+                      </div>
+                    ))}
                     {r.description && (
-                      <p style={{ margin: "8px 0 4px", fontSize: 12, color: COLORS.midGray }}>{(r.description).slice(0, 160)}</p>
+                      <div style={{
+                        marginTop: 12, padding: "10px 12px",
+                        background: COLORS.cream, borderRadius: 8,
+                        fontFamily: FONTS.body, fontSize: 12, color: COLORS.midGray,
+                        lineHeight: 1.5,
+                      }}>
+                        {(r.description).slice(0, 200)}
+                      </div>
                     )}
-                    <ViewIn3DButton compact payload={{
-                      address: addr, lat, lng, parcel_apn: null,
-                      district: districtConfig.label,
-                      active_layers: ["permits"],
-                    }} />
                   </div>
-                </Popup>
-              </CircleMarker>
-            );
-          })}
+                );
+              })()}
 
-          {/* Eviction Notices — diamond markers */}
-          {layers.evictions && filteredEvictions.map((r) => {
-            const [lng, lat] = r.shape!.coordinates;
-
-            const fmtBool = (v: boolean | undefined) => v === true ? "Yes" : v === false ? "No" : "—";
-            const fmtDate = (d?: string) => {
-              if (!d) return "—";
-              try { return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
-              catch { return d; }
-            };
-
-            const icon = L.divIcon({
-              className: "",
-              html: `<div style="
-                width:12px;height:12px;
-                background:${EVICTION_COLOR};
-                border:2px solid #fff;
-                transform:rotate(45deg);
-                box-shadow:0 1px 4px rgba(0,0,0,0.3);
-              "></div>`,
-              iconSize: [16, 16],
-              iconAnchor: [8, 8],
-            });
-
-            return (
-              <Marker
-                key={`e-${r.address ?? ''}-${lat},${lng}`}
-                position={[lat, lng]}
-                icon={icon}
-              >
-                <Popup>
-                  <div style={{ fontFamily: FONTS.body, fontSize: 13 }}>
-                    <strong>Eviction Notice — {r.address ?? "Unknown"}</strong>
-                    <table style={{ marginTop: 6, fontSize: 12, borderCollapse: "collapse" }}>
-                      <tbody>
-                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Date Filed</td><td>{fmtDate(r.file_date)}</td></tr>
-                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Non-Payment</td><td>{fmtBool(r.non_payment)}</td></tr>
-                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Owner Move-In</td><td>{fmtBool(r.owner_move_in)}</td></tr>
-                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Ellis Act</td><td>{fmtBool(r.ellis_act_withdrawal)}</td></tr>
-                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Breach</td><td>{fmtBool(r.breach)}</td></tr>
-                      </tbody>
-                    </table>
-                    <ViewIn3DButton compact payload={{
-                      address: r.address ?? null, lat, lng, parcel_apn: null,
-                      district: districtConfig.label,
-                      active_layers: ["evictions"],
-                    }} />
+              {/* Eviction detail */}
+              {selected.type === "eviction" && (() => {
+                const r = selected.data;
+                const fmtBool = (v: boolean | undefined) => v === true ? "Yes" : v === false ? "No" : "—";
+                return (
+                  <div>
+                    <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
+                      {r.address ?? "Unknown address"}
+                    </div>
+                    {[
+                      ["Date Filed", fmtDate(r.file_date)],
+                      ["Non-Payment", fmtBool(r.non_payment)],
+                      ["Owner Move-In", fmtBool(r.owner_move_in)],
+                      ["Ellis Act", fmtBool(r.ellis_act_withdrawal)],
+                      ["Breach", fmtBool(r.breach)],
+                      ["Neighborhood", r.neighborhood ?? "—"],
+                    ].map(([label, val]) => (
+                      <div key={label} style={{
+                        display: "flex", justifyContent: "space-between",
+                        padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
+                        fontFamily: FONTS.body, fontSize: 12,
+                      }}>
+                        <span style={{ color: COLORS.warmGray }}>{label}</span>
+                        <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
+                      </div>
+                    ))}
                   </div>
-                </Popup>
-              </Marker>
-            );
-          })}
+                );
+              })()}
 
-          {/* Affordable Housing */}
-          {layers.affordable && filteredAffordable.map((m) => (
-            <CircleMarker
-              key={`ah-${m.address}-${m.lat},${m.lng}`}
-              center={[m.lat, m.lng]}
-              radius={10}
-              pathOptions={{
-                color: "#ffffff",
-                weight: 2,
-                fillColor: AFFORDABLE_COLOR,
-                fillOpacity: 0.9,
-              }}
-            >
-              <Popup>
-                <div style={{ fontFamily: FONTS.body, fontSize: 13 }}>
-                  <strong>{m.name}</strong>
-                  <table style={{ marginTop: 6, fontSize: 12, borderCollapse: "collapse" }}>
-                    <tbody>
-                      <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Address</td><td>{m.address}</td></tr>
-                      <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Status</td><td>{m.status}</td></tr>
-                      <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Affordable Units</td><td>{m.units}</td></tr>
-                      <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>% Affordable</td><td>{m.pct}</td></tr>
-                      <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Est. Completion</td><td>{m.completion}</td></tr>
-                    </tbody>
-                  </table>
-                  <ViewIn3DButton compact payload={{
-                    address: m.address, lat: m.lat, lng: m.lng, parcel_apn: null,
-                    district: districtConfig.label,
-                    active_layers: ["affordable"],
+              {/* Affordable housing detail */}
+              {selected.type === "affordable" && (() => {
+                const m = selected.data;
+                return (
+                  <div>
+                    <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
+                      {m.name}
+                    </div>
+                    {[
+                      ["Address", m.address],
+                      ["Status", m.status],
+                      ["Affordable Units", m.units],
+                      ["% Affordable", m.pct],
+                      ["Est. Completion", m.completion],
+                    ].map(([label, val]) => (
+                      <div key={label} style={{
+                        display: "flex", justifyContent: "space-between",
+                        padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
+                        fontFamily: FONTS.body, fontSize: 12,
+                      }}>
+                        <span style={{ color: COLORS.warmGray }}>{label}</span>
+                        <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* 311 detail */}
+              {selected.type === "311" && (() => {
+                const r = selected.data;
+                const cat = normalize311(r.service_name);
+                const catColor = CAT_311[cat] ?? "#6B7280";
+                return (
+                  <div>
+                    <div style={{
+                      display: "inline-flex", alignItems: "center", gap: 5,
+                      padding: "3px 10px", borderRadius: 10, fontSize: 12,
+                      background: catColor + "18", color: catColor, fontWeight: 600,
+                      marginBottom: 10,
+                    }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: catColor }} />
+                      {cat}
+                    </div>
+                    <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
+                      {r.address ?? "Unknown"}
+                    </div>
+                    {[
+                      ["Date", fmtDate(r.requested_datetime)],
+                      ["Status", r.status_description ?? "—"],
+                      ["Subcategory", r.service_subtype ?? "—"],
+                    ].map(([label, val]) => (
+                      <div key={label} style={{
+                        display: "flex", justifyContent: "space-between",
+                        padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
+                        fontFamily: FONTS.body, fontSize: 12,
+                      }}>
+                        <span style={{ color: COLORS.warmGray }}>{label}</span>
+                        <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          ) : (
+            /* ── Filter / legend panel ────────────────────────── */
+            <div style={{ padding: "16px 18px", flex: 1 }}>
+              {/* Layers */}
+              <SidebarHeading text="Layers" />
+              {LAYER_META.map(({ key, label, color }) => (
+                <label key={key} style={{
+                  display: "flex", alignItems: "center", gap: 9,
+                  padding: "7px 0", cursor: "pointer",
+                  borderBottom: `1px solid ${COLORS.lightBorder}`,
+                  fontFamily: FONTS.body, fontSize: 12,
+                }}>
+                  <input
+                    type="checkbox" checked={layers[key]}
+                    onChange={e => toggleLayer(key, e.target.checked)}
+                    style={{ accentColor: color, width: 14, height: 14, cursor: "pointer" }}
+                  />
+                  <span style={{
+                    width: 9, height: 9, borderRadius: key === "cbds" ? 1 : "50%",
+                    background: key === "cbds" ? "transparent" : color,
+                    border: key === "cbds" ? `2px dashed ${color}` : "none",
+                    flexShrink: 0,
                   }} />
+                  <span style={{ color: COLORS.charcoal, flex: 1 }}>{label}</span>
+                  <span style={{
+                    fontFamily: FONTS.body, fontSize: 10, color: COLORS.warmGray,
+                    background: COLORS.cream, padding: "1px 7px", borderRadius: 8,
+                  }}>
+                    {layerCounts[key]}
+                  </span>
+                </label>
+              ))}
+
+              {/* Date Range */}
+              <div style={{ marginTop: 20 }}>
+                <SidebarHeading text="Date Range" />
+                <div style={{ display: "flex", gap: 6 }}>
+                  {([30, 90, 180] as DateRange[]).map(d => (
+                    <button key={d}
+                      onClick={() => setDateRange(d)}
+                      style={{
+                        flex: 1, padding: "6px 0", borderRadius: 8,
+                        border: `1px solid ${dateRange === d ? COLORS.orange : COLORS.lightBorder}`,
+                        background: dateRange === d ? COLORS.orange + "12" : "#fff",
+                        color: dateRange === d ? COLORS.orange : COLORS.midGray,
+                        fontFamily: FONTS.body, fontSize: 12, fontWeight: dateRange === d ? 700 : 400,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {d}d
+                    </button>
+                  ))}
                 </div>
-              </Popup>
-            </CircleMarker>
-          ))}
+              </div>
 
-          {/* 311 Requests */}
-          {layers.threeOneOne && filtered311.map((r) => {
-            const lat = parseFloat(r.lat!);
-            const lng = parseFloat(r.long!);
-            const color = threeOneOneColor(r.service_name);
-            const fmtDate = (d?: string) => {
-              if (!d) return "—";
-              try { return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
-              catch { return d; }
-            };
+              {/* Permit Categories */}
+              {layers.permits && (
+                <div style={{ marginTop: 20 }}>
+                  <SidebarHeading text="Permit Categories" />
+                  {([
+                    { label: "New Construction", color: PERMIT_COLOR.new },
+                    { label: "Demolition",       color: PERMIT_COLOR.demolition },
+                    { label: "Alteration",       color: PERMIT_COLOR.alteration },
+                    { label: "Other",            color: PERMIT_COLOR.other },
+                  ] as const).map(({ label, color }) => (
+                    <div key={label} style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      fontFamily: FONTS.body, fontSize: 11, color: COLORS.midGray,
+                      padding: "3px 0",
+                    }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                      {label}
+                    </div>
+                  ))}
+                  <div style={{ fontFamily: FONTS.body, fontSize: 10, color: COLORS.warmGray, marginTop: 4, fontStyle: "italic" }}>
+                    Circle size = estimated cost
+                  </div>
+                </div>
+              )}
 
-            return (
+              {/* 311 Categories */}
+              {layers.threeOneOne && (
+                <div style={{ marginTop: 20 }}>
+                  <SidebarHeading text="311 Categories" />
+                  {Object.entries(CAT_311).map(([cat, color]) => (
+                    <div key={cat} style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      fontFamily: FONTS.body, fontSize: 11, color: COLORS.midGray,
+                      padding: "3px 0",
+                    }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                      {cat}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Map area ─────────────────────────────────────────── */}
+        <div className="cp-map-area" style={{
+          flex: 1, position: "relative",
+          marginLeft: sidebarOpen ? 0 : -sidebarW,
+          transition: "margin-left 0.25s ease",
+        }}>
+          <MapContainer
+            center={center}
+            zoom={zoom}
+            style={{ width: "100%", height: "100%" }}
+            zoomControl={true}
+            attributionControl={true}
+          >
+            <TileLayer
+              url={MAPBOX_TILE_URL}
+              attribution='&copy; <a href="https://www.mapbox.com/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              maxZoom={19}
+              tileSize={512}
+              zoomOffset={-1}
+            />
+
+            <MapController districtConfig={districtConfig} filter={filter} />
+
+            {/* District boundary outline */}
+            {!selectedGeoName && districtGeoJSON && layers.neighborhoods && (
+              <GeoJSON
+                key={`dist-${districtConfig.number}`}
+                data={districtGeoJSON}
+                style={() => ({
+                  color: "#E8652D", weight: 3,
+                  fillColor: "#E8652D", fillOpacity: 0.04,
+                  interactive: false,
+                })}
+              />
+            )}
+
+            {/* Neighborhood Boundaries */}
+            {layers.neighborhoods && nhGeoJSON && (
+              <>
+                <GeoJSON key={nhKey} data={nhGeoJSON} style={nhStyle} />
+                <NeighborhoodLabels geojson={nhGeoJSON} />
+              </>
+            )}
+
+            {/* Community Benefit Districts */}
+            {layers.cbds && cbdGeoJSON && (
+              <>
+                <GeoJSON
+                  key={`cbd-${cbdGeoJSON.features.length}`}
+                  data={cbdGeoJSON}
+                  style={() => ({
+                    color: CBD_COLOR,
+                    weight: 2,
+                    dashArray: "6 4",
+                    fillColor: "transparent",
+                    fillOpacity: 0,
+                  })}
+                  onEachFeature={(feature, layer) => {
+                    const name = feature.properties?.name ?? "CBD";
+                    const slug = feature.properties?.slug ?? "";
+                    const revenue = feature.properties?.revenue;
+                    const revStr = revenue ? `$${(revenue / 1_000_000).toFixed(1)}M` : "—";
+                    layer.bindPopup(`
+                      <div style="font-family: ${FONTS.body}; font-size: 13px;">
+                        <strong>${name}</strong>
+                        <table style="margin-top: 6px; font-size: 12px; border-collapse: collapse;">
+                          <tbody>
+                            <tr><td style="color: #999; padding-right: 10px;">Revenue</td><td>${revStr}</td></tr>
+                            <tr><td style="color: #999; padding-right: 10px;">Districts</td><td>${feature.properties?.sup_districts ?? "—"}</td></tr>
+                          </tbody>
+                        </table>
+                        <a href="/cbd/${slug}" style="
+                          display: inline-block; margin-top: 8px;
+                          font-size: 12px; color: ${CBD_COLOR}; font-weight: 600;
+                          text-decoration: none;
+                        ">View CBD Portal &rarr;</a>
+                      </div>
+                    `);
+                  }}
+                />
+                <CBDLabels geojson={cbdGeoJSON} />
+              </>
+            )}
+
+            {/* Building Permits */}
+            {layers.permits && filteredPermits.map((r) => {
+              const [lng, lat] = r.location!.coordinates;
+              const cost  = r.estimated_cost != null ? parseFloat(String(r.estimated_cost)) : null;
+              const ptype = classifyPermit(r.permit_type_definition ?? null);
+              const color = PERMIT_COLOR[ptype];
+              return (
+                <CircleMarker
+                  key={`p-${r.permit_number ?? `${lat},${lng}`}`}
+                  center={[lat, lng]}
+                  radius={permitRadius(cost)}
+                  pathOptions={{ color: "#ffffff", weight: 2, fillColor: color, fillOpacity: 0.9 }}
+                  eventHandlers={{
+                    click: () => {
+                      setSelected({ type: "permit", data: r });
+                      if (!sidebarOpen) setSidebarOpen(true);
+                    },
+                  }}
+                >
+                  <Popup>
+                    <div style={{ fontFamily: FONTS.body, fontSize: 13 }}>
+                      <strong>{[r.street_number, r.street_name, r.street_suffix].filter(Boolean).join(" ") || "Unknown"}</strong>
+                      <br />{cleanPermitLabel(r.permit_type_definition ?? "")} &middot; {fmtCost(cost)}
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
+
+            {/* Eviction Notices — diamond markers */}
+            {layers.evictions && filteredEvictions.map((r) => {
+              const [lng, lat] = r.shape!.coordinates;
+              const icon = L.divIcon({
+                className: "",
+                html: `<div style="
+                  width:12px;height:12px;
+                  background:${EVICTION_COLOR};
+                  border:2px solid #fff;
+                  transform:rotate(45deg);
+                  box-shadow:0 1px 4px rgba(0,0,0,0.3);
+                "></div>`,
+                iconSize: [16, 16],
+                iconAnchor: [8, 8],
+              });
+
+              return (
+                <Marker
+                  key={`e-${r.address ?? ''}-${lat},${lng}`}
+                  position={[lat, lng]}
+                  icon={icon}
+                  eventHandlers={{
+                    click: () => {
+                      setSelected({ type: "eviction", data: r });
+                      if (!sidebarOpen) setSidebarOpen(true);
+                    },
+                  }}
+                >
+                  <Popup>
+                    <div style={{ fontFamily: FONTS.body, fontSize: 13 }}>
+                      <strong>Eviction — {r.address ?? "Unknown"}</strong>
+                      <br />{fmtDate(r.file_date)}
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
+
+            {/* Affordable Housing */}
+            {layers.affordable && filteredAffordable.map((m) => (
               <CircleMarker
-                key={`311-${r.service_request_id}`}
-                center={[lat, lng]}
-                radius={5}
-                pathOptions={{
-                  color: "#ffffff",
-                  weight: 1,
-                  fillColor: color,
-                  fillOpacity: 0.85,
+                key={`ah-${m.address}-${m.lat},${m.lng}`}
+                center={[m.lat, m.lng]}
+                radius={10}
+                pathOptions={{ color: "#ffffff", weight: 2, fillColor: AFFORDABLE_COLOR, fillOpacity: 0.9 }}
+                eventHandlers={{
+                  click: () => {
+                    setSelected({ type: "affordable", data: m });
+                    if (!sidebarOpen) setSidebarOpen(true);
+                  },
                 }}
               >
                 <Popup>
                   <div style={{ fontFamily: FONTS.body, fontSize: 13 }}>
-                    <strong>{r.service_name ?? "311 Request"}</strong>
-                    <table style={{ marginTop: 6, fontSize: 12, borderCollapse: "collapse" }}>
-                      <tbody>
-                        {r.service_subtype && (
-                          <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Subcategory</td><td>{r.service_subtype}</td></tr>
-                        )}
-                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Address</td><td>{r.address ?? "—"}</td></tr>
-                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Date</td><td>{fmtDate(r.requested_datetime)}</td></tr>
-                        <tr><td style={{ color: COLORS.warmGray, paddingRight: 10 }}>Status</td><td>{r.status_description ?? "—"}</td></tr>
-                      </tbody>
-                    </table>
+                    <strong>{m.name}</strong>
+                    <br />{m.address} &middot; {m.units} units
                   </div>
                 </Popup>
               </CircleMarker>
-            );
-          })}
-        </MapContainer>
+            ))}
 
-        {/* Floating layer toggle panel */}
-        <LayerPanel layers={layers} onChange={toggleLayer} />
-
-        {/* Map legend */}
-        {(layers.permits || layers.affordable || layers.evictions || layers.threeOneOne || layers.cbds) && <MapLegend layers={layers} />}
+            {/* 311 Requests */}
+            {layers.threeOneOne && filtered311.map((r) => {
+              const lat = parseFloat(r.lat!);
+              const lng = parseFloat(r.long!);
+              const color = threeOneOneColor(r.service_name);
+              return (
+                <CircleMarker
+                  key={`311-${r.service_request_id}`}
+                  center={[lat, lng]}
+                  radius={5}
+                  pathOptions={{ color: "#ffffff", weight: 1, fillColor: color, fillOpacity: 0.85 }}
+                  eventHandlers={{
+                    click: () => {
+                      setSelected({ type: "311", data: r });
+                      if (!sidebarOpen) setSidebarOpen(true);
+                    },
+                  }}
+                >
+                  <Popup>
+                    <div style={{ fontFamily: FONTS.body, fontSize: 13 }}>
+                      <strong>{r.service_name ?? "311 Request"}</strong>
+                      <br />{r.address ?? ""} &middot; {fmtDate(r.requested_datetime)}
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
+          </MapContainer>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
