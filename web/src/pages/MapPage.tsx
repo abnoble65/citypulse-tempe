@@ -93,9 +93,16 @@ function fmtCost(cost: number | null): string {
 }
 
 function fmtDate(d?: string): string {
-  if (!d) return "—";
+  if (!d) return "";
   try { return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); }
   catch { return d; }
+}
+
+function fmtCostFull(c: string | number | null | undefined): string {
+  if (c == null) return "";
+  const n = typeof c === "number" ? c : parseFloat(c);
+  if (isNaN(n) || n <= 0) return "";
+  return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
 
 // ── Geometry helpers ───────────────────────────────────────────────────────────
@@ -136,19 +143,45 @@ interface PermitRow {
   street_suffix?:          string;
   permit_type_definition?: string;
   estimated_cost?:         string | number;
+  revised_cost?:           string | number;
   status?:                 string;
   description?:            string;
+  filed_date?:             string;
+  issued_date?:            string;
+  completed_date?:         string;
+  permit_expiration_date?: string;
+  neighborhoods_analysis_boundaries?: string;
+  existing_use?:           string;
+  proposed_use?:           string;
   location?:               { type: string; coordinates: [number, number] };
 }
 
 interface EvictionRow {
+  eviction_id?:            string;
   address?:                string;
+  city?:                   string;
+  zip?:                    string;
   file_date?:              string;
-  non_payment?:            boolean;
-  owner_move_in?:          boolean;
-  ellis_act_withdrawal?:   boolean;
-  breach?:                 boolean;
   neighborhood?:           string;
+  non_payment?:            boolean;
+  breach?:                 boolean;
+  nuisance?:               boolean;
+  illegal_use?:            boolean;
+  failure_to_sign_renewal?: boolean;
+  access_denial?:          boolean;
+  unapproved_subtenant?:   boolean;
+  owner_move_in?:          boolean;
+  demolition?:             boolean;
+  capital_improvement?:    boolean;
+  substantial_rehab?:      boolean;
+  ellis_act_withdrawal?:   boolean;
+  condo_conversion?:       boolean;
+  roommate_same_unit?:     boolean;
+  other_cause?:            boolean;
+  late_payments?:          boolean;
+  lead_remediation?:       boolean;
+  development?:            boolean;
+  good_samaritan_ends?:    boolean;
   shape?:                  { type: string; coordinates: [number, number] };
 }
 
@@ -177,11 +210,16 @@ interface AHMarker {
 interface ThreeOneOneRow {
   service_request_id: string;
   requested_datetime?: string;
+  updated_datetime?:   string;
+  closed_date?:        string;
   status_description?: string;
-  service_name?: string;
-  service_subtype?: string;
-  address?: string;
-  lat?: string;
+  service_name?:       string;
+  service_subtype?:    string;
+  service_details?:    string;
+  address?:            string;
+  neighborhood?:       string;
+  agency_responsible?: string;
+  lat?:  string;
   long?: string;
 }
 
@@ -439,7 +477,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
 
     const params = new URLSearchParams({
       $where:  distWhere,
-      $select: "permit_number,street_number,street_name,street_suffix,permit_type_definition,estimated_cost,status,description,location",
+      $select: "permit_number,street_number,street_name,street_suffix,permit_type_definition,estimated_cost,revised_cost,status,description,filed_date,issued_date,completed_date,permit_expiration_date,neighborhoods_analysis_boundaries,existing_use,proposed_use,location",
       $limit:  "1500",
       $order:  "estimated_cost DESC",
     });
@@ -462,7 +500,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
 
     const params = new URLSearchParams({
       $where:  evictWhere,
-      $select: "address,file_date,non_payment,owner_move_in,ellis_act_withdrawal,breach,neighborhood,shape",
+      $select: "eviction_id,address,city,zip,file_date,neighborhood,non_payment,breach,nuisance,illegal_use,failure_to_sign_renewal,access_denial,unapproved_subtenant,owner_move_in,demolition,capital_improvement,substantial_rehab,ellis_act_withdrawal,condo_conversion,roommate_same_unit,other_cause,late_payments,lead_remediation,development,good_samaritan_ends,shape",
       $limit:  "1200",
     });
 
@@ -534,7 +572,7 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
 
     const params = new URLSearchParams({
       $where:  distWhere,
-      $select: "service_request_id,requested_datetime,status_description,service_name,service_subtype,address,lat,long",
+      $select: "service_request_id,requested_datetime,updated_datetime,closed_date,status_description,service_name,service_subtype,service_details,address,neighborhood,agency_responsible,lat,long",
       $limit:  "2000",
       $order:  "requested_datetime DESC",
     });
@@ -1081,202 +1119,241 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
 
           {/* ── Right-side detail panel (slides over map) ──── */}
           <div className={`cp-detail-panel ${selected ? "open" : ""}`}>
-            {selected && (
-              <div style={{ padding: "18px 20px" }}>
-                <div style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  marginBottom: 14,
-                }}>
-                  <span style={{
-                    fontFamily: FONTS.body, fontSize: 11, fontWeight: 700, color: COLORS.charcoal,
-                    textTransform: "uppercase", letterSpacing: "0.05em",
+            {selected && (() => {
+              /* shared detail row — hides when value is empty */
+              const DRow = ({ label, value }: { label: string; value: string | undefined | null }) => {
+                if (!value) return null;
+                return (
+                  <div style={{
+                    display: "flex", justifyContent: "space-between", gap: 12,
+                    padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
+                    fontFamily: FONTS.body, fontSize: 12,
                   }}>
-                    {selected.type === "permit" ? "Building Permit"
-                      : selected.type === "eviction" ? "Eviction Notice"
-                      : selected.type === "affordable" ? "Affordable Housing"
-                      : "311 Request"}
-                  </span>
-                  <button onClick={() => setSelected(null)} style={{
-                    background: "none", border: `1px solid ${COLORS.lightBorder}`,
-                    borderRadius: 6, padding: "2px 10px", cursor: "pointer",
-                    fontFamily: FONTS.body, fontSize: 11, color: COLORS.midGray,
-                  }}>
-                    Close
-                  </button>
-                </div>
+                    <span style={{
+                      color: COLORS.warmGray, fontSize: 10, fontWeight: 700,
+                      textTransform: "uppercase", letterSpacing: "0.04em",
+                      flexShrink: 0, paddingTop: 1,
+                    }}>{label}</span>
+                    <span style={{ color: COLORS.charcoal, fontWeight: 500, textAlign: "right" }}>{value}</span>
+                  </div>
+                );
+              };
 
-                {/* Permit detail */}
-                {selected.type === "permit" && (() => {
-                  const r = selected.data;
-                  const addr = [r.street_number, r.street_name, r.street_suffix].filter(Boolean).join(" ") || "Unknown";
-                  const cost = r.estimated_cost != null ? parseFloat(String(r.estimated_cost)) : null;
-                  return (
-                    <div>
-                      <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
-                        {addr}
-                      </div>
-                      {[
-                        ["Type", cleanPermitLabel(r.permit_type_definition ?? "Permit")],
-                        ["Status", (r.status ?? "—").replace(/\b\w/g, c => c.toUpperCase())],
-                        ["Est. Cost", fmtCost(cost)],
-                        ["Permit #", r.permit_number ?? "—"],
-                      ].map(([label, val]) => (
-                        <div key={label} style={{
-                          display: "flex", justifyContent: "space-between",
-                          padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
-                          fontFamily: FONTS.body, fontSize: 12,
-                        }}>
-                          <span style={{ color: COLORS.warmGray }}>{label}</span>
-                          <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
+              /* record link with divider */
+              const RecordLink = ({ href, label }: { href: string; label: string }) => (
+                <>
+                  <div style={{ borderTop: `1px solid ${COLORS.lightBorder}`, margin: "16px 0 12px" }} />
+                  <a href={href} target="_blank" rel="noopener noreferrer" style={{
+                    fontFamily: FONTS.body, fontSize: 12, fontWeight: 600,
+                    color: COLORS.orange, textDecoration: "none",
+                  }}>
+                    {label} &rarr;
+                  </a>
+                </>
+              );
+
+              /* header: record type subtitle + close */
+              const typeLabel =
+                selected.type === "permit" ? "Building Permit"
+                : selected.type === "eviction" ? "Eviction Notice"
+                : selected.type === "affordable" ? "Affordable Housing"
+                : "311 Request";
+
+              return (
+                <div style={{ padding: "18px 20px" }}>
+                  {/* Header */}
+                  <div style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    marginBottom: 4,
+                  }}>
+                    <span style={{
+                      fontFamily: FONTS.body, fontSize: 10, fontWeight: 700, color: COLORS.warmGray,
+                      textTransform: "uppercase", letterSpacing: "0.06em",
+                    }}>
+                      {typeLabel}
+                    </span>
+                    <button onClick={() => setSelected(null)} style={{
+                      background: "none", border: `1px solid ${COLORS.lightBorder}`,
+                      borderRadius: 6, padding: "2px 10px", cursor: "pointer",
+                      fontFamily: FONTS.body, fontSize: 11, color: COLORS.midGray,
+                    }}>
+                      Close
+                    </button>
+                  </div>
+
+                  {/* ── Permit ─────────────────────────── */}
+                  {selected.type === "permit" && (() => {
+                    const r = selected.data;
+                    const addr = [r.street_number, r.street_name, r.street_suffix].filter(Boolean).join(" ") || "Unknown";
+                    const estCost = fmtCostFull(r.estimated_cost);
+                    const revCost = fmtCostFull(r.revised_cost);
+                    return (
+                      <>
+                        <div style={{ fontFamily: FONTS.body, fontSize: 16, fontWeight: 700, color: COLORS.charcoal, marginBottom: 14, lineHeight: 1.3 }}>
+                          {addr}
                         </div>
-                      ))}
-                      {r.description && (
+                        <DRow label="Permit #" value={r.permit_number} />
+                        <DRow label="Type" value={r.permit_type_definition ? cleanPermitLabel(r.permit_type_definition) : undefined} />
+                        <DRow label="Status" value={r.status ? r.status.replace(/\b\w/g, c => c.toUpperCase()) : undefined} />
+                        <DRow label="Filed" value={fmtDate(r.filed_date)} />
+                        <DRow label="Issued" value={fmtDate(r.issued_date)} />
+                        <DRow label="Completed" value={fmtDate(r.completed_date)} />
+                        <DRow label="Expires" value={fmtDate(r.permit_expiration_date)} />
+                        <DRow label="Neighborhood" value={r.neighborhoods_analysis_boundaries} />
+                        <DRow label="Estimated Cost" value={estCost} />
+                        {revCost && revCost !== estCost && <DRow label="Revised Cost" value={revCost} />}
+                        <DRow label="Existing Use" value={r.existing_use} />
+                        <DRow label="Proposed Use" value={r.proposed_use} />
+                        {r.description && (
+                          <div style={{
+                            marginTop: 14, padding: "10px 12px",
+                            background: COLORS.cream, borderRadius: 8,
+                            fontFamily: FONTS.body, fontSize: 12, color: COLORS.midGray,
+                            lineHeight: 1.55, fontStyle: "italic",
+                          }}>
+                            {r.description}
+                          </div>
+                        )}
+                        {r.permit_number && (
+                          <RecordLink
+                            href={`https://dbiweb02.sfgov.org/dbipts/default.aspx?page=Permit&PermitNumber=${r.permit_number}`}
+                            label="View official record"
+                          />
+                        )}
+                      </>
+                    );
+                  })()}
+
+                  {/* ── Eviction ───────────────────────── */}
+                  {selected.type === "eviction" && (() => {
+                    const r = selected.data;
+                    const reasons: [string, boolean | undefined][] = [
+                      ["Non-Payment of Rent", r.non_payment],
+                      ["Breach of Lease", r.breach],
+                      ["Nuisance", r.nuisance],
+                      ["Illegal Use", r.illegal_use],
+                      ["Failure to Sign Renewal", r.failure_to_sign_renewal],
+                      ["Access Denial", r.access_denial],
+                      ["Unapproved Subtenant", r.unapproved_subtenant],
+                      ["Owner Move-In", r.owner_move_in],
+                      ["Demolition", r.demolition],
+                      ["Capital Improvement", r.capital_improvement],
+                      ["Substantial Rehab", r.substantial_rehab],
+                      ["Ellis Act", r.ellis_act_withdrawal],
+                      ["Condo Conversion", r.condo_conversion],
+                      ["Roommate Same Unit", r.roommate_same_unit],
+                      ["Late Payments", r.late_payments],
+                      ["Lead Remediation", r.lead_remediation],
+                      ["Development", r.development],
+                      ["Good Samaritan Ends", r.good_samaritan_ends],
+                      ["Other", r.other_cause],
+                    ];
+                    const activeReasons = reasons.filter(([, v]) => v === true).map(([l]) => l);
+                    return (
+                      <>
+                        <div style={{ fontFamily: FONTS.body, fontSize: 16, fontWeight: 700, color: COLORS.charcoal, marginBottom: 14, lineHeight: 1.3 }}>
+                          {r.address ?? "Unknown address"}
+                        </div>
+                        <DRow label="File #" value={r.eviction_id} />
+                        <DRow label="Filed" value={fmtDate(r.file_date)} />
+                        <DRow label="Neighborhood" value={r.neighborhood} />
+                        <DRow label="City" value={r.city} />
+                        <DRow label="Zip" value={r.zip} />
+                        {activeReasons.length > 0 && (
+                          <div style={{ marginTop: 14 }}>
+                            <div style={{
+                              fontFamily: FONTS.body, fontSize: 10, fontWeight: 700, color: COLORS.warmGray,
+                              textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6,
+                            }}>
+                              Eviction Reasons
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                              {activeReasons.map(reason => (
+                                <span key={reason} style={{
+                                  fontFamily: FONTS.body, fontSize: 11, fontWeight: 500,
+                                  background: "#FEE2E2", color: "#991B1B",
+                                  padding: "2px 8px", borderRadius: 4,
+                                }}>
+                                  {reason}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <RecordLink
+                          href="https://data.sfgov.org/Housing-and-Buildings/Eviction-Notices/5cei-gny5"
+                          label="View eviction records on DataSF"
+                        />
+                      </>
+                    );
+                  })()}
+
+                  {/* ── Affordable Housing ─────────────── */}
+                  {selected.type === "affordable" && (() => {
+                    const m = selected.data;
+                    return (
+                      <>
+                        <div style={{ fontFamily: FONTS.body, fontSize: 16, fontWeight: 700, color: COLORS.charcoal, marginBottom: 14, lineHeight: 1.3 }}>
+                          {m.name}
+                        </div>
+                        <DRow label="Address" value={m.address} />
+                        <DRow label="Status" value={m.status} />
+                        <DRow label="Affordable Units" value={m.units} />
+                        <DRow label="% Affordable" value={m.pct} />
+                        <DRow label="Est. Completion" value={m.completion} />
+                      </>
+                    );
+                  })()}
+
+                  {/* ── 311 Request ─────────────────────── */}
+                  {selected.type === "311" && (() => {
+                    const r = selected.data;
+                    const cat = normalize311(r.service_name);
+                    const catColor = CAT_311[cat] ?? "#6B7280";
+                    return (
+                      <>
                         <div style={{
-                          marginTop: 12, padding: "10px 12px",
-                          background: COLORS.cream, borderRadius: 8,
-                          fontFamily: FONTS.body, fontSize: 12, color: COLORS.midGray,
-                          lineHeight: 1.5,
+                          display: "inline-flex", alignItems: "center", gap: 5,
+                          padding: "3px 10px", borderRadius: 10, fontSize: 11,
+                          background: catColor + "18", color: catColor, fontWeight: 600,
+                          marginBottom: 8,
                         }}>
-                          {(r.description).slice(0, 200)}
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: catColor }} />
+                          {cat}
                         </div>
-                      )}
-                      {r.permit_number && (
-                        <a
-                          href={`https://dbiweb02.sfgov.org/dbipts/default.aspx?page=Permit&PermitNumber=${r.permit_number}`}
-                          target="_blank" rel="noopener noreferrer"
-                          style={{
-                            display: "inline-block", marginTop: 14,
-                            fontFamily: FONTS.body, fontSize: 12, fontWeight: 600,
-                            color: COLORS.orange, textDecoration: "none",
-                          }}
-                        >
-                          View official record &rarr;
-                        </a>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Eviction detail */}
-                {selected.type === "eviction" && (() => {
-                  const r = selected.data;
-                  const fmtBool = (v: boolean | undefined) => v === true ? "Yes" : v === false ? "No" : "—";
-                  return (
-                    <div>
-                      <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
-                        {r.address ?? "Unknown address"}
-                      </div>
-                      {[
-                        ["Date Filed", fmtDate(r.file_date)],
-                        ["Non-Payment", fmtBool(r.non_payment)],
-                        ["Owner Move-In", fmtBool(r.owner_move_in)],
-                        ["Ellis Act", fmtBool(r.ellis_act_withdrawal)],
-                        ["Breach", fmtBool(r.breach)],
-                        ["Neighborhood", r.neighborhood ?? "—"],
-                      ].map(([label, val]) => (
-                        <div key={label} style={{
-                          display: "flex", justifyContent: "space-between",
-                          padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
-                          fontFamily: FONTS.body, fontSize: 12,
-                        }}>
-                          <span style={{ color: COLORS.warmGray }}>{label}</span>
-                          <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
+                        <div style={{ fontFamily: FONTS.body, fontSize: 16, fontWeight: 700, color: COLORS.charcoal, marginBottom: 14, lineHeight: 1.3 }}>
+                          {r.address ?? "Unknown"}
                         </div>
-                      ))}
-                      <a
-                        href="https://data.sfgov.org/Housing-and-Buildings/Eviction-Notices/5cei-gny5"
-                        target="_blank" rel="noopener noreferrer"
-                        style={{
-                          display: "inline-block", marginTop: 14,
-                          fontFamily: FONTS.body, fontSize: 12, fontWeight: 600,
-                          color: COLORS.orange, textDecoration: "none",
-                        }}
-                      >
-                        View eviction records on DataSF &rarr;
-                      </a>
-                    </div>
-                  );
-                })()}
-
-                {/* Affordable housing detail */}
-                {selected.type === "affordable" && (() => {
-                  const m = selected.data;
-                  return (
-                    <div>
-                      <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
-                        {m.name}
-                      </div>
-                      {[
-                        ["Address", m.address],
-                        ["Status", m.status],
-                        ["Affordable Units", m.units],
-                        ["% Affordable", m.pct],
-                        ["Est. Completion", m.completion],
-                      ].map(([label, val]) => (
-                        <div key={label} style={{
-                          display: "flex", justifyContent: "space-between",
-                          padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
-                          fontFamily: FONTS.body, fontSize: 12,
-                        }}>
-                          <span style={{ color: COLORS.warmGray }}>{label}</span>
-                          <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-
-                {/* 311 detail */}
-                {selected.type === "311" && (() => {
-                  const r = selected.data;
-                  const cat = normalize311(r.service_name);
-                  const catColor = CAT_311[cat] ?? "#6B7280";
-                  return (
-                    <div>
-                      <div style={{
-                        display: "inline-flex", alignItems: "center", gap: 5,
-                        padding: "3px 10px", borderRadius: 10, fontSize: 12,
-                        background: catColor + "18", color: catColor, fontWeight: 600,
-                        marginBottom: 10,
-                      }}>
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: catColor }} />
-                        {cat}
-                      </div>
-                      <div style={{ fontFamily: FONTS.body, fontSize: 15, fontWeight: 600, color: COLORS.charcoal, marginBottom: 12 }}>
-                        {r.address ?? "Unknown"}
-                      </div>
-                      {[
-                        ["Date", fmtDate(r.requested_datetime)],
-                        ["Status", r.status_description ?? "—"],
-                        ["Subcategory", r.service_subtype ?? "—"],
-                      ].map(([label, val]) => (
-                        <div key={label} style={{
-                          display: "flex", justifyContent: "space-between",
-                          padding: "6px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
-                          fontFamily: FONTS.body, fontSize: 12,
-                        }}>
-                          <span style={{ color: COLORS.warmGray }}>{label}</span>
-                          <span style={{ color: COLORS.charcoal, fontWeight: 500 }}>{val}</span>
-                        </div>
-                      ))}
-                      {r.service_request_id && (
-                        <a
-                          href={`https://sf311.org/report/${r.service_request_id}`}
-                          target="_blank" rel="noopener noreferrer"
-                          style={{
-                            display: "inline-block", marginTop: 14,
-                            fontFamily: FONTS.body, fontSize: 12, fontWeight: 600,
-                            color: COLORS.orange, textDecoration: "none",
-                          }}
-                        >
-                          View official record &rarr;
-                        </a>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
+                        <DRow label="Request #" value={r.service_request_id} />
+                        <DRow label="Category" value={r.service_subtype || r.service_name} />
+                        <DRow label="Status" value={r.status_description} />
+                        <DRow label="Opened" value={fmtDate(r.requested_datetime)} />
+                        <DRow label="Updated" value={fmtDate(r.updated_datetime)} />
+                        <DRow label="Closed" value={fmtDate(r.closed_date)} />
+                        <DRow label="Neighborhood" value={r.neighborhood} />
+                        <DRow label="Agency" value={r.agency_responsible} />
+                        {r.service_details && (
+                          <div style={{
+                            marginTop: 14, padding: "10px 12px",
+                            background: COLORS.cream, borderRadius: 8,
+                            fontFamily: FONTS.body, fontSize: 12, color: COLORS.midGray,
+                            lineHeight: 1.55, fontStyle: "italic",
+                          }}>
+                            {r.service_details}
+                          </div>
+                        )}
+                        {r.service_request_id && (
+                          <RecordLink
+                            href={`https://sf311.org/report/${r.service_request_id}`}
+                            label="View official record"
+                          />
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
