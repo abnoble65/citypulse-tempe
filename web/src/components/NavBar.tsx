@@ -191,6 +191,20 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
             }}
           >
             CBD PORTALS
+            <span style={{
+              background: "#E8652D",
+              color: "#fff",
+              fontSize: 9,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              borderRadius: 6,
+              padding: "1px 6px",
+              marginLeft: 5,
+              letterSpacing: "0.04em",
+              verticalAlign: "middle",
+            }}>
+              OPS
+            </span>
           </a>
         </div>
 

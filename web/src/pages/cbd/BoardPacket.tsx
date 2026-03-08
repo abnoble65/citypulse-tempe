@@ -107,11 +107,33 @@ interface PacketData {
 
 // ── One-page landscape PDF builder ─────────────────────────────────────
 
-function buildPDF(d: PacketData) {
+async function buildPDF(d: PacketData) {
   const { config, permits, rows311, evictions, businesses, aiSummary, lang } = d;
   const doc = new jsPDF("l", "mm", "letter"); // landscape 279.4 x 215.9mm
   const W = 279.4, H = 215.9, M = 12;
   const accent = hexToRGB(config.accent_color);
+
+  // ── CJK font for Chinese PDFs ──
+  let cjkReady = false;
+  if (lang === "zh") {
+    try {
+      const buf = await fetch("/fonts/NotoSansSC-Regular.ttf").then(r => r.arrayBuffer());
+      const bytes = new Uint8Array(buf);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 8192) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      }
+      doc.addFileToVFS("NotoSansSC-Regular.ttf", btoa(binary));
+      doc.addFont("NotoSansSC-Regular.ttf", "NotoSansSC", "normal");
+      cjkReady = true;
+    } catch (e) {
+      console.warn("[BoardPacket] CJK font load failed, falling back to helvetica", e);
+    }
+  }
+
+  function setF(style: "normal" | "bold" | "italic") {
+    doc.setFont(cjkReady ? "NotoSansSC" : "helvetica", cjkReady ? "normal" : style);
+  }
   const now = new Date();
   const monthYear = now.toLocaleDateString(lang === "zh" ? "zh-TW" : lang === "es" ? "es" : "en-US", { month: "long", year: "numeric" });
   const dateStr = now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -172,12 +194,12 @@ function buildPDF(d: PacketData) {
   doc.setFillColor(...accent);
   doc.rect(0, 0, W, 2, "F");
 
-  doc.setFont("helvetica", "bold");
+  setF("bold");
   doc.setFontSize(14);
   doc.setTextColor(...accent);
   doc.text(config.name, M, 10);
 
-  doc.setFont("helvetica", "normal");
+  setF("normal");
   doc.setFontSize(10);
   doc.setTextColor(80, 80, 80);
   doc.text(`${t("boardReport", lang)} · ${monthYear}`, W / 2, 10, { align: "center" });
@@ -212,12 +234,12 @@ function buildPDF(d: PacketData) {
     doc.setFillColor(...m.color);
     doc.rect(x, metricsY + 3, 1.2, mBoxH - 6, "F");
 
-    doc.setFont("helvetica", "bold");
+    setF("bold");
     doc.setFontSize(14);
     doc.setTextColor(...m.color);
     doc.text(m.value, x + mBoxW / 2, metricsY + 10, { align: "center" });
 
-    doc.setFont("helvetica", "normal");
+    setF("normal");
     doc.setFontSize(6.5);
     doc.setTextColor(120, 120, 120);
     const labelLines = doc.splitTextToSize(m.label, mBoxW - 6);
@@ -232,7 +254,7 @@ function buildPDF(d: PacketData) {
   const rightX = M + colW + 8;
   // — LEFT COLUMN: 311 Activity Summary ——————————————
 
-  doc.setFont("helvetica", "bold");
+  setF("bold");
   doc.setFontSize(9);
   doc.setTextColor(...accent);
   doc.text(t("activity311", lang), leftX, row2Y);
@@ -242,7 +264,7 @@ function buildPDF(d: PacketData) {
 
   // Category breakdown bars
   let ly = row2Y + 6;
-  doc.setFont("helvetica", "bold");
+  setF("bold");
   doc.setFontSize(7);
   doc.setTextColor(80, 80, 80);
   doc.text(t("categoryBreak", lang), leftX + 2, ly);
@@ -258,13 +280,13 @@ function buildPDF(d: PacketData) {
   for (const [cat, count] of catEntries.slice(0, 5)) {
     const barW = Math.max(2, (count / maxCatCount) * barMaxW);
     const clr = catColors[cat] ?? [140, 140, 140];
-    doc.setFont("helvetica", "normal");
+    setF("normal");
     doc.setFontSize(7);
     doc.setTextColor(60, 60, 60);
     doc.text(truncate(cat, 18), leftX + 2, ly + 3);
     doc.setFillColor(...clr);
     doc.roundedRect(leftX + 42, ly, barW, 3.5, 1, 1, "F");
-    doc.setFont("helvetica", "bold");
+    setF("bold");
     doc.setFontSize(6.5);
     doc.setTextColor(...clr);
     doc.text(String(count), leftX + 44 + barW, ly + 3);
@@ -273,14 +295,14 @@ function buildPDF(d: PacketData) {
 
   // Top hotspots
   ly += 3;
-  doc.setFont("helvetica", "bold");
+  setF("bold");
   doc.setFontSize(7);
   doc.setTextColor(80, 80, 80);
   doc.text(t("topHotspots", lang), leftX + 2, ly);
   ly += 4;
 
   for (const [addr, count] of topAddresses.slice(0, 5)) {
-    doc.setFont("helvetica", "normal");
+    setF("normal");
     doc.setFontSize(6.5);
     doc.setTextColor(60, 60, 60);
     const line = truncate(`${addr}  —  ${count} ${t("requests", lang)}`, 55);
@@ -290,7 +312,7 @@ function buildPDF(d: PacketData) {
 
   // Resolution by category
   ly += 3;
-  doc.setFont("helvetica", "bold");
+  setF("bold");
   doc.setFontSize(7);
   doc.setTextColor(80, 80, 80);
   doc.text(t("resByCategory", lang), leftX + 2, ly);
@@ -299,7 +321,7 @@ function buildPDF(d: PacketData) {
   for (const [cat] of catEntries.slice(0, 4)) {
     const days = catResDays[cat];
     const avg = days ? (days.reduce((s, d) => s + d, 0) / days.length).toFixed(1) : "—";
-    doc.setFont("helvetica", "normal");
+    setF("normal");
     doc.setFontSize(6.5);
     doc.setTextColor(60, 60, 60);
     doc.text(truncate(cat, 18), leftX + 2, ly + 3);
@@ -309,14 +331,14 @@ function buildPDF(d: PacketData) {
       else if (avgN <= 7) doc.setTextColor(180, 130, 10);
       else doc.setTextColor(220, 50, 50);
     }
-    doc.setFont("helvetica", "bold");
+    setF("bold");
     doc.text(`${avg} ${t("days", lang)}`, leftX + 44, ly + 3);
     ly += 5;
   }
 
   // — RIGHT COLUMN: Permit Activity ——————————————
 
-  doc.setFont("helvetica", "bold");
+  setF("bold");
   doc.setFontSize(9);
   doc.setTextColor(...accent);
   doc.text(t("permitActivity", lang), rightX, row2Y);
@@ -324,7 +346,7 @@ function buildPDF(d: PacketData) {
   doc.line(rightX, row2Y + 1.5, rightX + colW, row2Y + 1.5);
 
   let ry = row2Y + 6;
-  doc.setFont("helvetica", "bold");
+  setF("bold");
   doc.setFontSize(7);
   doc.setTextColor(80, 80, 80);
   doc.text(t("byType", lang), rightX + 2, ry);
@@ -335,13 +357,13 @@ function buildPDF(d: PacketData) {
 
   for (const [type, count] of permitEntries.slice(0, 5)) {
     const barW = Math.max(2, (count / maxPermitCount) * barMaxW);
-    doc.setFont("helvetica", "normal");
+    setF("normal");
     doc.setFontSize(6.5);
     doc.setTextColor(60, 60, 60);
     doc.text(truncate(type, 22), rightX + 2, ry + 3);
     doc.setFillColor(59, 130, 246);
     doc.roundedRect(rightX + 50, ry, barW, 3.5, 1, 1, "F");
-    doc.setFont("helvetica", "bold");
+    setF("bold");
     doc.setFontSize(6.5);
     doc.setTextColor(59, 130, 246);
     doc.text(String(count), rightX + 52 + barW, ry + 3);
@@ -350,14 +372,14 @@ function buildPDF(d: PacketData) {
 
   // Top projects
   ry += 3;
-  doc.setFont("helvetica", "bold");
+  setF("bold");
   doc.setFontSize(7);
   doc.setTextColor(80, 80, 80);
   doc.text(t("topProjects", lang), rightX + 2, ry);
   ry += 4;
 
   for (const p of topByValue.slice(0, 3)) {
-    doc.setFont("helvetica", "bold");
+    setF("bold");
     doc.setFontSize(6.5);
     doc.setTextColor(50, 50, 50);
     const projLine = truncate(`${toTitleCase(cleanAddress(p.address))}  —  $${(p.cost / 1000).toFixed(0)}K  (${cleanPermitLabel(p.type)})`, 60);
@@ -365,7 +387,7 @@ function buildPDF(d: PacketData) {
     ry += 5.5;
   }
   if (topByValue.length === 0) {
-    doc.setFont("helvetica", "italic");
+    setF("italic");
     doc.setFontSize(6.5);
     doc.setTextColor(140, 140, 140);
     doc.text("No high-value permits in period", rightX + 2, ry + 3);
@@ -374,12 +396,12 @@ function buildPDF(d: PacketData) {
 
   // Business summary
   ry += 3;
-  doc.setFont("helvetica", "bold");
+  setF("bold");
   doc.setFontSize(7);
   doc.setTextColor(80, 80, 80);
   doc.text(t("newBusiness", lang), rightX + 2, ry);
   ry += 4;
-  doc.setFont("helvetica", "normal");
+  setF("normal");
   doc.setFontSize(6.5);
   doc.setTextColor(60, 60, 60);
   doc.text(`${activeBiz.length} active  ·  ${newBiz.length} new (90d)  ·  ${businesses.filter(b => b.endDate && b.endDate >= cutoff90Str).length} closures`, rightX + 2, ry + 3);
@@ -391,7 +413,7 @@ function buildPDF(d: PacketData) {
   doc.setLineWidth(0.6);
   doc.line(M, briefY - 2, W - M, briefY - 2);
 
-  doc.setFont("helvetica", "bold");
+  setF("bold");
   doc.setFontSize(9);
   doc.setTextColor(...accent);
   doc.text(t("executiveBrief", lang), M, briefY + 3);
@@ -400,7 +422,7 @@ function buildPDF(d: PacketData) {
   const briefMaxH = 75; // mm available for AI text
 
   if (aiSummary) {
-    doc.setFont("helvetica", "normal");
+    setF("normal");
     doc.setFontSize(8);
     doc.setTextColor(50, 50, 50);
 
@@ -427,7 +449,7 @@ function buildPDF(d: PacketData) {
   doc.setLineWidth(0.2);
   doc.line(M, H - 10, W - M, H - 10);
 
-  doc.setFont("helvetica", "normal");
+  setF("normal");
   doc.setFontSize(6.5);
   doc.setTextColor(150, 150, 150);
   const contactParts = [config.contact_email, config.contact_phone].filter(Boolean);
@@ -568,7 +590,7 @@ Be concise and data-driven. 150 words maximum.${getLanguageInstruction(language)
 
       // ── Build PDF ────────────────────────────────────────────
       setStage("building");
-      buildPDF({ config, permits, rows311, evictions, businesses, aiSummary, lang: language });
+      await buildPDF({ config, permits, rows311, evictions, businesses, aiSummary, lang: language });
       setStage("done");
     } catch (err) {
       console.error("[BoardPacket] Error:", err);
