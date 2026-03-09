@@ -219,6 +219,20 @@ export function CityPulseChat({ currentDistrict, currentPage }: CityPulseChatPro
         {isOpen ? <CloseIcon /> : <ChatIcon size={isMobile ? 18 : 24} />}
       </button>
 
+      {/* ── Overlay (mobile: tap to close) ─────────────────────────────────── */}
+      {isMobile && (
+        <div
+          onClick={() => setIsOpen(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 1098,
+            background: "rgba(0,0,0,0.35)",
+            opacity: isOpen ? 1 : 0,
+            pointerEvents: isOpen ? "auto" : "none",
+            transition: "opacity 0.2s ease",
+          }}
+        />
+      )}
+
       {/* ── Chat panel ──────────────────────────────────────────────────────── */}
       <div
         role="dialog"
@@ -292,6 +306,20 @@ export function CityPulseChat({ currentDistrict, currentPage }: CityPulseChatPro
               Clear
             </button>
           )}
+          {/* Close button — always visible, essential on mobile */}
+          <button
+            onClick={() => setIsOpen(false)}
+            aria-label="Close AI assistant"
+            style={{
+              width: 44, height: 44, minWidth: 44, minHeight: 44,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: "rgba(255,255,255,0.18)", border: "none", borderRadius: 8,
+              cursor: "pointer", flexShrink: 0, marginLeft: 2,
+              marginRight: -8, /* compensate header padding so X sits flush */
+            }}
+          >
+            <CloseIcon />
+          </button>
         </div>
 
         {/* Messages */}

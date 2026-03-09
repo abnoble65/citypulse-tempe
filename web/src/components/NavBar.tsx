@@ -334,6 +334,34 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
               </button>
             );
           })}
+          {/* CBD Portals tab */}
+          <a
+            href="/cbd"
+            style={{
+              flex: 1, border: "none", background: "transparent",
+              display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+              gap: 3, cursor: "pointer", textDecoration: "none",
+              color: COLORS.warmGray, fontFamily: FONTS.body,
+            }}
+          >
+            <svg width={18} height={18} viewBox="0 0 18 18" fill="currentColor" aria-hidden>
+              <rect x="1" y="7" width="6" height="10" rx="1" />
+              <rect x="9" y="3" width="8" height="14" rx="1" />
+              <rect x="3" y="9" width="2" height="2" rx="0.3" fill="white" />
+              <rect x="11" y="5" width="2" height="2" rx="0.3" fill="white" />
+              <rect x="14" y="5" width="2" height="2" rx="0.3" fill="white" />
+              <rect x="11" y="9" width="2" height="2" rx="0.3" fill="white" />
+              <rect x="14" y="9" width="2" height="2" rx="0.3" fill="white" />
+            </svg>
+            <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", lineHeight: 1 }}>
+              CBD
+              <span style={{
+                background: "#E8652D", color: "#fff", fontSize: 6, fontWeight: 700,
+                borderRadius: 3, padding: "0px 3px", marginLeft: 2, verticalAlign: "middle",
+              }}>OPS</span>
+            </span>
+          </a>
         </div>
       </div>
     </>
