@@ -57,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { model, max_tokens, messages, system, tools } = req.body ?? {};
 
   if (!MODEL_ALLOWLIST.includes(model)) {
-    return res.status(400).json({ error: `Model not allowed: ${model}` });
+    return res.status(400).json({ error: "Invalid request." });
   }
 
   const capped = Math.min(max_tokens ?? 1024, MAX_TOKENS_CEIL);
@@ -72,6 +72,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(result);
   } catch (e: any) {
     console.error("[api/ai]", e);
-    return res.status(502).json({ error: e.message ?? "Upstream error" });
+    return res.status(502).json({ error: "Unable to generate briefing right now. Please try again." });
   }
 }

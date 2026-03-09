@@ -354,7 +354,8 @@ export function Board({ districtConfig }: BoardProps) {
           .order("meeting_date", { ascending: false })
           .limit(50);
         if (plain.error) {
-          setLoadError(plain.error.message);
+          console.error("[Board] Supabase fallback query failed:", plain.error);
+          setLoadError("Data temporarily unavailable. Please refresh.");
           return;
         }
         data = plain.data ?? [];

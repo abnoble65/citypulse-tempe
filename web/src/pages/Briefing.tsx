@@ -127,7 +127,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
       .then(text => setLocalText(text))
       .catch(err => {
         console.error("[Briefing] neighborhood generation failed:", err);
-        setGenError(err instanceof Error ? err.message : "Failed to generate neighborhood briefing.");
+        setGenError("Unable to generate briefing right now. Please try again.");
       })
       .finally(() => setIsGenerating(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps

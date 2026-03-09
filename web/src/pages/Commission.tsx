@@ -547,7 +547,7 @@ export function Commission({ districtConfig }: CommissionProps) {
 
     if (err) {
       console.error("[Commission] Supabase query failed:", err);
-      setError(err.message);
+      setError("Data temporarily unavailable. Please refresh.");
       setLoading(false);
       return;
     }

@@ -301,7 +301,7 @@ async function executeTool(name: string, input: ToolInput): Promise<string> {
   } catch (err) {
     console.error(`[chatbot] tool ${name} failed:`, err);
     return JSON.stringify({
-      error: `Could not fetch data for ${name}: ${err instanceof Error ? err.message : 'unknown error'}`,
+      error: `Data temporarily unavailable for ${name}.`,
     });
   }
 }

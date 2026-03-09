@@ -590,7 +590,7 @@ Be concise and data-driven. 150 words maximum.${getLanguageInstruction(language)
       setStage("done");
     } catch (err) {
       console.error("[BoardPacket] Error:", err);
-      setError(err instanceof Error ? err.message : "An unexpected error occurred.");
+      setError("Something went wrong. Please try again.");
       setStage("error");
     }
   }, [config, preview, language]);
