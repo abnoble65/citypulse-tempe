@@ -6,8 +6,13 @@
  * 3. Processes each PDF in descending date order: fetches, extracts via Claude,
  *    and upserts structured data into Supabase.
  *
- * Usage:
- *   npx tsx scripts/ingestMinutes.ts
+ * Run weekly (Fridays recommended) to pick up new hearing minutes.
+ * SF Planning typically posts minutes PDFs 1-3 weeks after the hearing date.
+ * The script skips dates already in Supabase, so re-running is safe/idempotent.
+ *
+ *   npx tsx scripts/dryRunMinutes.ts          # check for gaps first
+ *   npx tsx scripts/ingestMinutes.ts          # ingest all missing
+ *   npx tsx scripts/reprocessDate.ts YYYY-MM-DD  # re-run a single date
  *
  * Required environment variables (in .env):
  *   VITE_SUPABASE_URL
@@ -303,13 +308,8 @@ async function alreadyProcessed(dateStr: string): Promise<boolean> {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-// Dates where the hearing row exists in DB but project inserts failed (shadow_details
-// schema error). These are force-deleted and reprocessed on each run.
-const FORCE_REPROCESS = new Set([
-  '2025-06-26', // large PDF, JSON truncation mid-stream
-  '2024-06-06',
-  '2022-09-08',
-]);
+// Dates to force-delete and reprocess on each run. Clear after successful reprocess.
+const FORCE_REPROCESS = new Set<string>([]);
 
 async function main() {
   const hearings = await fetchAllMinutesUrls();
