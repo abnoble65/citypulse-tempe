@@ -901,7 +901,11 @@ export function Commission({ districtConfig }: CommissionProps) {
                 </div>
 
                 {/* Row 2: action badge(s) — block-level div, completely separate from title row */}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, width: "100%" }}>
+                <div style={{
+                  display: "flex", gap: 6, marginTop: 6, width: "100%",
+                  overflowX: "auto", WebkitOverflowScrolling: "touch" as const,
+                  scrollbarWidth: "none" as const, flexWrap: "nowrap",
+                }}>
                   {allInCard
                     ? allInCard.map((mp, i) => {
                         const mpAc = actionStyle(normalizeAction(mp.action));
@@ -936,7 +940,9 @@ export function Commission({ districtConfig }: CommissionProps) {
                 {/* Row 3: date + meta badges inline */}
                 {(latestDate || p.shadow_flag || (sentiment && sentiment.speakers > 0)) && (
                   <div style={{
-                    display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center",
+                    display: "flex", gap: 10, alignItems: "center",
+                    overflowX: "auto", WebkitOverflowScrolling: "touch" as const,
+                    scrollbarWidth: "none" as const, flexWrap: "nowrap",
                     marginTop: 6, fontSize: 12, color: COLORS.warmGray, fontFamily: FONTS.body,
                   }}>
                     {latestDate && <span>{latestDate}</span>}

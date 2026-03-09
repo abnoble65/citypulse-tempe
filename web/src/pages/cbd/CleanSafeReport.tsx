@@ -166,7 +166,11 @@ function CategoryFilters({ active, onChange }: {
   onChange: (cat: Category, val: boolean) => void;
 }) {
   return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+    <div style={{
+      display: "flex", gap: 8, marginBottom: 12,
+      overflowX: "auto", WebkitOverflowScrolling: "touch" as const,
+      scrollbarWidth: "none" as const, flexWrap: "nowrap", paddingBottom: 4,
+    }}>
       {CATEGORIES.map(cat => (
         <label key={cat} style={{
           display: "flex", alignItems: "center", gap: 6,
@@ -176,6 +180,7 @@ function CategoryFilters({ active, onChange }: {
           fontFamily: FONTS.body, fontSize: 12, fontWeight: active[cat] ? 700 : 500,
           color: active[cat] ? CAT_COLORS[cat] : COLORS.midGray,
           userSelect: "none", transition: "all 0.15s",
+          flexShrink: 0, whiteSpace: "nowrap",
         }}>
           <input type="checkbox" checked={active[cat]}
             onChange={e => onChange(cat, e.target.checked)}

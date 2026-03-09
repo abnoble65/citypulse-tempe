@@ -138,13 +138,18 @@ function ItemCard({ item }: { item: RecParkItemRow }) {
       border: `1px solid ${COLORS.lightBorder}`,
     }}>
       {/* Top row: item letter + topic badges */}
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 10 }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 6, marginBottom: 10,
+        overflowX: "auto", WebkitOverflowScrolling: "touch" as const,
+        scrollbarWidth: "none" as const, flexWrap: "nowrap",
+      }}>
         {item.item_letter && (
           <span style={{
             fontFamily: "monospace", fontSize: 11, fontWeight: 700,
             color: COLORS.warmGray, background: COLORS.white,
             border: `1px solid ${COLORS.lightBorder}`,
             borderRadius: 6, padding: "3px 8px",
+            flexShrink: 0, whiteSpace: "nowrap",
           }}>
             ITEM {item.item_letter}
           </span>
@@ -157,7 +162,7 @@ function ItemCard({ item }: { item: RecParkItemRow }) {
               color: cfg.text, background: cfg.bg,
               border: `1px solid ${cfg.border}`,
               borderRadius: 6, padding: "3px 8px",
-              textTransform: "capitalize",
+              textTransform: "capitalize", flexShrink: 0, whiteSpace: "nowrap",
             }}>
               {cfg.icon} {t}
             </span>
@@ -185,7 +190,11 @@ function ItemCard({ item }: { item: RecParkItemRow }) {
       )}
 
       {/* Footer: action + vote + locations */}
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        overflowX: "auto", WebkitOverflowScrolling: "touch" as const,
+        scrollbarWidth: "none" as const, flexWrap: "nowrap",
+      }}>
         {item.action && (
           <span style={{
             fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
@@ -254,18 +263,23 @@ function MeetingCard({
       <div
         style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "18px 24px", cursor: "pointer",
+          padding: "18px clamp(12px, 3vw, 24px)", cursor: "pointer",
+          gap: 8,
         }}
         onClick={onToggle}
       >
-        <div>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <p style={{
             fontFamily: "'Urbanist', sans-serif", fontSize: 16, fontWeight: 800,
             color: COLORS.charcoal, marginBottom: 3,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>
             {fmtDate(meeting.meeting_date)}
           </p>
-          <p style={{ fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray }}>
+          <p style={{
+            fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
             {meeting.meeting_type ?? "Full Commission"}
             {" · "}
             {displayCount} item{displayCount !== 1 ? "s" : ""}
@@ -273,7 +287,7 @@ function MeetingCard({
               ` matching filters (${allItems.length} total)`}
           </p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           {meeting.pdf_url && (
             <a
               href={fixUrl(meeting.pdf_url)}
@@ -284,7 +298,9 @@ function MeetingCard({
                 fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
                 color: COLORS.warmGray, textDecoration: "none",
                 border: `1px solid ${COLORS.lightBorder}`,
-                borderRadius: 12, padding: "4px 10px", flexShrink: 0,
+                borderRadius: 12, padding: "4px 10px",
+                minHeight: 44, display: "flex", alignItems: "center",
+                flexShrink: 0,
               }}
             >
               Agenda ↗
@@ -296,6 +312,7 @@ function MeetingCard({
             color:        isExpanded ? COLORS.orange : COLORS.charcoal,
             border:       `1px solid ${isExpanded ? COLORS.orange : COLORS.lightBorder}`,
             borderRadius: 16, padding: "6px 14px",
+            minHeight: 44, display: "flex", alignItems: "center",
             cursor: "pointer", flexShrink: 0,
           }}>
             {isExpanded ? "Collapse ▲" : "View items ▼"}
@@ -408,31 +425,42 @@ export function Parks({ districtConfig: _districtConfig }: ParksProps) {
         <div style={{ maxWidth: 860, margin: "0 auto" }}>
 
           {/* Topic pills */}
-          <div style={{
-            display: "flex", gap: 6, flexWrap: "wrap",
-            marginBottom: 8,
-          }}>
-            {[null, ...ALL_TOPICS].map(t => {
-              const isActive = topicFilter === t;
-              const cfg = t ? TOPIC_CFG[t] : null;
-              return (
-                <button
-                  key={t ?? "all"}
-                  onClick={() => setTopicFilter(t)}
-                  style={{
-                    fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
-                    background:   isActive ? (cfg?.bg ?? COLORS.orangePale) : "transparent",
-                    color:        isActive ? (cfg?.text ?? COLORS.orange) : COLORS.warmGray,
-                    border:       `1px solid ${isActive ? (cfg?.border ?? COLORS.orange) : COLORS.lightBorder}`,
-                    borderRadius: 20, padding: "5px 14px",
-                    cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.15s",
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {t ? `${cfg!.icon} ${t}` : "All Topics"}
-                </button>
-              );
-            })}
+          <div style={{ position: "relative" }}>
+            <div style={{
+              display: "flex", gap: 6,
+              overflowX: "auto", WebkitOverflowScrolling: "touch" as const,
+              scrollbarWidth: "none" as const, flexWrap: "nowrap",
+              marginBottom: 8, paddingBottom: 4,
+            }}>
+              {[null, ...ALL_TOPICS].map(t => {
+                const isActive = topicFilter === t;
+                const cfg = t ? TOPIC_CFG[t] : null;
+                return (
+                  <button
+                    key={t ?? "all"}
+                    onClick={() => setTopicFilter(t)}
+                    style={{
+                      fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
+                      background:   isActive ? (cfg?.bg ?? COLORS.orangePale) : "transparent",
+                      color:        isActive ? (cfg?.text ?? COLORS.orange) : COLORS.warmGray,
+                      border:       `1px solid ${isActive ? (cfg?.border ?? COLORS.orange) : COLORS.lightBorder}`,
+                      borderRadius: 20, padding: "5px 14px",
+                      cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.15s",
+                      textTransform: "capitalize", flexShrink: 0, minHeight: 44,
+                      display: "flex", alignItems: "center",
+                    }}
+                  >
+                    {t ? `${cfg!.icon} ${t}` : "All Topics"}
+                  </button>
+                );
+              })}
+              <div style={{ flexShrink: 0, width: 16 }} aria-hidden="true" />
+            </div>
+            <div aria-hidden="true" style={{
+              position: "absolute", top: 0, right: 0, bottom: 0, width: 40,
+              background: `linear-gradient(to right, transparent, ${COLORS.white})`,
+              pointerEvents: "none",
+            }} />
           </div>
 
           {/* Location search */}
