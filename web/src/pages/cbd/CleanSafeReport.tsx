@@ -23,7 +23,7 @@ import { COLORS, FONTS } from "../../theme";
 import { fetch311ForCBD, type CBD311Row } from "../../utils/cbdFetch";
 import { renderMarkdownBlock } from "../../components/MarkdownText";
 import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
-import Anthropic from "@anthropic-ai/sdk";
+import { callAI } from "../../services/aiProxy";
 import { useLanguage, getLanguageInstruction } from "../../contexts/LanguageContext";
 
 const DATASF = "https://data.sfgov.org/resource";
@@ -295,8 +295,6 @@ export function CleanSafeReport() {
   // ── AI operational analysis ──────────────────────────────────────────────
   useEffect(() => {
     if (loading || !config || rows311.length === 0 || aiAnalysis) return;
-    const apiKey = (import.meta as any).env?.VITE_ANTHROPIC_API_KEY;
-    if (!apiKey) { setAiAnalysis("*AI analysis unavailable — API key not configured.*"); return; }
 
     setAiLoading(true);
     const catCounts: Record<string, number> = {};
@@ -360,8 +358,7 @@ RESOLUTION DATA:
 
 Flag any categories with slow resolution times vs others and recommend resource reallocation. Write 2-3 paragraphs of analysis. Include specific addresses and numbers. End with 3 bullet-point recommendations.${getLanguageInstruction(language)}`;
 
-    const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-    client.messages.create({
+    callAI({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 800,
       messages: [{ role: "user", content: prompt }],

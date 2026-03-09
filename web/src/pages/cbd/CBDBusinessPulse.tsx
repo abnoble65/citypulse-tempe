@@ -14,7 +14,7 @@ import { COLORS, FONTS } from "../../theme";
 import { fetchBusinessesForCBD, type CBDBusinessRow } from "../../utils/cbdFetch";
 import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
 import { renderMarkdownBlock } from "../../components/MarkdownText";
-import Anthropic from "@anthropic-ai/sdk";
+import { callAI } from "../../services/aiProxy";
 import { useLanguage, getLanguageInstruction } from "../../contexts/LanguageContext";
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -99,8 +99,6 @@ export function CBDBusinessPulse() {
   // ── AI analysis ───────────────────────────────────────────────────────
   useEffect(() => {
     if (loading || !config || businesses.length === 0 || aiAnalysis) return;
-    const apiKey = (import.meta as any).env?.VITE_ANTHROPIC_API_KEY;
-    if (!apiKey) { setAiAnalysis("*AI analysis unavailable.*"); return; }
 
     setAiLoading(true);
 
@@ -138,8 +136,7 @@ DATA:
 
 Focus on what the registration patterns mean for district health. Note any clusters of activity or areas with low registration.${getLanguageInstruction(language)}`;
 
-    const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-    client.messages.create({
+    callAI({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 500,
       messages: [{ role: "user", content: prompt }],

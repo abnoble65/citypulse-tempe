@@ -12,7 +12,7 @@
  * Required env vars (in .env):
  *   VITE_SUPABASE_URL
  *   VITE_SUPABASE_SERVICE_KEY
- *   VITE_ANTHROPIC_API_KEY
+ *   ANTHROPIC_API_KEY
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -43,7 +43,7 @@ loadEnv();
 
 const SUPABASE_URL  = process.env.VITE_SUPABASE_URL!;
 const SUPABASE_KEY  = process.env.VITE_SUPABASE_SERVICE_KEY!;
-const ANTHROPIC_KEY = process.env.VITE_ANTHROPIC_API_KEY!;
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
 
 const GRANICUS_BASE  = 'https://sanfrancisco.granicus.com';
 const CLIP_LIST_URL  = `${GRANICUS_BASE}/ViewPublisher.php?view_id=91`;

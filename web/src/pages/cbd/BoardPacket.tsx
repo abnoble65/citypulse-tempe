@@ -12,7 +12,7 @@ import { useCBD, type CBDConfig } from "../../contexts/CBDContext";
 import { COLORS, FONTS } from "../../theme";
 import { isPointInCBD, type CBDBoundaryEntry } from "../../utils/geoFilter";
 import { fetchBusinessesForCBD, type CBDBusinessRow } from "../../utils/cbdFetch";
-import Anthropic from "@anthropic-ai/sdk";
+import { callAI } from "../../services/aiProxy";
 import { useLanguage, getLanguageInstruction, type AppLanguage } from "../../contexts/LanguageContext";
 import { cleanPermitLabel } from "../../services/aggregator";
 
@@ -556,9 +556,8 @@ export function BoardPacket() {
       // ── AI executive brief ─────────────────────────────────
       setStage("ai");
       let aiSummary = "";
-      const apiKey = (import.meta as any).env?.VITE_ANTHROPIC_API_KEY;
 
-      if (apiKey) {
+      {
         const catCounts: Record<string, number> = {};
         for (const r of rows311) catCounts[normalize311Cat(r.category)] = (catCounts[normalize311Cat(r.category)] ?? 0) + 1;
         const catList = Object.entries(catCounts).sort(([, a], [, b]) => b - a).map(([c, n]) => `${c}: ${n}`).join(", ");
@@ -573,8 +572,7 @@ export function BoardPacket() {
         const newBiz = businesses.filter(b => b.startDate >= cutoff90.toISOString().split("T")[0]);
         const topByVal = [...permits].sort((a, b) => b.cost - a.cost).slice(0, 2);
 
-        const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-        const res = await client.messages.create({
+        const res = await callAI({
           model: "claude-haiku-4-5-20251001",
           max_tokens: 400,
           messages: [{ role: "user", content: `Write a 150-word executive brief for the ${config.name} CBD board. Two sections: Key Findings (2-3 sentences on data highlights) and Recommended Actions (2-3 bullet points).
@@ -584,8 +582,6 @@ DATA (90 days): ${permits.length} permits, ${rows311.length} 311 requests (${cat
 Be concise and data-driven. 150 words maximum.${getLanguageInstruction(language)}` }],
         });
         aiSummary = res.content[0]?.type === "text" ? res.content[0].text : "";
-      } else {
-        aiSummary = "AI summary unavailable — API key not configured.";
       }
 
       // ── Build PDF ────────────────────────────────────────────

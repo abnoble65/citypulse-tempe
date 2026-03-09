@@ -11,7 +11,7 @@
  * Required env vars (in .env):
  *   VITE_SUPABASE_URL
  *   VITE_SUPABASE_SERVICE_KEY
- *   VITE_ANTHROPIC_API_KEY
+ *   ANTHROPIC_API_KEY
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -42,7 +42,7 @@ loadEnv();
 
 const SUPABASE_URL  = process.env.VITE_SUPABASE_URL!;
 const SUPABASE_KEY  = process.env.VITE_SUPABASE_SERVICE_KEY!;
-const ANTHROPIC_KEY = process.env.VITE_ANTHROPIC_API_KEY!;
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
 
 const LIST_URL = 'https://www.sf.gov/news-from-the-office-of-the-mayor';
 
@@ -55,7 +55,7 @@ const LIMIT   = parseInt(args[args.indexOf('--limit') + 1] ?? '50', 10) || 50;
 const DRY_RUN = args.includes('--dry-run');
 
 if (!SUPABASE_URL || !SUPABASE_KEY || !ANTHROPIC_KEY) {
-  console.error('Missing required env vars. Check VITE_SUPABASE_URL, VITE_SUPABASE_SERVICE_KEY, VITE_ANTHROPIC_API_KEY.');
+  console.error('Missing required env vars. Check VITE_SUPABASE_URL, VITE_SUPABASE_SERVICE_KEY, ANTHROPIC_API_KEY.');
   process.exit(1);
 }
 

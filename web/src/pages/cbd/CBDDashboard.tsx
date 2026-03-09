@@ -22,7 +22,7 @@ import { isPointInCBD, type CBDBoundaryEntry } from "../../utils/geoFilter";
 import { renderMarkdownBlock } from "../../components/MarkdownText";
 import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
 import { fetch311ForCBD } from "../../utils/cbdFetch";
-import Anthropic from "@anthropic-ai/sdk";
+import { callAI } from "../../services/aiProxy";
 import { useLanguage, getLanguageInstruction } from "../../contexts/LanguageContext";
 
 const DATASF = "https://data.sfgov.org/resource";
@@ -477,9 +477,6 @@ export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
 
   useEffect(() => {
     if (statsLoading || !config || aiSummary) return;
-    const apiKey = (import.meta as any).env?.VITE_ANTHROPIC_API_KEY;
-    if (!apiKey) { setAiSummary("*AI summary unavailable — API key not configured.*"); return; }
-
     setAiLoading(true);
     const catCounts: Record<string, number> = {};
     for (const r of stats.threeOneOne) catCounts[r.category] = (catCounts[r.category] ?? 0) + 1;
@@ -496,8 +493,7 @@ DATA (last 90 days within CBD boundary):
 
 Focus on: permit activity within the district, 311 service request trends, and any notable developments. Be data-driven and actionable. Keep it under 200 words.${getLanguageInstruction(language)}`;
 
-    const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-    client.messages.create({
+    callAI({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 512,
       messages: [{ role: "user", content: prompt }],

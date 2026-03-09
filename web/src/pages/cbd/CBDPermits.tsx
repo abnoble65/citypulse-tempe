@@ -22,7 +22,7 @@ import { COLORS, FONTS } from "../../theme";
 import { fetchPermitsForCBD, type CBDPermitRow } from "../../utils/cbdFetch";
 import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
 import { renderMarkdownBlock } from "../../components/MarkdownText";
-import Anthropic from "@anthropic-ai/sdk";
+import { callAI } from "../../services/aiProxy";
 import { useLanguage, getLanguageInstruction } from "../../contexts/LanguageContext";
 
 const MAPBOX_TILE = (token: string) =>
@@ -158,8 +158,6 @@ export function CBDPermits() {
   // ── AI notable projects ───────────────────────────────────────────────
   useEffect(() => {
     if (loading || !config || permits.length === 0 || aiSummary) return;
-    const apiKey = (import.meta as any).env?.VITE_ANTHROPIC_API_KEY;
-    if (!apiKey) { setAiSummary("*AI analysis unavailable.*"); return; }
 
     setAiLoading(true);
     const top = permits
@@ -190,8 +188,7 @@ ${topList}
 
 Focus on what these permits mean for the district: new construction, major renovations, potential disruption. End with a brief outlook.${getLanguageInstruction(language)}`;
 
-    const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-    client.messages.create({
+    callAI({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 600,
       messages: [{ role: "user", content: prompt }],

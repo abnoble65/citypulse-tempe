@@ -25,7 +25,7 @@ loadEnv();
 
 const SUPABASE_URL  = process.env.VITE_SUPABASE_URL!;
 const SUPABASE_KEY  = process.env.VITE_SUPABASE_SERVICE_KEY!;
-const ANTHROPIC_KEY = process.env.VITE_ANTHROPIC_API_KEY!;
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
 const ARCHIVE_INDEX = 'https://sfplanning.org/cpc-hearing-archives';
 
 const supabase  = createClient(SUPABASE_URL, SUPABASE_KEY);

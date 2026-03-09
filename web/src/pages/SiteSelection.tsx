@@ -11,7 +11,7 @@ import { generateSitePacketPDF } from "../utils/sitePacketPdf";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import Anthropic from "@anthropic-ai/sdk";
+import { callAI } from "../services/aiProxy";
 
 import { COLORS, FONTS } from "../theme";
 import { ViewIn3DButton } from "../components/ViewIn3D";
@@ -679,8 +679,7 @@ export function SiteSelection(_props: SiteSelectionProps) {
     setAiLoading(true);
     setAiNotes("");
     try {
-      const client = new Anthropic({ apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY, dangerouslyAllowBrowser: true });
-      const msg = await client.messages.create({
+      const msg = await callAI({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 200,
         messages: [{

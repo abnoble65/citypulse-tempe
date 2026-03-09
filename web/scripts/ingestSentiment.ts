@@ -13,7 +13,7 @@
  * Required environment variables (in .env):
  *   VITE_SUPABASE_URL
  *   VITE_SUPABASE_SERVICE_KEY
- *   VITE_ANTHROPIC_API_KEY
+ *   ANTHROPIC_API_KEY
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -44,7 +44,7 @@ loadEnv();
 
 const SUPABASE_URL  = process.env.VITE_SUPABASE_URL!;
 const SUPABASE_KEY  = process.env.VITE_SUPABASE_SERVICE_KEY!;
-const ANTHROPIC_KEY = process.env.VITE_ANTHROPIC_API_KEY!;
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
 
 const GRANICUS_BASE    = 'https://sanfrancisco.granicus.com';
 const GRANICUS_VIEW_ID = 20; // SF Planning Commission
@@ -53,7 +53,7 @@ const GRANICUS_VIEW_ID = 20; // SF Planning Commission
 const RATE_LIMIT_MS = 10_000;
 
 if (!SUPABASE_URL || !SUPABASE_KEY || !ANTHROPIC_KEY) {
-  console.error('Missing required env vars. Check VITE_SUPABASE_URL, VITE_SUPABASE_SERVICE_KEY, VITE_ANTHROPIC_API_KEY.');
+  console.error('Missing required env vars. Check VITE_SUPABASE_URL, VITE_SUPABASE_SERVICE_KEY, ANTHROPIC_API_KEY.');
   process.exit(1);
 }
 

@@ -17,7 +17,7 @@ import { COLORS, FONTS } from "../../theme";
 import { fetch311ForCBD, type CBD311Row } from "../../utils/cbdFetch";
 import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
 import { renderMarkdownBlock } from "../../components/MarkdownText";
-import Anthropic from "@anthropic-ai/sdk";
+import { callAI } from "../../services/aiProxy";
 import { useLanguage, getLanguageInstruction } from "../../contexts/LanguageContext";
 
 // ── Categories ──────────────────────────────────────────────────────────
@@ -130,8 +130,6 @@ export function CBD311Detail() {
   // ── AI insight ────────────────────────────────────────────────────────
   useEffect(() => {
     if (loading || !config || rawRows.length === 0 || aiInsight) return;
-    const apiKey = (import.meta as any).env?.VITE_ANTHROPIC_API_KEY;
-    if (!apiKey) { setAiInsight("*AI analysis unavailable.*"); return; }
 
     setAiLoading(true);
 
@@ -171,8 +169,7 @@ ${outliers.slice(0, 8).join("\n") || "None detected"}
 
 Identify patterns and recommend which categories/locations need attention.${getLanguageInstruction(language)}`;
 
-    const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-    client.messages.create({
+    callAI({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 500,
       messages: [{ role: "user", content: prompt }],

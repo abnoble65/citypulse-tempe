@@ -1,11 +1,11 @@
 /**
  * services/briefing.ts — CityPulse web
  *
- * Calls the Anthropic API directly from the browser using the key exposed
- * via VITE_ANTHROPIC_API_KEY in web/.env.
+ * Calls the Anthropic API via the /api/ai serverless proxy.
+ * API key is server-side only (ANTHROPIC_API_KEY).
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { callAI } from './aiProxy';
 import { aggregateDistrictData, aggregateCitywideData, type DistrictData } from './aggregator';
 import { supabase } from './supabase';
 import type { DistrictConfig } from '../districts';
@@ -95,10 +95,7 @@ function forPrompt(data: DistrictData): Omit<DistrictData, 'map_permits' | 'by_d
   return rest;
 }
 
-const client = new Anthropic({
-  apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY as string,
-  dangerouslyAllowBrowser: true,
-});
+// Client-side AI calls go through the /api/ai serverless proxy (see aiProxy.ts)
 
 // ── Mayor's Office cross-reference ────────────────────────────────────────────
 // Fetches the 2 most recent mayor_news items relevant to the district and
@@ -356,7 +353,7 @@ export async function generateGovHeadlines(
     }
   } catch { /* sessionStorage unavailable */ }
 
-  const message = await client.messages.create({
+  const message = await callAI({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 256,
     messages: [{
@@ -721,7 +718,7 @@ export async function generateBriefingFromData(
       : `${JSON.stringify(forPrompt(briefingData), null, 2)}${crossRefs}`;
 
   const t0 = performance.now();
-  const message = await client.messages.create({
+  const message = await callAI({
     model: 'claude-sonnet-4-6',
     max_tokens: 2000,
     system: briefingSystemPrompt(district) + getLanguageInstruction(lang),
@@ -850,7 +847,7 @@ Return ONLY a JSON object in this exact shape (no other text):
 {"signals": [{"title":"...","body":"...","severity":"...","concern":"..."}]}`;
 
   const t0 = performance.now();
-  const message = await client.messages.create({
+  const message = await callAI({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
     system: signalsSystemPrompt(district) + getLanguageInstruction(lang),
@@ -1072,7 +1069,7 @@ IMPORTANT: ${shadowTotal > 0 ? `Include one risk about shadow impact (☀️ ico
   console.log(`[generateOutlook] STEP 2: calling Claude Haiku — prompt length: ${userContent.length} chars`);
 
   const t0outlook = performance.now();
-  const message = await client.messages.create({
+  const message = await callAI({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
     system: outlookSystemPrompt(district) + getLanguageInstruction(lang),
@@ -1196,7 +1193,7 @@ Return ONLY a JSON object in this exact shape (no other text):
 {"concerns": [{"headline":"...","severity":"...","evidence":"...","affects":"...","action":"..."}]}`;
 
   const t0 = performance.now();
-  const message = await client.messages.create({
+  const message = await callAI({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2048,
     system: concernsSystemPrompt(district) + getLanguageInstruction(lang),
@@ -1358,7 +1355,7 @@ export async function generateBriefingOverview(
     quotesLine || null,
   ].filter(Boolean).join('\n');
 
-  const message = await client.messages.create({
+  const message = await callAI({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 2000,
     messages: [{

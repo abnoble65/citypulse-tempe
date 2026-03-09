@@ -13,7 +13,6 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks: {
             'vendor-react':    ['react', 'react-dom'],
-            'vendor-anthropic': ['@anthropic-ai/sdk'],
             'vendor-supabase': ['@supabase/supabase-js'],
           },
         },

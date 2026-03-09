@@ -5,7 +5,7 @@
  * Reuses existing DataSF + Supabase functions — no new API calls.
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { callAI } from './aiProxy';
 import {
   fetchBuildingPermits,
   fetchEvictions,
@@ -14,12 +14,7 @@ import {
 } from './dataSF';
 import { supabase } from './supabase';
 
-// ── Client (same pattern as briefing.ts) ──────────────────────────────────────
-
-const client = new Anthropic({
-  apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY as string,
-  dangerouslyAllowBrowser: true,
-});
+// Client-side AI calls go through the /api/ai serverless proxy
 
 const MODEL = 'claude-sonnet-4-6';
 
@@ -35,7 +30,7 @@ Always call a tool before answering data questions — do not invent statistics.
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
 
-const TOOLS: Anthropic.Tool[] = [
+const TOOLS: any[] = [
   {
     name: 'search_permits',
     description:
@@ -327,7 +322,7 @@ export async function sendChatMessage(
   currentDistrict?: string,
 ): Promise<string> {
   // Build message history for the API
-  const messages: Anthropic.MessageParam[] = history.map(m => ({
+  const messages: any[] = history.map(m => ({
     role:    m.role,
     content: m.content,
   }));
@@ -339,7 +334,7 @@ export async function sendChatMessage(
 
   // Agentic tool-use loop (max 5 turns to prevent runaway)
   for (let turn = 0; turn < 5; turn++) {
-    const response = await client.messages.create({
+    const response = await callAI({
       model:      MODEL,
       max_tokens: 1024,
       system,
@@ -348,7 +343,7 @@ export async function sendChatMessage(
     });
 
     if (response.stop_reason === 'end_turn') {
-      const block = response.content.find(b => b.type === 'text');
+      const block = response.content.find((b: any) => b.type === 'text');
       return block?.type === 'text' ? block.text : "I couldn't generate a response.";
     }
 
@@ -357,9 +352,9 @@ export async function sendChatMessage(
       messages.push({ role: 'assistant', content: response.content });
 
       // Execute all tool calls in parallel
-      const toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
+      const toolUseBlocks = response.content.filter((b: any) => b.type === 'tool_use');
       const toolResults = await Promise.all(
-        toolUseBlocks.map(async block => {
+        toolUseBlocks.map(async (block: any) => {
           if (block.type !== 'tool_use') return null;
           const result = await executeTool(block.name, block.input as ToolInput);
           return {
@@ -372,13 +367,13 @@ export async function sendChatMessage(
 
       messages.push({
         role:    'user',
-        content: toolResults.filter(Boolean) as Anthropic.ToolResultBlockParam[],
+        content: toolResults.filter(Boolean) as any[],
       });
       continue;
     }
 
     // Unexpected stop — return any text found
-    const block = response.content.find(b => b.type === 'text');
+    const block = response.content.find((b: any) => b.type === 'text');
     if (block?.type === 'text') return block.text;
     break;
   }

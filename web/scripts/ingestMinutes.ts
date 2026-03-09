@@ -12,7 +12,7 @@
  * Required environment variables (in .env):
  *   VITE_SUPABASE_URL
  *   VITE_SUPABASE_SERVICE_KEY
- *   VITE_ANTHROPIC_API_KEY
+ *   ANTHROPIC_API_KEY
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -43,12 +43,12 @@ loadEnv();
 
 const SUPABASE_URL  = process.env.VITE_SUPABASE_URL!;
 const SUPABASE_KEY  = process.env.VITE_SUPABASE_SERVICE_KEY!;
-const ANTHROPIC_KEY = process.env.VITE_ANTHROPIC_API_KEY!;
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
 const RATE_LIMIT_MS = 120_000; // large PDFs hit 30k tokens/min limit; 120s gives buffer
 const ARCHIVE_INDEX = 'https://sfplanning.org/cpc-hearing-archives';
 
 if (!SUPABASE_URL || !SUPABASE_KEY || !ANTHROPIC_KEY) {
-  console.error('Missing required environment variables. Check VITE_SUPABASE_URL, VITE_SUPABASE_SERVICE_KEY, VITE_ANTHROPIC_API_KEY.');
+  console.error('Missing required environment variables. Check VITE_SUPABASE_URL, VITE_SUPABASE_SERVICE_KEY, ANTHROPIC_API_KEY.');
   process.exit(1);
 }
 
