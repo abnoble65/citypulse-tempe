@@ -6,7 +6,7 @@
  * "Digital Twin view coming soon — powered by Nextspace".
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { COLORS, FONTS } from "../theme";
 
 // ── CC3D shared context payload ──────────────────────────────────────────────
@@ -18,6 +18,37 @@ export interface CC3DPayload {
   parcel_apn:    string | null;
   district:      string;
   active_layers: string[];
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function normalizeAPN(apn: string): string {
+  return apn.replace(/-/g, "");
+}
+
+// ── Intelligence Package types ───────────────────────────────────────────────
+
+interface IntelPackage {
+  parcel_apn: string;
+  primary_use: string | null;
+  floors_above_grade: number | null;
+  year_built: number | null;
+  zoning_code: string | null;
+  development_readiness: {
+    score: number;
+    score_label: string;
+  } | null;
+  risk_signals: {
+    overall_risk_tier: string;
+  } | null;
+  permit_intelligence: {
+    permit_activity_signal: string;
+    total_permits_on_record: number;
+  } | null;
+  planning_commission_intelligence: {
+    sentiment_label: string;
+    hearing_sentiment_score: number;
+  } | null;
 }
 
 // ── Cube icon (inline SVG) ───────────────────────────────────────────────────
@@ -79,6 +110,54 @@ export function ViewIn3DButton({ payload, compact }: ViewIn3DButtonProps) {
 // ── Modal ────────────────────────────────────────────────────────────────────
 
 function DigitalTwinModal({ payload, onClose }: { payload: CC3DPayload; onClose: () => void }) {
+  const [intel, setIntel] = useState<IntelPackage | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const nextspaceBase = import.meta.env.VITE_NEXTSPACE_BASE_URL as string | undefined;
+
+  useEffect(() => {
+    if (!payload.parcel_apn) return;
+    const apn = normalizeAPN(payload.parcel_apn);
+    const base = (import.meta.env.VITE_API_BASE_URL as string) || "";
+    const url = `${base}/api/nextspace-package?apn=${encodeURIComponent(apn)}`;
+
+    setLoading(true);
+    setError(null);
+
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to load intelligence package (${res.status})`);
+        return res.json();
+      })
+      .then((data: IntelPackage) => {
+        setIntel(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Unknown error");
+        setLoading(false);
+      });
+  }, [payload.parcel_apn]);
+
+  const tileStyle: React.CSSProperties = {
+    background: COLORS.cream, borderRadius: 12,
+    padding: "14px 16px",
+    display: "flex", flexDirection: "column", gap: 4,
+  };
+  const tileLabelStyle: React.CSSProperties = {
+    fontSize: 11, fontWeight: 700, color: COLORS.orange,
+    letterSpacing: "0.06em", textTransform: "uppercase",
+    fontFamily: FONTS.body,
+  };
+  const tileValueStyle: React.CSSProperties = {
+    fontSize: 20, fontWeight: 800, color: COLORS.charcoal,
+    fontFamily: "'Urbanist', sans-serif",
+  };
+  const tileSubStyle: React.CSSProperties = {
+    fontSize: 12, color: COLORS.warmGray, fontFamily: FONTS.body,
+  };
+
   return (
     <div
       onClick={onClose}
@@ -94,9 +173,10 @@ function DigitalTwinModal({ payload, onClose }: { payload: CC3DPayload; onClose:
         style={{
           background: COLORS.white, borderRadius: 20,
           padding: "clamp(24px, 5vw, 36px)",
-          maxWidth: 420, width: "100%",
+          maxWidth: 480, width: "100%",
           boxShadow: "0 8px 40px rgba(0,0,0,0.15)",
           position: "relative",
+          maxHeight: "90vh", overflowY: "auto",
         }}
       >
         {/* Close X */}
@@ -124,55 +204,141 @@ function DigitalTwinModal({ payload, onClose }: { payload: CC3DPayload; onClose:
           <h3 style={{
             fontFamily: "'Urbanist', sans-serif",
             fontSize: 20, fontWeight: 800,
-            color: COLORS.charcoal, margin: "0 0 6px",
+            color: COLORS.charcoal, margin: "0 0 4px",
           }}>
-            Digital Twin View
+            {payload.address ?? "Digital Twin View"}
           </h3>
           <p style={{
-            fontFamily: FONTS.body, fontSize: 14,
+            fontFamily: FONTS.body, fontSize: 13,
             color: COLORS.warmGray, margin: 0,
           }}>
-            Coming soon — powered by Nextspace
+            {payload.district}
           </p>
         </div>
 
-        {/* Payload preview */}
-        <div style={{
-          background: COLORS.cream, borderRadius: 12,
-          padding: "14px 16px", marginBottom: 16,
-        }}>
+        {/* Loading */}
+        {loading && (
           <div style={{
-            fontSize: 11, fontWeight: 700, color: COLORS.orange,
-            letterSpacing: "0.06em", textTransform: "uppercase",
-            marginBottom: 10, fontFamily: FONTS.body,
-          }}>CC3D Context</div>
-          <table style={{ fontSize: 13, fontFamily: FONTS.body, borderCollapse: "collapse", width: "100%" }}>
-            <tbody>
-              <PayloadRow label="Address" value={payload.address} />
-              <PayloadRow label="District" value={payload.district} />
-              <PayloadRow label="Lat / Lng" value={
-                payload.lat != null && payload.lng != null
-                  ? `${payload.lat.toFixed(5)}, ${payload.lng.toFixed(5)}`
-                  : null
-              } />
-              <PayloadRow label="APN" value={payload.parcel_apn} />
-              <PayloadRow label="Layers" value={payload.active_layers.join(", ") || null} />
-            </tbody>
-          </table>
-        </div>
-
-        {/* JSON blob */}
-        <details style={{ fontFamily: FONTS.body, fontSize: 12, color: COLORS.midGray }}>
-          <summary style={{ cursor: "pointer", marginBottom: 6, fontWeight: 600 }}>Raw JSON payload</summary>
-          <pre style={{
-            background: "#1E1E1E", color: "#D4D4D4",
-            borderRadius: 8, padding: 12,
-            fontSize: 11, lineHeight: 1.5,
-            overflow: "auto", maxHeight: 160,
+            textAlign: "center", padding: "32px 0",
+            fontFamily: FONTS.body, fontSize: 14, color: COLORS.warmGray,
           }}>
-            {JSON.stringify(payload, null, 2)}
-          </pre>
-        </details>
+            Loading intelligence package…
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div style={{
+            background: "#FDEEEE", border: "1px solid #F0C8C8",
+            borderRadius: 12, padding: "16px 20px", marginBottom: 16,
+            fontFamily: FONTS.body, fontSize: 13, color: "#B44040",
+          }}>
+            {error}
+          </div>
+        )}
+
+        {/* Intelligence data */}
+        {intel && !loading && (
+          <>
+            {/* Score tiles — 2-column grid */}
+            <div style={{
+              display: "grid", gridTemplateColumns: "1fr 1fr",
+              gap: 10, marginBottom: 16,
+            }}>
+              {/* Dev Readiness */}
+              <div style={tileStyle}>
+                <div style={tileLabelStyle}>Dev Readiness</div>
+                <div style={tileValueStyle}>
+                  {intel.development_readiness?.score ?? "—"}
+                  <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.warmGray }}> / 100</span>
+                </div>
+                <div style={tileSubStyle}>{intel.development_readiness?.score_label ?? "—"}</div>
+              </div>
+
+              {/* Risk Tier */}
+              <div style={tileStyle}>
+                <div style={tileLabelStyle}>Risk Tier</div>
+                <div style={tileValueStyle}>{intel.risk_signals?.overall_risk_tier ?? "—"}</div>
+              </div>
+
+              {/* Permit Activity */}
+              <div style={tileStyle}>
+                <div style={tileLabelStyle}>Permit Activity</div>
+                <div style={tileValueStyle}>{intel.permit_intelligence?.total_permits_on_record ?? "—"}</div>
+                <div style={tileSubStyle}>{intel.permit_intelligence?.permit_activity_signal ?? "—"}</div>
+              </div>
+
+              {/* Hearing Sentiment */}
+              <div style={tileStyle}>
+                <div style={tileLabelStyle}>Hearing Sentiment</div>
+                <div style={tileValueStyle}>{intel.planning_commission_intelligence?.hearing_sentiment_score ?? "—"}</div>
+                <div style={tileSubStyle}>{intel.planning_commission_intelligence?.sentiment_label ?? "—"}</div>
+              </div>
+            </div>
+
+            {/* Property details table */}
+            <div style={{
+              background: COLORS.cream, borderRadius: 12,
+              padding: "14px 16px", marginBottom: 16,
+            }}>
+              <div style={{
+                fontSize: 11, fontWeight: 700, color: COLORS.orange,
+                letterSpacing: "0.06em", textTransform: "uppercase",
+                marginBottom: 10, fontFamily: FONTS.body,
+              }}>Property Details</div>
+              <table style={{ fontSize: 13, fontFamily: FONTS.body, borderCollapse: "collapse", width: "100%" }}>
+                <tbody>
+                  <PayloadRow label="Primary Use" value={intel.primary_use} />
+                  <PayloadRow label="Floors" value={intel.floors_above_grade != null ? String(intel.floors_above_grade) : null} />
+                  <PayloadRow label="Year Built" value={intel.year_built != null ? String(intel.year_built) : null} />
+                  <PayloadRow label="Zoning" value={intel.zoning_code} />
+                  <PayloadRow label="APN" value={intel.parcel_apn} />
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {/* No APN fallback */}
+        {!payload.parcel_apn && !loading && !error && (
+          <div style={{
+            textAlign: "center", padding: "24px 0",
+            fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,
+          }}>
+            No parcel APN available for this location.
+          </div>
+        )}
+
+        {/* Open in Nextspace */}
+        <div style={{ textAlign: "center", marginTop: 8 }}>
+          {nextspaceBase ? (
+            <a
+              href={`${nextspaceBase}/scene?apn=${payload.parcel_apn ? normalizeAPN(payload.parcel_apn) : ""}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                background: COLORS.orange, color: COLORS.white,
+                border: "none", borderRadius: 12,
+                padding: "12px 24px", fontSize: 14, fontWeight: 700,
+                fontFamily: "'Urbanist', sans-serif",
+                textDecoration: "none",
+                boxShadow: "0 2px 8px rgba(212,100,59,0.15)",
+                transition: "opacity 0.15s",
+              }}
+            >
+              <CubeIcon size={16} />
+              Open in Nextspace
+            </a>
+          ) : (
+            <p style={{
+              fontFamily: FONTS.body, fontSize: 12,
+              color: COLORS.warmGray, margin: 0,
+            }}>
+              Nextspace scene not yet configured
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

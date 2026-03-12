@@ -303,16 +303,19 @@ export async function generateIntelligencePackage(
   const sentimentRows = await fetchPublicSentiment(hearingIds);
 
   // Resolve CBD profile from supervisor district
-  const supervisorDistrict =
+  const supervisorDistrictRaw =
     project?.district ??
     assessor?.supervisor_district ??
     "";
+  // Extract bare number — handles both "District 3" and "3"
+  const districtNumber = supervisorDistrictRaw.replace(/\D/g, "");
+  const supervisorDistrict = districtNumber || supervisorDistrictRaw;
   const cbdProfile = await fetchCBDProfile(supervisorDistrict);
   const cbdSlug = cbdProfile?.slug ?? "downtown";
   const cbdName = cbdProfile?.name ?? "Downtown SF";
 
   // Signal cache — keyed by district
-  const signalData = await fetchSignalCache(`D${supervisorDistrict}`);
+  const signalData = await fetchSignalCache(`D${districtNumber}`);
 
   // -----------------------------------------------------------------------
   // 2. Permit intelligence
@@ -454,7 +457,7 @@ export async function generateIntelligencePackage(
         : undefined, // zip not in assessor blklot query — derive from permits
       cbd_slug: cbdSlug,
       cbd_name: cbdName,
-      supervisor_district: `D${supervisorDistrict}`,
+      supervisor_district: `District ${districtNumber}`,
       supervisor_name:
         SUPERVISOR_NAMES[supervisorDistrict] ?? "Unknown",
     },
@@ -604,7 +607,7 @@ export async function generateIntelligencePackage(
     },
 
     citypulse_deeplink: {
-      civic_app_url: `${CITYPULSE_BASE}/districts/D${supervisorDistrict}`,
+      civic_app_url: `${CITYPULSE_BASE}/districts/D${districtNumber}`,
       cbd_portal_url: `${CITYPULSE_BASE}/cbd/${cbdSlug}`,
       permits_view_url: `${CITYPULSE_BASE}/cbd/${cbdSlug}/permits?apn=${displayAPN}`,
       site_selection_url: `${CITYPULSE_BASE}/cbd/${cbdSlug}/site-selection?apn=${displayAPN}`,
