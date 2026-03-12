@@ -64,6 +64,7 @@ interface LiveProject {
   shadow_flag: boolean;
   shadow_details: string | null;
   case_number: string | null;
+  parcel_apn: string | null;
   lat: number | null;
   lng: number | null;
   hearing: { id: string; hearing_date: string; public_sentiment: Sentiment[] } | null;
@@ -313,7 +314,7 @@ function ProjectDetailCard({ project }: { project: LiveProject }) {
         address: project.address,
         lat: project.lat ?? null,
         lng: project.lng ?? null,
-        parcel_apn: null,
+        parcel_apn: project.parcel_apn ?? null,
         district: project.district ?? "Unknown",
         active_layers: ["commission"],
       }} />
@@ -492,7 +493,7 @@ interface CommissionProps {
 // Reusable select string for both the district load and search queries
 const PROJECT_SELECT = `
   id, address, district, action, project_description,
-  shadow_flag, shadow_details, case_number, lat, lng,
+  shadow_flag, shadow_details, case_number, parcel_apn, lat, lng,
   hearing:hearing_id(
     id, hearing_date,
     public_sentiment(
