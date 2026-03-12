@@ -29,26 +29,22 @@ function normalizeAPN(apn: string): string {
 // ── Intelligence Package types ───────────────────────────────────────────────
 
 interface IntelPackage {
-  parcel_apn: string;
-  primary_use: string | null;
-  floors_above_grade: number | null;
-  year_built: number | null;
-  zoning_code: string | null;
-  development_readiness: {
-    score: number;
-    score_label: string;
-  } | null;
-  risk_signals: {
-    overall_risk_tier: string;
-  } | null;
-  permit_intelligence: {
+  identity: {
+    apn: string;
+  };
+  building_attributes: {
+    primary_land_use: string | null;
+    stories: number | null;
+    year_built: number | null;
+    zoning_code: string | null;
+  };
+  intelligence: {
+    readiness_score: number;
+    readiness_label: string;
     permit_activity_signal: string;
-    total_permits_on_record: number;
-  } | null;
-  planning_commission_intelligence: {
-    sentiment_label: string;
-    hearing_sentiment_score: number;
-  } | null;
+    total_permits: number;
+    total_hearings: number;
+  };
 }
 
 // ── Cube icon (inline SVG) ───────────────────────────────────────────────────
@@ -249,30 +245,38 @@ function DigitalTwinModal({ payload, onClose }: { payload: CC3DPayload; onClose:
               <div style={tileStyle}>
                 <div style={tileLabelStyle}>Dev Readiness</div>
                 <div style={tileValueStyle}>
-                  {intel.development_readiness?.score ?? "—"}
+                  {intel.intelligence.readiness_score ?? "—"}
                   <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.warmGray }}> / 100</span>
                 </div>
-                <div style={tileSubStyle}>{intel.development_readiness?.score_label ?? "—"}</div>
+                <div style={tileSubStyle}>{intel.intelligence.readiness_label ?? "—"}</div>
               </div>
 
-              {/* Risk Tier */}
+              {/* Readiness Label */}
               <div style={tileStyle}>
-                <div style={tileLabelStyle}>Risk Tier</div>
-                <div style={tileValueStyle}>{intel.risk_signals?.overall_risk_tier ?? "—"}</div>
+                <div style={tileLabelStyle}>Readiness</div>
+                <div style={{
+                  ...tileValueStyle,
+                  color: intel.intelligence.readiness_label === "PRIME" ? "#3D7A3F"
+                       : intel.intelligence.readiness_label === "HIGH" ? "#B47A2E"
+                       : intel.intelligence.readiness_label === "WATCH" ? COLORS.orange
+                       : COLORS.warmGray,
+                }}>
+                  {intel.intelligence.readiness_label ?? "—"}
+                </div>
               </div>
 
               {/* Permit Activity */}
               <div style={tileStyle}>
                 <div style={tileLabelStyle}>Permit Activity</div>
-                <div style={tileValueStyle}>{intel.permit_intelligence?.total_permits_on_record ?? "—"}</div>
-                <div style={tileSubStyle}>{intel.permit_intelligence?.permit_activity_signal ?? "—"}</div>
+                <div style={tileValueStyle}>{intel.intelligence.total_permits ?? "—"}</div>
+                <div style={tileSubStyle}>{intel.intelligence.permit_activity_signal ?? "—"}</div>
               </div>
 
-              {/* Hearing Sentiment */}
+              {/* Hearings */}
               <div style={tileStyle}>
-                <div style={tileLabelStyle}>Hearing Sentiment</div>
-                <div style={tileValueStyle}>{intel.planning_commission_intelligence?.hearing_sentiment_score ?? "—"}</div>
-                <div style={tileSubStyle}>{intel.planning_commission_intelligence?.sentiment_label ?? "—"}</div>
+                <div style={tileLabelStyle}>Hearings</div>
+                <div style={tileValueStyle}>{intel.intelligence.total_hearings ?? "—"}</div>
+                <div style={tileSubStyle}>commission hearings</div>
               </div>
             </div>
 
@@ -288,11 +292,11 @@ function DigitalTwinModal({ payload, onClose }: { payload: CC3DPayload; onClose:
               }}>Property Details</div>
               <table style={{ fontSize: 13, fontFamily: FONTS.body, borderCollapse: "collapse", width: "100%" }}>
                 <tbody>
-                  <PayloadRow label="Primary Use" value={intel.primary_use} />
-                  <PayloadRow label="Floors" value={intel.floors_above_grade != null ? String(intel.floors_above_grade) : null} />
-                  <PayloadRow label="Year Built" value={intel.year_built != null ? String(intel.year_built) : null} />
-                  <PayloadRow label="Zoning" value={intel.zoning_code} />
-                  <PayloadRow label="APN" value={intel.parcel_apn} />
+                  <PayloadRow label="Primary Use" value={intel.building_attributes.primary_land_use} />
+                  <PayloadRow label="Stories" value={intel.building_attributes.stories != null ? String(intel.building_attributes.stories) : null} />
+                  <PayloadRow label="Year Built" value={intel.building_attributes.year_built != null ? String(intel.building_attributes.year_built) : null} />
+                  <PayloadRow label="Zoning" value={intel.building_attributes.zoning_code} />
+                  <PayloadRow label="APN" value={intel.identity.apn} />
                 </tbody>
               </table>
             </div>
