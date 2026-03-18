@@ -225,13 +225,16 @@ async function main() {
     }
   })
 
-  const output = JSON.stringify(buildings, null, 2)
+  const filtered = buildings.filter(b => !b.address.startsWith('0 UNKNOWN'))
+  console.log(`  Filtered out ${buildings.length - filtered.length} buildings with no address`)
+
+  const output = JSON.stringify(filtered, null, 2)
   writeFileSync('public/data/sf-buildings.json', output)
-  console.log(`\n✓ Generated ${buildings.length} buildings → public/data/sf-buildings.json`)
-  console.log(`  PRIME: ${buildings.filter(b => b.readiness_label === 'PRIME').length}`)
-  console.log(`  HIGH:  ${buildings.filter(b => b.readiness_label === 'HIGH').length}`)
-  console.log(`  WATCH: ${buildings.filter(b => b.readiness_label === 'WATCH').length}`)
-  console.log(`  LOW:   ${buildings.filter(b => b.readiness_label === 'LOW').length}`)
+  console.log(`\n✓ Generated ${filtered.length} buildings → public/data/sf-buildings.json`)
+  console.log(`  PRIME: ${filtered.filter(b => b.readiness_label === 'PRIME').length}`)
+  console.log(`  HIGH:  ${filtered.filter(b => b.readiness_label === 'HIGH').length}`)
+  console.log(`  WATCH: ${filtered.filter(b => b.readiness_label === 'WATCH').length}`)
+  console.log(`  LOW:   ${filtered.filter(b => b.readiness_label === 'LOW').length}`)
 }
 
 main().catch(console.error)

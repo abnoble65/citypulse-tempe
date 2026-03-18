@@ -131,10 +131,7 @@ function fetchParcelsInView(map: mapboxgl.Map) {
   fetch(url.toString())
     .then((r) => r.json())
     .then((esriJson) => {
-      if (esriJson.error) {
-        console.warn('[MapView] ArcGIS error:', esriJson.error)
-        return
-      }
+      if (esriJson.error) return
       if (!map.getSource(PARCEL_SOURCE_ID)) return
       const geojson: GeoJSON.FeatureCollection = {
         type: 'FeatureCollection',
@@ -150,7 +147,7 @@ function fetchParcelsInView(map: mapboxgl.Map) {
       console.log('[MapView] Parcels loaded:', geojson.features.length)
       ;(map.getSource(PARCEL_SOURCE_ID) as mapboxgl.GeoJSONSource).setData(geojson)
     })
-    .catch((err) => console.warn('[MapView] Parcel fetch failed:', err))
+    .catch(() => {})
 }
 
 // ── CityPulse brand tokens ───────────────────────────────────────────────────
