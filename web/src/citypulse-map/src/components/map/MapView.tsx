@@ -327,82 +327,164 @@ function Legend() {
 // ── Loading overlay ──────────────────────────────────────────────────────────
 function LoadingOverlay({ count, total }: { count: number; total: number }) {
   const pct = total > 0 ? Math.round((count / total) * 100) : 0
+  const bars = [18, 28, 22, 36, 24, 32, 20, 26, 30, 16, 34, 22]
 
   return (
     <div style={{
       position: 'absolute',
       inset: 0,
-      background: 'rgba(15,31,46,0.85)',
+      background: 'rgba(10,14,20,0.92)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 50,
-      backdropFilter: 'blur(4px)',
     }}>
-      {/* Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 32 }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1D9E75' }} />
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+      <style>{`
+        @keyframes logoBreath {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.6; transform: scale(0.97); }
+        }
+        @keyframes dotPulse {
+          0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(29,158,117,0.7); }
+          50% { opacity: 0.8; transform: scale(1.3); box-shadow: 0 0 0 6px rgba(29,158,117,0); }
+        }
+        @keyframes barRise {
+          0%, 100% { transform: scaleY(0.6); opacity: 0.4; }
+          50% { transform: scaleY(1); opacity: 1; }
+        }
+        @keyframes scanLine {
+          0% { transform: translateY(-100%); opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { transform: translateY(500%); opacity: 0; }
+        }
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes progressGlow {
+          0%, 100% { box-shadow: 0 0 6px rgba(29,158,117,0.4); }
+          50% { box-shadow: 0 0 12px rgba(29,158,117,0.8); }
+        }
+      `}</style>
+
+      {/* Scan line effect */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        overflow: 'hidden',
+        pointerEvents: 'none',
+      }}>
+        <div style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          height: 1,
+          background: 'linear-gradient(90deg, transparent, rgba(29,158,117,0.3), transparent)',
+          animation: 'scanLine 3s ease-in-out infinite',
+        }} />
+      </div>
+
+      {/* Logo — breathing pulse */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        marginBottom: 36,
+        animation: 'logoBreath 2s ease-in-out infinite',
+      }}>
+        <div style={{
+          width: 10,
+          height: 10,
+          borderRadius: '50%',
+          background: '#1D9E75',
+          animation: 'dotPulse 2s ease-in-out infinite',
+        }} />
+        <span style={{
+          fontSize: 15,
+          fontWeight: 700,
+          color: '#fff',
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+        }}>
           CityPulse
         </span>
       </div>
 
-      {/* City animation — pulsing buildings */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, marginBottom: 28, height: 40 }}>
-        {[18, 28, 22, 36, 24, 32, 20, 26, 30, 16, 34, 22].map((h, i) => (
-          <div
-            key={i}
-            style={{
-              width: 8,
-              height: h,
-              borderRadius: '2px 2px 0 0',
-              background: i % 3 === 0 ? '#1D9E75' : i % 3 === 1 ? '#BA7517' : 'rgba(255,255,255,0.2)',
-              animation: `pulse 1.2s ease-in-out ${i * 0.08}s infinite alternate`,
-              opacity: pct > (i / 12) * 100 ? 1 : 0.2,
-              transition: 'opacity 0.3s ease',
-            }}
-          />
-        ))}
+      {/* Animated skyline bars */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'flex-end',
+        gap: 3,
+        marginBottom: 32,
+        height: 44,
+      }}>
+        {bars.map((h, i) => {
+          const isEnriched = total > 0 && i < (count / total) * bars.length
+          const color = i % 3 === 0 ? '#1D9E75' : i % 3 === 1 ? '#BA7517' : 'rgba(255,255,255,0.15)'
+          return (
+            <div
+              key={i}
+              style={{
+                width: 9,
+                height: h,
+                borderRadius: '2px 2px 0 0',
+                background: isEnriched ? color : 'rgba(255,255,255,0.12)',
+                transformOrigin: 'bottom',
+                animation: `barRise 1.4s ease-in-out ${i * 0.1}s infinite`,
+                transition: 'background 0.5s ease',
+              }}
+            />
+          )
+        })}
       </div>
 
-      {/* Progress bar */}
-      <div style={{ width: 240, marginBottom: 12 }}>
+      {/* Progress bar with glow */}
+      <div style={{
+        width: 260,
+        marginBottom: 14,
+        animation: 'fadeInUp 0.5s ease forwards',
+      }}>
         <div style={{
           height: 3,
-          background: 'rgba(255,255,255,0.1)',
+          background: 'rgba(255,255,255,0.08)',
           borderRadius: 2,
           overflow: 'hidden',
         }}>
           <div style={{
             height: '100%',
-            width: `${pct}%`,
+            width: `${Math.max(pct, 3)}%`,
             background: '#1D9E75',
             borderRadius: 2,
             transition: 'width 0.4s ease',
+            animation: 'progressGlow 1.5s ease-in-out infinite',
           }} />
         </div>
       </div>
 
       {/* Status text */}
-      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
+      <div style={{
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.55)',
+        marginBottom: 5,
+        letterSpacing: '0.02em',
+        animation: 'fadeInUp 0.6s ease forwards',
+      }}>
         {count === 0
-          ? 'Connecting to data sources…'
+          ? 'Connecting to data sources'
           : count < total
-          ? `Enriching parcel boundaries… ${count} of ${total}`
-          : 'Finalizing intelligence layer…'
+          ? `Enriching parcel boundaries — ${count} of ${total}`
+          : 'Finalizing intelligence layer'
         }
       </div>
-      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
-        {total > 0 ? `${pct}% complete` : 'Loading…'}
+      <div style={{
+        fontSize: 10,
+        color: 'rgba(255,255,255,0.25)',
+        letterSpacing: '0.04em',
+      }}>
+        {total > 0 ? `${pct}%` : 'Loading'}
       </div>
-
-      <style>{`
-        @keyframes pulse {
-          from { transform: scaleY(0.85); }
-          to { transform: scaleY(1); }
-        }
-      `}</style>
     </div>
   )
 }
@@ -453,7 +535,7 @@ export function MapView() {
 
     const map = new mapboxgl.Map({
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/light-v11',
+      style: 'mapbox://styles/mapbox/navigation-night-v1',
       center: SF_CENTER,
       zoom: SF_ZOOM,
       pitch: 45,
