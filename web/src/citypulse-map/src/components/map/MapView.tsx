@@ -535,7 +535,7 @@ export function MapView() {
 
     const map = new mapboxgl.Map({
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/navigation-night-v1',
+      style: 'mapbox://styles/mapbox/satellite-streets-v12',
       center: SF_CENTER,
       zoom: SF_ZOOM,
       pitch: 45,
