@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { devtools, subscribeWithSelector } from 'zustand/middleware'
 import type { BuildingEntity } from '../types/building'
 
-export type ViewMode = '2.5d' | '3d' | 'flat'
+export type ViewMode = '2d' | '2.5d' | '3d'
 export type ReadinessFilter = 'all' | 'PRIME' | 'HIGH' | 'WATCH' | 'LOW'
 
 interface MapState {

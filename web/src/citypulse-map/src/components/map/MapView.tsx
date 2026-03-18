@@ -43,9 +43,9 @@ function buildColorExpression(selectedId: string | null): mapboxgl.Expression {
 
 // ── View mode → pitch / bearing ────────────────────────────────────────────────
 const VIEW_CAMERA: Record<ViewMode, { pitch: number; bearing: number }> = {
+  '2d':   { pitch:  0, bearing:  0 },
   '2.5d': { pitch: 45, bearing: -8 },
   '3d':   { pitch: 70, bearing: -8 },
-  'flat': { pitch:  0, bearing: -8 },
 }
 
 // ── Toolbar ────────────────────────────────────────────────────────────────────
@@ -86,7 +86,7 @@ function ViewToggle() {
     }}>
       {/* View mode */}
       <div style={{ display: 'flex', gap: 4, background: 'var(--color-background-primary)', borderRadius: 6, padding: 4, border: '1px solid var(--color-border-tertiary)' }}>
-        {(['2.5d', '3d', 'flat'] as ViewMode[]).map((m) => (
+        {(['2d', '2.5d', '3d'] as ViewMode[]).map((m) => (
           <button key={m} style={btnStyle(viewMode === m)} onClick={() => setViewMode(m)}>{m}</button>
         ))}
       </div>
@@ -325,8 +325,13 @@ export function MapView() {
   // ── View mode camera ────────────────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current
-    if (!map) return
+    if (!map || !map.getLayer(LAYER_ID)) return
     map.easeTo({ ...VIEW_CAMERA[viewMode], duration: 600 })
+    map.setPaintProperty(
+      LAYER_ID,
+      'fill-extrusion-height',
+      viewMode === '2d' ? 0 : ['get', 'height_meters']
+    )
   }, [viewMode])
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -352,7 +357,7 @@ export function MapView() {
             color: 'var(--color-text-secondary)',
             zIndex: 20,
           }}>
-            Fetching parcel boundaries from DataSF…
+            Fetching parcel boundaries from ArcGIS…
           </div>
         )}
 
