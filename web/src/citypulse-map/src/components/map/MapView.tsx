@@ -5,6 +5,7 @@ import { useMapStore, type ViewMode } from '../../store/mapStore'
 import { useBuildings, useEnrichedBuildings, useBuildingById, buildingsToGeoJSON } from '../../hooks/useBuildings'
 import { useMapUrl } from '../../hooks/useMapUrl'
 import { AttributeInspector } from './AttributeInspector'
+import { UnknownParcelPanel } from './UnknownParcelPanel'
 import type { BuildingEntity } from '../../types/building'
 
 // ── Mapbox token ───────────────────────────────────────────────────────────────
@@ -17,6 +18,11 @@ const SOURCE_ID   = 'citypulse-buildings'
 const LAYER_ID    = 'buildings-extrusion'
 const SF_CENTER: [number, number] = [-122.398, 37.791]
 const SF_ZOOM     = 14.5
+
+const PARCEL_SOURCE_ID   = 'arcgis-parcels'
+const PARCEL_OUTLINE_ID  = 'arcgis-parcel-lines'
+const PARCEL_FILL_ID     = 'arcgis-parcel-fill'
+const ARCGIS_PARCELS_URL = 'https://services8.arcgis.com/SeelVoY3qN5dU7fD/arcgis/rest/services/Parcels___Active_and_Retired/FeatureServer/0/query'
 
 // Maps readiness label → colour.
 // Used in a Mapbox match expression — if the label changes in BuildingEntity,
@@ -44,62 +50,237 @@ function buildColorExpression(selectedId: string | null): mapboxgl.Expression {
 // ── View mode → pitch / bearing ────────────────────────────────────────────────
 const VIEW_CAMERA: Record<ViewMode, { pitch: number; bearing: number }> = {
   '2d':   { pitch:  0, bearing:  0 },
-  '2.5d': { pitch: 45, bearing: -8 },
   '3d':   { pitch: 70, bearing: -8 },
+}
+
+// ── ArcGIS point query for unknown parcels ──────────────────────────────────
+async function queryParcelAtPoint(lng: number, lat: number) {
+  const params = new URLSearchParams({
+    geometry: `${lng},${lat}`,
+    geometryType: 'esriGeometryPoint',
+    inSR: '4326',
+    spatialRel: 'esriSpatialRelIntersects',
+    outFields: 'blklot,from_addre,to_addre,street_nam,street_typ,land_use,shape_area',
+    returnGeometry: 'true',
+    outSR: '4326',
+    f: 'geojson',
+  })
+  const url = `https://services8.arcgis.com/SeelVoY3qN5dU7fD/arcgis/rest/services/Parcels___Active_and_Retired/FeatureServer/0/query?${params}`
+
+  try {
+    const res = await fetch(url)
+    const fc = await res.json()
+    const feature = fc?.features?.[0]
+    if (!feature) return
+
+    const attrs = feature.properties
+    const blklot = attrs.blklot
+    const address = `${attrs.from_addre} ${attrs.street_nam} ${attrs.street_typ}`
+
+    // Check if this parcel matches a known building
+    const known = useMapStore.getState().buildings?.find(b => b.apn === blklot)
+    if (known) {
+      useMapStore.getState().selectBuilding(known.building_id, known)
+      return
+    }
+
+    // Show lightweight unknown parcel panel
+    useMapStore.getState().selectUnknownParcel({
+      blklot,
+      address,
+      land_use: attrs.land_use,
+      shape_area: attrs.shape_area,
+      geometry: feature.geometry,
+    })
+  } catch (err) {
+    console.warn('[MapView] Parcel query failed:', err)
+  }
+}
+
+// ── Fetch all ArcGIS parcels visible in the current viewport ─────────────────
+let parcelFetchTimeout: ReturnType<typeof setTimeout> | null = null
+let lastSelectedParcelId: string | null = null
+
+function fetchParcelsInView(map: mapboxgl.Map) {
+  if (map.getZoom() < 14) {
+    ;(map.getSource(PARCEL_SOURCE_ID) as mapboxgl.GeoJSONSource)
+      .setData({ type: 'FeatureCollection', features: [] })
+    return
+  }
+
+  const bounds = map.getBounds()
+  const geometry = {
+    xmin: bounds.getWest(),
+    ymin: bounds.getSouth(),
+    xmax: bounds.getEast(),
+    ymax: bounds.getNorth(),
+    spatialReference: { wkid: 4326 }
+  }
+
+  const url = new URL(ARCGIS_PARCELS_URL)
+  url.searchParams.set('geometry', JSON.stringify(geometry))
+  url.searchParams.set('geometryType', 'esriGeometryEnvelope')
+  url.searchParams.set('inSR', '4326')
+  url.searchParams.set('spatialRel', 'esriSpatialRelIntersects')
+  url.searchParams.set('outFields', 'blklot,from_addre,street_nam,street_typ,land_use,shape_area')
+  url.searchParams.set('returnGeometry', 'true')
+  url.searchParams.set('outSR', '4326')
+  url.searchParams.set('resultRecordCount', '200')
+  url.searchParams.set('f', 'json')
+
+  fetch(url.toString())
+    .then((r) => r.json())
+    .then((esriJson) => {
+      if (esriJson.error) {
+        console.warn('[MapView] ArcGIS error:', esriJson.error)
+        return
+      }
+      if (!map.getSource(PARCEL_SOURCE_ID)) return
+      const geojson: GeoJSON.FeatureCollection = {
+        type: 'FeatureCollection',
+        features: (esriJson.features ?? []).map((f: any) => ({
+          type: 'Feature',
+          geometry: {
+            type: 'Polygon',
+            coordinates: f.geometry?.rings ?? [],
+          },
+          properties: f.attributes,
+        })),
+      }
+      console.log('[MapView] Parcels loaded:', geojson.features.length)
+      ;(map.getSource(PARCEL_SOURCE_ID) as mapboxgl.GeoJSONSource).setData(geojson)
+    })
+    .catch((err) => console.warn('[MapView] Parcel fetch failed:', err))
+}
+
+// ── CityPulse brand tokens ───────────────────────────────────────────────────
+const CP = {
+  navy:    '#0F1F2E',
+  teal:    '#1D9E75',
+  tealDim: '#0F6E56',
+  sand:    '#F5F2ED',
+  stone:   '#E8E4DC',
+  muted:   '#6B7280',
+  prime:   '#1D9E75',
+  high:    '#BA7517',
+  watch:   '#D85A30',
+  low:     '#888780',
 }
 
 // ── Toolbar ────────────────────────────────────────────────────────────────────
 function ViewToggle() {
   const { viewMode, setViewMode, readinessFilter, setReadinessFilter } = useMapStore()
-
-  const btnStyle = (active: boolean): React.CSSProperties => ({
-    padding: '4px 10px',
-    fontSize: 11,
-    fontWeight: 500,
-    border: '1px solid var(--color-border-secondary)',
-    borderRadius: 4,
-    background: active ? 'var(--color-text-primary)' : 'var(--color-background-primary)',
-    color:       active ? 'var(--color-background-primary)' : 'var(--color-text-secondary)',
-    cursor: 'pointer',
-  })
-
-  const filterStyle = (active: boolean, color: string): React.CSSProperties => ({
-    padding: '3px 8px',
-    fontSize: 10,
-    fontWeight: 500,
-    border: `1.5px solid ${active ? color : 'var(--color-border-secondary)'}`,
-    borderRadius: 4,
-    background: active ? color : 'var(--color-background-primary)',
-    color: active ? '#fff' : 'var(--color-text-secondary)',
-    cursor: 'pointer',
-  })
+  const is3d = viewMode === '3d'
 
   return (
     <div style={{
       position: 'absolute',
-      top: 12,
-      left: 12,
+      top: 14,
+      left: 14,
+      zIndex: 20,
       display: 'flex',
       flexDirection: 'column',
-      gap: 6,
-      zIndex: 10,
+      gap: 8,
     }}>
-      {/* View mode */}
-      <div style={{ display: 'flex', gap: 4, background: 'var(--color-background-primary)', borderRadius: 6, padding: 4, border: '1px solid var(--color-border-tertiary)' }}>
-        {(['2d', '2.5d', '3d'] as ViewMode[]).map((m) => (
-          <button key={m} style={btnStyle(viewMode === m)} onClick={() => setViewMode(m)}>{m}</button>
-        ))}
+      {/* Brand header pill */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        background: CP.navy,
+        borderRadius: 8,
+        padding: '7px 12px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+      }}>
+        <div style={{
+          width: 6,
+          height: 6,
+          borderRadius: '50%',
+          background: CP.teal,
+        }} />
+        <span style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: '#fff',
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+        }}>
+          CityPulse
+        </span>
+        <div style={{ width: 1, height: 12, background: 'rgba(255,255,255,0.15)', margin: '0 2px' }} />
+        {/* 2D/3D toggle */}
+        <button
+          onClick={() => setViewMode(is3d ? '2d' : '3d')}
+          style={{
+            display: 'flex',
+            background: 'rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 5,
+            padding: '2px',
+            cursor: 'pointer',
+            gap: 2,
+          }}
+        >
+          {(['2d', '3d'] as const).map(m => (
+            <span
+              key={m}
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                padding: '2px 7px',
+                borderRadius: 4,
+                background: viewMode === m ? CP.teal : 'transparent',
+                color: viewMode === m ? '#fff' : 'rgba(255,255,255,0.5)',
+                transition: 'all 0.15s',
+                letterSpacing: '0.04em',
+              }}
+            >
+              {m.toUpperCase()}
+            </span>
+          ))}
+        </button>
       </div>
-      {/* Readiness filter */}
-      <div style={{ display: 'flex', gap: 4 }}>
+
+      {/* Readiness filter pills */}
+      <div style={{
+        display: 'flex',
+        gap: 4,
+        background: 'rgba(255,255,255,0.92)',
+        borderRadius: 8,
+        padding: '5px 8px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+        backdropFilter: 'blur(8px)',
+      }}>
         {(['PRIME', 'HIGH', 'WATCH', 'LOW'] as const).map((r) => {
-          const colors = { PRIME: '#1D9E75', HIGH: '#BA7517', WATCH: '#D85A30', LOW: '#888780' }
+          const color = { PRIME: CP.prime, HIGH: CP.high, WATCH: CP.watch, LOW: CP.low }[r]
+          const active = readinessFilter === r
           return (
             <button
               key={r}
-              style={filterStyle(readinessFilter === r, colors[r])}
               onClick={() => setReadinessFilter(readinessFilter === r ? 'all' : r)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 8px',
+                fontSize: 10,
+                fontWeight: 600,
+                border: 'none',
+                borderRadius: 5,
+                background: active ? color : 'transparent',
+                color: active ? '#fff' : CP.muted,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                letterSpacing: '0.03em',
+              }}
             >
+              <div style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: active ? '#fff' : color,
+                flexShrink: 0,
+              }} />
               {r}
             </button>
           )
@@ -112,35 +293,116 @@ function ViewToggle() {
 // ── Legend ─────────────────────────────────────────────────────────────────────
 function Legend() {
   const items = [
-    { label: 'PRIME', color: '#1D9E75', sub: '≥ 80' },
-    { label: 'HIGH',  color: '#BA7517', sub: '60–79' },
-    { label: 'WATCH', color: '#D85A30', sub: '40–59' },
-    { label: 'LOW',   color: '#888780', sub: '< 40'  },
+    { label: 'PRIME', color: CP.prime, sub: '≥ 80' },
+    { label: 'HIGH',  color: CP.high,  sub: '60–79' },
+    { label: 'WATCH', color: CP.watch, sub: '40–59' },
+    { label: 'LOW',   color: CP.low,   sub: '< 40'  },
   ]
   return (
     <div style={{
       position: 'absolute',
-      bottom: 32,
-      left: 12,
-      background: 'var(--color-background-primary)',
-      border: '1px solid var(--color-border-tertiary)',
+      bottom: 36,
+      left: 14,
+      background: 'rgba(255,255,255,0.92)',
+      backdropFilter: 'blur(8px)',
       borderRadius: 8,
-      padding: '8px 12px',
+      padding: '8px 10px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
       zIndex: 10,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 5,
     }}>
-      <div style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', marginBottom: 2 }}>
-        Readiness
+      <div style={{ fontSize: 8, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: CP.muted, marginBottom: 6 }}>
+        Readiness score
       </div>
-      {items.map((i) => (
-        <div key={i.label} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-          <div style={{ width: 10, height: 10, borderRadius: 2, background: i.color, flexShrink: 0 }} />
-          <span style={{ fontSize: 11, fontWeight: 500, color: i.color }}>{i.label}</span>
-          <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>{i.sub}</span>
+      {items.map(i => (
+        <div key={i.label} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 2, background: i.color, flexShrink: 0 }} />
+          <span style={{ fontSize: 10, fontWeight: 600, color: i.color, width: 38 }}>{i.label}</span>
+          <span style={{ fontSize: 10, color: CP.muted }}>{i.sub}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── Loading overlay ──────────────────────────────────────────────────────────
+function LoadingOverlay({ count, total }: { count: number; total: number }) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0
+
+  return (
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      background: 'rgba(15,31,46,0.85)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 50,
+      backdropFilter: 'blur(4px)',
+    }}>
+      {/* Logo */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 32 }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1D9E75' }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+          CityPulse
+        </span>
+      </div>
+
+      {/* City animation — pulsing buildings */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, marginBottom: 28, height: 40 }}>
+        {[18, 28, 22, 36, 24, 32, 20, 26, 30, 16, 34, 22].map((h, i) => (
+          <div
+            key={i}
+            style={{
+              width: 8,
+              height: h,
+              borderRadius: '2px 2px 0 0',
+              background: i % 3 === 0 ? '#1D9E75' : i % 3 === 1 ? '#BA7517' : 'rgba(255,255,255,0.2)',
+              animation: `pulse 1.2s ease-in-out ${i * 0.08}s infinite alternate`,
+              opacity: pct > (i / 12) * 100 ? 1 : 0.2,
+              transition: 'opacity 0.3s ease',
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ width: 240, marginBottom: 12 }}>
+        <div style={{
+          height: 3,
+          background: 'rgba(255,255,255,0.1)',
+          borderRadius: 2,
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            height: '100%',
+            width: `${pct}%`,
+            background: '#1D9E75',
+            borderRadius: 2,
+            transition: 'width 0.4s ease',
+          }} />
+        </div>
+      </div>
+
+      {/* Status text */}
+      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
+        {count === 0
+          ? 'Connecting to data sources…'
+          : count < total
+          ? `Enriching parcel boundaries… ${count} of ${total}`
+          : 'Finalizing intelligence layer…'
+        }
+      </div>
+      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
+        {total > 0 ? `${pct}% complete` : 'Loading…'}
+      </div>
+
+      <style>{`
+        @keyframes pulse {
+          from { transform: scaleY(0.85); }
+          to { transform: scaleY(1); }
+        }
+      `}</style>
     </div>
   )
 }
@@ -157,6 +419,7 @@ export function MapView() {
     selectedBuildingId,
     selectedBuilding,
     selectBuilding,
+    unknownParcel,
     viewMode,
     readinessFilter,
   } = useMapStore()
@@ -193,8 +456,8 @@ export function MapView() {
       style: 'mapbox://styles/mapbox/light-v11',
       center: SF_CENTER,
       zoom: SF_ZOOM,
-      pitch: VIEW_CAMERA['2.5d'].pitch,
-      bearing: VIEW_CAMERA['2.5d'].bearing,
+      pitch: 45,
+      bearing: -8,
       antialias: true,
     })
 
@@ -226,6 +489,66 @@ export function MapView() {
         },
       })
 
+      // ── ArcGIS parcel layer — all parcels in viewport ─────────────────
+      map.addSource(PARCEL_SOURCE_ID, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+        generateId: true,
+      })
+
+      // Fill — invisible but captures clicks
+      map.addLayer({
+        id: PARCEL_FILL_ID,
+        type: 'fill',
+        source: PARCEL_SOURCE_ID,
+        paint: {
+          'fill-color': '#1D9E75',
+          'fill-opacity': [
+            'case',
+            ['==', ['get', 'blklot'], ''],
+            0,
+            0.05,
+          ],
+        },
+      })
+
+      // Outline — visible parcel boundaries
+      map.addLayer({
+        id: PARCEL_OUTLINE_ID,
+        type: 'line',
+        source: PARCEL_SOURCE_ID,
+        paint: {
+          'line-color': [
+            'case',
+            ['boolean', ['feature-state', 'selected'], false],
+            '#185FA5',
+            '#888780',
+          ],
+          'line-width': [
+            'interpolate', ['linear'], ['zoom'],
+            14, 0.4,
+            16, 0.8,
+            18, 1.5,
+          ],
+          'line-opacity': [
+            'interpolate', ['linear'], ['zoom'],
+            13, 0,
+            14, 0.6,
+            16, 1,
+          ],
+        },
+      })
+
+      // Make sure CityPulse buildings render on top
+      map.moveLayer(LAYER_ID)
+
+      // Fetch parcels on load and after map moves
+      fetchParcelsInView(map)
+      map.on('moveend', () => {
+        if (parcelFetchTimeout) clearTimeout(parcelFetchTimeout)
+        parcelFetchTimeout = setTimeout(() => fetchParcelsInView(map), 300)
+      })
+
       // ── Click handler ─────────────────────────────────────────────────
       map.on('click', LAYER_ID, (e) => {
         const feature = e.features?.[0]
@@ -247,13 +570,74 @@ export function MapView() {
         })
       })
 
-      // Click on empty space — deselect
+      // Click on empty space — query ArcGIS for any parcel at this point
       map.on('click', (e) => {
         const features = map.queryRenderedFeatures(e.point, { layers: [LAYER_ID] })
-        if (!features.length) selectBuilding(null, null)
+
+        // If clicked a known building, already handled by LAYER_ID click
+        if (features.length) return
+
+        // Otherwise query ArcGIS for any parcel at this point
+        queryParcelAtPoint(e.lngLat.lng, e.lngLat.lat)
       })
 
-      // Cursor
+      // ── Parcel fill click — select known building or show unknown panel ─
+      map.on('click', PARCEL_FILL_ID, async (e) => {
+        const feature = e.features?.[0]
+        if (!feature) return
+
+        const attrs = feature.properties as {
+          blklot: string
+          from_addre: string
+          to_addre: string
+          street_nam: string
+          street_typ: string
+          land_use: string
+          shape_area: number
+        }
+
+        // Clear previous selection highlight
+        if (lastSelectedParcelId) {
+          map.setFeatureState(
+            { source: PARCEL_SOURCE_ID, id: lastSelectedParcelId },
+            { selected: false }
+          )
+        }
+        lastSelectedParcelId = feature.id as string
+        map.setFeatureState(
+          { source: PARCEL_SOURCE_ID, id: feature.id as string },
+          { selected: true }
+        )
+
+        const address = `${attrs.from_addre} ${attrs.street_nam} ${attrs.street_typ}`
+
+        // Check if this matches a known CityPulse building
+        const buildings = useMapStore.getState().buildings
+        const known = buildings?.find(b => b.apn === attrs.blklot)
+        if (known) {
+          selectBuilding(known.building_id, known)
+          return
+        }
+
+        // Show unknown parcel panel
+        useMapStore.getState().selectUnknownParcel({
+          blklot: attrs.blklot,
+          address,
+          land_use: attrs.land_use ?? null,
+          shape_area: attrs.shape_area ?? null,
+          geometry: feature.geometry,
+        })
+      })
+
+      // Cursor on parcel hover
+      map.on('mouseenter', PARCEL_FILL_ID, () => {
+        map.getCanvas().style.cursor = 'pointer'
+      })
+      map.on('mouseleave', PARCEL_FILL_ID, () => {
+        map.getCanvas().style.cursor = ''
+      })
+
+      // Cursor on building hover
       map.on('mouseenter', LAYER_ID, () => { map.getCanvas().style.cursor = 'pointer' })
       map.on('mouseleave', LAYER_ID, () => { map.getCanvas().style.cursor = '' })
 
@@ -343,37 +727,11 @@ export function MapView() {
         <ViewToggle />
         <Legend />
 
-        {isEnriching && !isLoading && (
-          <div style={{
-            position: 'absolute',
-            bottom: 80,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'var(--color-background-secondary)',
-            border: '1px solid var(--color-border-tertiary)',
-            borderRadius: 6,
-            padding: '5px 14px',
-            fontSize: 11,
-            color: 'var(--color-text-secondary)',
-            zIndex: 20,
-          }}>
-            Fetching parcel boundaries from ArcGIS…
-          </div>
-        )}
-
-        {isLoading && (
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(255,255,255,0.7)',
-            fontSize: 13,
-            color: 'var(--color-text-secondary)',
-          }}>
-            Loading SF buildings…
-          </div>
+        {(isLoading || isEnriching) && (
+          <LoadingOverlay
+            count={buildings?.filter(b => b.parcel_geometry !== null).length ?? 0}
+            total={buildings?.length ?? 0}
+          />
         )}
 
         {error && (
@@ -396,13 +754,18 @@ export function MapView() {
 
       {/* Inspector panel */}
       <div style={{
-        width: displayBuilding ? 320 : 0,
+        width: (displayBuilding || unknownParcel) ? 320 : 0,
         overflow: 'hidden',
         transition: 'width 0.3s ease',
         borderLeft: '1px solid var(--color-border-tertiary)',
         background: 'var(--color-background-primary)',
       }}>
-        {displayBuilding && <AttributeInspector building={displayBuilding} />}
+        {displayBuilding
+          ? <AttributeInspector building={displayBuilding} />
+          : unknownParcel
+          ? <UnknownParcelPanel parcel={unknownParcel} />
+          : null
+        }
       </div>
     </div>
   )

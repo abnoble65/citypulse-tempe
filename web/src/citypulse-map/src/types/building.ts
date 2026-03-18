@@ -20,6 +20,14 @@ export interface FieldMeta {
   source?: string
 }
 
+export interface UnknownParcel {
+  blklot: string
+  address: string
+  land_use: string | null
+  shape_area: number | null
+  geometry: GeoJSONPolygon | null
+}
+
 export interface BuildingEntity {
   // ── Identity ──────────────────────────────────────────────────────────
   building_id: string           // CC3D primary key

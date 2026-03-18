@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { devtools, subscribeWithSelector } from 'zustand/middleware'
-import type { BuildingEntity } from '../types/building'
+import type { BuildingEntity, UnknownParcel } from '../types/building'
 
-export type ViewMode = '2d' | '2.5d' | '3d'
+export type ViewMode = '2d' | '3d'
 export type ReadinessFilter = 'all' | 'PRIME' | 'HIGH' | 'WATCH' | 'LOW'
 
 interface MapState {
@@ -15,12 +15,20 @@ interface MapState {
   readinessFilter: ReadinessFilter
   showPendingFields: boolean
 
+  // Unknown parcel (clicked outside known buildings)
+  unknownParcel: UnknownParcel | null
+
+  // Buildings list (set by useBuildings hook)
+  buildings: BuildingEntity[] | null
+
   // Sync
   syncQueue: string[]   // BuildingIDs queued for Nextspace
   lastSyncAt: Date | null
 
   // Actions
   selectBuilding: (id: string | null, entity: BuildingEntity | null) => void
+  selectUnknownParcel: (parcel: UnknownParcel | null) => void
+  setBuildings: (buildings: BuildingEntity[]) => void
   setViewMode: (mode: ViewMode) => void
   setReadinessFilter: (filter: ReadinessFilter) => void
   togglePendingFields: () => void
@@ -34,14 +42,22 @@ export const useMapStore = create<MapState>()(
     subscribeWithSelector((set) => ({
       selectedBuildingId: null,
       selectedBuilding: null,
-      viewMode: '2.5d',
+      unknownParcel: null,
+      buildings: null,
+      viewMode: '3d',
       readinessFilter: 'all',
       showPendingFields: true,
       syncQueue: [],
       lastSyncAt: null,
 
       selectBuilding: (id, entity) =>
-        set({ selectedBuildingId: id, selectedBuilding: entity }, false, 'selectBuilding'),
+        set({ selectedBuildingId: id, selectedBuilding: entity, unknownParcel: null }, false, 'selectBuilding'),
+
+      selectUnknownParcel: (parcel) =>
+        set({ unknownParcel: parcel, selectedBuildingId: null, selectedBuilding: null }, false, 'selectUnknownParcel'),
+
+      setBuildings: (buildings) =>
+        set({ buildings }, false, 'setBuildings'),
 
       setViewMode: (mode) =>
         set({ viewMode: mode }, false, 'setViewMode'),
