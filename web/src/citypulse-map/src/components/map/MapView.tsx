@@ -565,7 +565,11 @@ export function MapView() {
         source: SOURCE_ID,
         paint: {
           'fill-extrusion-color':   READINESS_COLORS,
-          'fill-extrusion-height':  ['get', 'height_meters'],
+          'fill-extrusion-height':  [
+            'coalesce',
+            ['get', 'height_meters'],
+            20,
+          ],
           'fill-extrusion-base':    0,
           'fill-extrusion-opacity': 0.85,
         },

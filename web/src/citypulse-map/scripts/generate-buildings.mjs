@@ -90,7 +90,7 @@ async function fetchBuildingHeights(blklots) {
   for (let i = 0; i < mblrs.length; i += 50) {
     const batch = mblrs.slice(i, i + 50)
     const where = batch.map(m => `'${m}'`).join(',')
-    const url = `https://data.sfgov.org/resource/ynuv-fyni.json?$where=mblr IN (${where})&$select=mblr,hgt_median_m,hgt_maxcm&$limit=50`
+    const url = `https://data.sfgov.org/resource/ynuv-fyni.json?$where=mblr IN (${where})&$select=mblr,hgt_median_m,hgt_maxcm,longitude,latitude&$limit=50`
     const res = await fetch(url)
     const rows = await res.json()
     if (Array.isArray(rows)) {
@@ -141,7 +141,13 @@ async function main() {
     const blklot = attrs.blklot
     const assessor = assessorData[blklot] ?? {}
     const heightRecord = heightData[blklot] ?? {}
-    const { lng, lat } = centroid(p.geometry.rings)
+    const lidar = heightData[blklot]
+    const longitude = lidar?.longitude
+      ? parseFloat(parseFloat(lidar.longitude).toFixed(6))
+      : parseFloat(centroid(p.geometry.rings).lng.toFixed(6))
+    const latitude = lidar?.latitude
+      ? parseFloat(parseFloat(lidar.latitude).toFixed(6))
+      : parseFloat(centroid(p.geometry.rings).lat.toFixed(6))
 
     const heightRaw = heightRecord?.hgt_median_m
     const heightM = heightRaw ? Math.round(parseFloat(heightRaw))
@@ -190,8 +196,8 @@ async function main() {
       apn: blklot,
       address,
       building_name: null,
-      longitude: parseFloat(lng.toFixed(6)),
-      latitude: parseFloat(lat.toFixed(6)),
+      longitude,
+      latitude,
       height_meters: heightM,
       floor_count: floorCount,
       footprint_sqm: footprintSqm,
