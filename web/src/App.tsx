@@ -3,7 +3,7 @@ import { NavBar } from "./components/NavBar";
 import { SplashScreen } from "./components/SplashScreen";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Home } from "./pages/Home";
-import { generateBriefing } from "./services/briefing";
+import { generateBriefing, generateBriefingFromData } from "./services/briefing";
 import type { DistrictData } from "./services/briefing";
 import { aggregateDistrictData, aggregateCitywideData } from "./services/aggregator";
 import { DEFAULT_DISTRICT, DISTRICTS, CITYWIDE_DISTRICT } from "./districts";
@@ -12,6 +12,8 @@ import { CityPulseLogo } from "./components/Icons";
 import { CityPulseChat } from "./components/CityPulseChat";
 import { CBDPortal } from "./components/CBDPortal";
 import { useLanguage } from "./contexts/LanguageContext";
+
+const PropertyPage = lazy(() => import("./pages/PropertyPage").then(m => ({ default: m.PropertyPage })));
 
 // ── Stale chunk auto-reload ──────────────────────────────────────────────────
 // After a deploy, old chunk filenames no longer exist on the server.
@@ -188,6 +190,18 @@ function pathFromPage(pageName: string): string {
 export default function App() {
   const { language } = useLanguage();
 
+  // ── Property page route detection ────────────────────────────────────────
+  const propertyMatch = window.location.pathname.match(/^\/property\/([a-z0-9-]+)/i);
+  if (propertyMatch) {
+    return (
+      <ErrorBoundary label="PropertyPage">
+        <Suspense fallback={null}>
+          <PropertyPage apn={propertyMatch[1]} />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
   // ── CBD Portal route detection ──────────────────────────────────────────
   const cbdMatch = window.location.pathname.match(/^\/cbd\/([a-z0-9-]+)/);
   if (cbdMatch) {
@@ -292,8 +306,17 @@ export default function App() {
       ? aggregateCitywideData(controller.signal)
       : aggregateDistrictData(districtConfig, controller.signal);
     load
-      .then(data => {
-        if (!controller.signal.aborted) setAggregatedData(data);
+      .then(async data => {
+        if (controller.signal.aborted) return;
+        setAggregatedData(data);
+        if (!briefingText) {
+          try {
+            const text = await generateBriefingFromData(data, districtConfig, undefined, language);
+            if (!controller.signal.aborted) setBriefingText(text);
+          } catch (err) {
+            console.warn("[app] auto-briefing generation failed:", err);
+          }
+        }
       })
       .catch(err => {
         if (err?.name === "AbortError") return;

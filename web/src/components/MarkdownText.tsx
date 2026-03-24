@@ -80,9 +80,9 @@ export function renderMarkdownBlock(
     const trimmed = para.trim();
     if (!trimmed) continue;
 
-    // Check if this paragraph is a heading
+    // Check if this paragraph is a heading-only block (no body text after it)
     const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)/);
-    if (headingMatch) {
+    if (headingMatch && !trimmed.includes("\n")) {
       const level = headingMatch[1].length;
       if (level <= 2) {
         nodes.push(
