@@ -1,18 +1,4 @@
 {
-  "redirects": [
-    {
-      "source": "/",
-      "has": [{ "type": "host", "value": "citypulsesf.com" }],
-      "destination": "/citypulse-launch.html",
-      "permanent": false
-    },
-    {
-      "source": "/",
-      "has": [{ "type": "host", "value": "www.citypulsesf.com" }],
-      "destination": "/citypulse-launch.html",
-      "permanent": false
-    }
-  ],
   "rewrites": [
     { "source": "/:path*.html", "destination": "/:path*.html" },
     { "source": "/((?!api/).+)", "destination": "/index.html" }
