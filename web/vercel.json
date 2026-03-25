@@ -1,5 +1,15 @@
 {
   "rewrites": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "citypulsesf.com" }],
+      "destination": "/citypulse-launch.html"
+    },
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "www.citypulsesf.com" }],
+      "destination": "/citypulse-launch.html"
+    },
     { "source": "/:path*.html", "destination": "/:path*.html" },
     { "source": "/((?!api/).+)", "destination": "/index.html" }
   ],
