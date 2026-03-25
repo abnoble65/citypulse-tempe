@@ -894,14 +894,28 @@ if(ms) mockObs.observe(ms);
 })();
 
 // Form handler
-function handleSignup(e){
+async function handleSignup(e){
   e.preventDefault();
   const form = e.target;
   const input = form.querySelector('input');
   const btn   = form.querySelector('button');
-  btn.textContent = "You're on the list ✓";
-  btn.style.background = '#2A7A4B';
-  input.value = ''; input.placeholder = "We'll be in touch soon."; input.disabled = true; btn.disabled = true;
+  const email = input.value;
+  btn.textContent = 'Sending...'; btn.disabled = true; input.disabled = true;
+  try {
+    const res = await fetch('https://formspree.io/f/xkopwzjy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, _subject: 'CityPulse Early Access Request' })
+    });
+    if (!res.ok) throw new Error(res.status);
+    btn.textContent = "You're on the list \u2713";
+    btn.style.background = '#2A7A4B';
+    input.value = ''; input.placeholder = "We'll be in touch soon.";
+  } catch {
+    btn.textContent = 'Try again';
+    btn.style.background = '#B44040';
+    input.disabled = false;
+  }
   setTimeout(()=>{
     btn.textContent='Request Access'; btn.style.background='';
     input.placeholder='your@email.com'; input.disabled=false; btn.disabled=false;
