@@ -17,7 +17,7 @@
     <script type="module" src="/src/main.tsx"></script>
 
     <!-- Onboarding Modal -->
-    <div id="cp-onboard-backdrop" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(15,26,19,.65);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center">
+    <div id="cp-onboard-backdrop" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(15,26,19,.65);backdrop-filter:blur(4px);align-items:center;justify-content:center">
       <div id="cp-onboard-modal" style="width:min(460px,92vw);max-height:92vh;border-radius:20px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.35);animation:cp-ob-in .25s ease-out">
         <!-- Header -->
         <div id="cp-ob-header" style="background:#0F1A13;padding:28px 28px 24px;text-align:center">
@@ -110,7 +110,7 @@
       });
 
       render();
-      setTimeout(function(){backdrop.style.display='flex';},600);
+      setTimeout(function(){backdrop.style.display='flex';},6000);
     })();
     </script>
   </body>
