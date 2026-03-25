@@ -1,29 +1,34 @@
 {
-  "routes": [
+  "redirects": [
     {
-      "src": "/index\\.html",
-      "headers": { "Cache-Control": "no-cache, no-store, must-revalidate" },
-      "continue": true
-    },
-    {
-      "src": "/assets/(.*)",
-      "headers": { "Cache-Control": "public, max-age=31536000, immutable" },
-      "continue": true
-    },
-    {
-      "src": "/(.*)",
+      "source": "/",
       "has": [{ "type": "host", "value": "citypulsesf.com" }],
-      "dest": "/citypulse-launch.html"
+      "destination": "/citypulse-launch.html",
+      "permanent": false
     },
     {
-      "src": "/(.*)",
+      "source": "/",
       "has": [{ "type": "host", "value": "www.citypulsesf.com" }],
-      "dest": "/citypulse-launch.html"
-    },
-    { "handle": "filesystem" },
+      "destination": "/citypulse-launch.html",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    { "source": "/:path*.html", "destination": "/:path*.html" },
+    { "source": "/((?!api/).+)", "destination": "/index.html" }
+  ],
+  "headers": [
     {
-      "src": "/((?!api/).+)",
-      "dest": "/index.html"
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
     }
   ]
 }
