@@ -95,6 +95,42 @@ function forPrompt(data: DistrictData): Omit<DistrictData, 'map_permits' | 'by_d
   return rest;
 }
 
+// ── Fallback when AI proxy is unreachable ────────────────────────────────────
+// Returns a readable data-only briefing so users still see useful content.
+function buildDataOnlyFallback(
+  data: DistrictData,
+  district: DistrictConfig,
+  focus?: { zip: string; name: string },
+): string {
+  const area = focus ? focus.name : district.label;
+  const ps = data.permit_summary;
+  const ev = data.eviction_summary;
+  const sr = data.three_one_one_summary;
+
+  const lines: string[] = [
+    `## ${area} — Data Snapshot`,
+    '',
+    '*AI-generated narrative is temporarily unavailable. Here is a summary of the live data:*',
+    '',
+    `**Permits:** ${ps.total.toLocaleString()} filed`,
+  ];
+  if (ps.total_estimated_cost_usd) {
+    lines.push(`**Estimated construction value:** $${(ps.total_estimated_cost_usd / 1_000_000).toFixed(1)}M`);
+  }
+  const topTypes = Object.entries(ps.by_type).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  if (topTypes.length) {
+    lines.push(`**Top permit types:** ${topTypes.map(([t, n]) => `${t} (${n})`).join(', ')}`);
+  }
+  if (ev && 'total' in ev) {
+    lines.push(`**Eviction notices:** ${(ev as any).total}`);
+  }
+  if (sr && 'total' in sr) {
+    lines.push(`**311 service requests:** ${(sr as any).total}`);
+  }
+  lines.push('', '---', '', '*Navigate to Charts, Signals, or the Map for full visualisations.*');
+  return lines.join('\n');
+}
+
 // Client-side AI calls go through the /api/ai serverless proxy (see aiProxy.ts)
 
 // ── Mayor's Office cross-reference ────────────────────────────────────────────
@@ -353,27 +389,32 @@ export async function generateGovHeadlines(
     }
   } catch { /* sessionStorage unavailable */ }
 
-  const message = await callAI({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 256,
-    messages: [{
-      role: 'user',
-      content: `For each of the following San Francisco government actions, write one plain-language headline a resident would understand (max 80 chars each). Return as a JSON array of strings only.\n\n${JSON.stringify(items.map(i => i.title))}`,
-    }],
-  });
-
-  const text = message.content[0].type === 'text' ? message.content[0].text : '[]';
-  let headlines: string[] = [];
   try {
-    const match = text.match(/\[[\s\S]*\]/);
-    headlines = JSON.parse(match?.[0] ?? '[]') as string[];
-  } catch { headlines = []; }
+    const message = await callAI({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 256,
+      messages: [{
+        role: 'user',
+        content: `For each of the following San Francisco government actions, write one plain-language headline a resident would understand (max 80 chars each). Return as a JSON array of strings only.\n\n${JSON.stringify(items.map(i => i.title))}`,
+      }],
+    });
 
-  try {
-    sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), headlines }));
-  } catch { /* ignore */ }
+    const text = message.content[0].type === 'text' ? message.content[0].text : '[]';
+    let headlines: string[] = [];
+    try {
+      const match = text.match(/\[[\s\S]*\]/);
+      headlines = JSON.parse(match?.[0] ?? '[]') as string[];
+    } catch { headlines = []; }
 
-  return headlines;
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), headlines }));
+    } catch { /* ignore */ }
+
+    return headlines;
+  } catch (err) {
+    console.warn('[govHeadlines] AI unavailable:', err);
+    return items.map(i => i.title);
+  }
 }
 
 // ── Session-level AI content caches ───────────────────────────────────────────
@@ -718,21 +759,26 @@ export async function generateBriefingFromData(
       : `${JSON.stringify(forPrompt(briefingData), null, 2)}${crossRefs}`;
 
   const t0 = performance.now();
-  const message = await callAI({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 2000,
-    system: briefingSystemPrompt(district) + getLanguageInstruction(lang),
-    messages: [{ role: 'user', content: userContent }],
-  });
-  console.log(`[briefing] claude-sonnet-4-6 (${lang}): ${(performance.now() - t0).toFixed(0)}ms`);
+  try {
+    const message = await callAI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2000,
+      system: briefingSystemPrompt(district) + getLanguageInstruction(lang),
+      messages: [{ role: 'user', content: userContent }],
+    });
+    console.log(`[briefing] claude-sonnet-4-6 (${lang}): ${(performance.now() - t0).toFixed(0)}ms`);
 
-  const block = message.content[0];
-  if (block.type !== 'text') throw new Error(`Unexpected response block type: ${block.type}`);
-  console.log('[briefing] raw response length:', block.text.length, 'chars');
-  console.log('[briefing] last 100 chars:', block.text.slice(-100));
-  warnIfHallucinated(block.text, userContent, 'briefing');
-  _briefingCache.set(key, block.text);
-  return block.text;
+    const block = message.content[0];
+    if (block.type !== 'text') throw new Error(`Unexpected response block type: ${block.type}`);
+    console.log('[briefing] raw response length:', block.text.length, 'chars');
+    console.log('[briefing] last 100 chars:', block.text.slice(-100));
+    warnIfHallucinated(block.text, userContent, 'briefing');
+    _briefingCache.set(key, block.text);
+    return block.text;
+  } catch (err) {
+    console.warn('[briefing] AI unavailable, returning data-only fallback:', err);
+    return buildDataOnlyFallback(briefingData, district, focus);
+  }
 }
 
 /**
@@ -868,8 +914,8 @@ Return ONLY a JSON object in this exact shape (no other text):
   _signalsCache.set(key, result);
   return result;
   } catch (error) {
-    console.error('[signals] FAILED:', error);
-    throw error;
+    console.warn('[signals] AI unavailable, returning empty signals:', error);
+    return { signals: [], generatedAt: null };
   }
 }
 
@@ -1068,31 +1114,36 @@ IMPORTANT: ${shadowTotal > 0 ? `Include one risk about shadow impact (☀️ ico
 
   console.log(`[generateOutlook] STEP 2: calling Claude Haiku — prompt length: ${userContent.length} chars`);
 
-  const t0outlook = performance.now();
-  const message = await callAI({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 2048,
-    system: outlookSystemPrompt(district) + getLanguageInstruction(lang),
-    messages: [{ role: 'user', content: userContent }],
-  });
+  try {
+    const t0outlook = performance.now();
+    const message = await callAI({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2048,
+      system: outlookSystemPrompt(district) + getLanguageInstruction(lang),
+      messages: [{ role: 'user', content: userContent }],
+    });
 
-  console.log(`[generateOutlook] STEP 3 (${lang}): Claude responded in ${(performance.now() - t0outlook).toFixed(0)}ms — stop_reason: ${message.stop_reason}, content blocks: ${message.content.length}`);
+    console.log(`[generateOutlook] STEP 3 (${lang}): Claude responded in ${(performance.now() - t0outlook).toFixed(0)}ms — stop_reason: ${message.stop_reason}, content blocks: ${message.content.length}`);
 
-  const block = message.content[0];
-  if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
+    const block = message.content[0];
+    if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
 
-  console.log(`[generateOutlook] STEP 4: raw response (first 500 chars):\n${block.text.slice(0, 500)}`);
+    console.log(`[generateOutlook] STEP 4: raw response (first 500 chars):\n${block.text.slice(0, 500)}`);
 
-  const parsed = repairAndParseJSON<OutlookData>(block.text);
-  console.log(`[generateOutlook] STEP 5 OK — events: ${parsed.events?.length}, risks: ${parsed.risks?.length}, engagement: ${parsed.engagement?.length}`);
-  warnIfHallucinated(block.text, userContent, 'outlook');
+    const parsed = repairAndParseJSON<OutlookData>(block.text);
+    console.log(`[generateOutlook] STEP 5 OK — events: ${parsed.events?.length}, risks: ${parsed.risks?.length}, engagement: ${parsed.engagement?.length}`);
+    warnIfHallucinated(block.text, userContent, 'outlook');
 
-  // 4 — Persist to Supabase DB (fire-and-forget; failure is non-fatal)
-  const generatedAt = await writeOutlookToDB(key, parsed);
+    // 4 — Persist to Supabase DB (fire-and-forget; failure is non-fatal)
+    const generatedAt = await writeOutlookToDB(key, parsed);
 
-  const result = { outlook: parsed, generatedAt };
-  _outlookCache.set(key, result);
-  return result;
+    const result = { outlook: parsed, generatedAt };
+    _outlookCache.set(key, result);
+    return result;
+  } catch (err) {
+    console.warn('[outlook] AI unavailable, returning empty outlook:', err);
+    return { outlook: { events: [], risks: [], engagement: [] }, generatedAt: null };
+  }
 }
 
 function concernsSystemPrompt(district: DistrictConfig): string {
@@ -1193,26 +1244,31 @@ Return ONLY a JSON object in this exact shape (no other text):
 {"concerns": [{"headline":"...","severity":"...","evidence":"...","affects":"...","action":"..."}]}`;
 
   const t0 = performance.now();
-  const message = await callAI({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 2048,
-    system: concernsSystemPrompt(district) + getLanguageInstruction(lang),
-    messages: [{ role: 'user', content: userContent }],
-  });
-  console.log(`[concerns] claude-haiku (${lang}): ${(performance.now() - t0).toFixed(0)}ms`);
+  try {
+    const message = await callAI({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2048,
+      system: concernsSystemPrompt(district) + getLanguageInstruction(lang),
+      messages: [{ role: 'user', content: userContent }],
+    });
+    console.log(`[concerns] claude-haiku (${lang}): ${(performance.now() - t0).toFixed(0)}ms`);
 
-  const block = message.content[0];
-  if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
+    const block = message.content[0];
+    if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
 
-  const parsed = repairAndParseJSON<{ concerns: PublicConcern[] }>(block.text);
-  warnIfHallucinated(block.text, userContent, 'concerns');
+    const parsed = repairAndParseJSON<{ concerns: PublicConcern[] }>(block.text);
+    warnIfHallucinated(block.text, userContent, 'concerns');
 
-  // 4 — Persist to Supabase DB (fire-and-forget; failure is non-fatal)
-  const generatedAt = await writeConcernsToDB(key, parsed.concerns);
+    // 4 — Persist to Supabase DB (fire-and-forget; failure is non-fatal)
+    const generatedAt = await writeConcernsToDB(key, parsed.concerns);
 
-  const result = { concerns: parsed.concerns, generatedAt };
-  _concernsCache.set(key, result);
-  return result;
+    const result = { concerns: parsed.concerns, generatedAt };
+    _concernsCache.set(key, result);
+    return result;
+  } catch (err) {
+    console.warn('[concerns] AI unavailable, returning empty concerns:', err);
+    return { concerns: [], generatedAt: null };
+  }
 }
 
 // ── Supabase briefing_overview_cache helpers ───────────────────────────────────
@@ -1355,12 +1411,13 @@ export async function generateBriefingOverview(
     quotesLine || null,
   ].filter(Boolean).join('\n');
 
-  const message = await callAI({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 2000,
-    messages: [{
-      role: 'user',
-      content: `${ctx}\n\nWrite a morning news briefing overview for ${locationLabel}.
+  try {
+    const message = await callAI({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2000,
+      messages: [{
+        role: 'user',
+        content: `${ctx}\n\nWrite a morning news briefing overview for ${locationLabel}.
 
 Structure your briefing in 3–4 short paragraphs separated by blank lines:
 
@@ -1373,16 +1430,20 @@ Paragraph 3: Community context — evictions, affordable housing pipeline, any h
 Paragraph 4 (optional): One forward-looking observation residents should watch.
 
 Each paragraph should be 2–3 sentences max. Write for a busy reader scanning on their phone. Be specific: use real numbers, real addresses, real neighborhoods. Tone: trusted local journalist, not activist. No advocacy language (no "crisis", "severe", "alarming"). No markdown formatting, no bullet points. Plain prose only, with blank lines between paragraphs.${ANTI_HALLUCINATION_RULES}${getLanguageInstruction(lang)}`,
-    }],
-  });
+      }],
+    });
 
-  const block = message.content[0];
-  if (block.type !== 'text') throw new Error('Unexpected response type');
-  const overview = block.text.trim();
-  warnIfHallucinated(overview, ctx, 'overview');
+    const block = message.content[0];
+    if (block.type !== 'text') throw new Error('Unexpected response type');
+    const overview = block.text.trim();
+    warnIfHallucinated(overview, ctx, 'overview');
 
-  const generatedAt = await writeOverviewToDB(key, overview);
-  const result = { overview, generatedAt };
-  _overviewCache.set(key, result);
-  return result;
+    const generatedAt = await writeOverviewToDB(key, overview);
+    const result = { overview, generatedAt };
+    _overviewCache.set(key, result);
+    return result;
+  } catch (err) {
+    console.warn('[overview] AI unavailable, returning fallback:', err);
+    return { overview: ctx, generatedAt: null };
+  }
 }

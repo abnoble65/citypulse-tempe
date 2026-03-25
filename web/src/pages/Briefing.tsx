@@ -65,14 +65,17 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
 
   // Fetch the most recent Planning Commission hearing date once on mount.
   useEffect(() => {
-    supabase
-      .from("hearings")
-      .select("hearing_date")
-      .order("hearing_date", { ascending: false })
-      .limit(1)
+    Promise.resolve(
+      supabase
+        .from("hearings")
+        .select("hearing_date")
+        .order("hearing_date", { ascending: false })
+        .limit(1)
+    )
       .then(({ data }) => {
         setLatestHearing(data?.[0]?.hearing_date ?? null);
-      });
+      })
+      .catch(() => {});
   }, []);
 
   // Overview — instant from cache, async otherwise. Re-runs when data or filter changes.

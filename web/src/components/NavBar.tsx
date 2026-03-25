@@ -173,8 +173,10 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
             </div>
           ))}
 
-          {/* CBD Portals link (desktop only) */}
-          <div style={{ width: 1, height: 18, background: COLORS.lightBorder, margin: "0 10px", flexShrink: 0 }} />
+        </div>
+
+        {/* District badge + CBD link + live indicator + language */}
+        <div style={{ flexShrink: 0, marginLeft: 12, display: "flex", alignItems: "center", gap: 8 }}>
           <a
             href="/cbd"
             style={{
@@ -187,7 +189,6 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
               padding: "4px 8px",
               fontFamily: FONTS.body,
               whiteSpace: "nowrap",
-              flexShrink: 0,
             }}
           >
             CBD PORTALS
@@ -206,10 +207,7 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
               OPS
             </span>
           </a>
-        </div>
-
-        {/* District badge + live indicator + language */}
-        <div style={{ flexShrink: 0, marginLeft: 12, display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 1, height: 18, background: COLORS.lightBorder, flexShrink: 0 }} />
           <LiveBadge />
           <LanguageSelector />
           <span style={{

@@ -14,36 +14,57 @@ function apnToBlklot(apn: string): string | null {
   return clean
 }
 
+// Shared query helper — returns the first matching parcel polygon
+async function queryArcGISParcel(where: string): Promise<GeoJSONPolygon | null> {
+  const params = new URLSearchParams({
+    where,
+    outFields: 'blklot',
+    returnGeometry: 'true',
+    outSR: '4326',
+    resultRecordCount: '1',
+    f: 'geojson',
+  })
+
+  const res = await fetch(`${PARCELS_URL}?${params}`)
+  if (!res.ok) return null
+
+  const fc = await res.json()
+  const feature = fc?.features?.[0]
+  if (!feature?.geometry) return null
+
+  if (feature.geometry.type === 'MultiPolygon') {
+    return { type: 'Polygon', coordinates: feature.geometry.coordinates[0] }
+  }
+  return { type: 'Polygon', coordinates: feature.geometry.coordinates }
+}
+
+// Promise-based cache for block-level lookups — deduplicates concurrent requests
+// for condo sub-units sharing the same parent block (e.g. 300 units in block 3716)
+const blockGeometryCache = new Map<string, Promise<GeoJSONPolygon | null>>()
+
 export async function fetchParcelGeometry(apn: string): Promise<GeoJSONPolygon | null> {
   try {
     const blklot = apnToBlklot(apn)
     if (!blklot) return null
 
-    const params = new URLSearchParams({
-      where: `blklot='${blklot}'`,
-      outFields: 'blklot,from_addre,street_nam,street_typ',
-      returnGeometry: 'true',
-      outSR: '4326',
-      f: 'geojson',
-    })
+    // Try exact blklot match first
+    const exact = await queryArcGISParcel(`blklot='${blklot}'`)
+    if (exact) return exact
 
-    const res = await fetch(`${PARCELS_URL}?${params}`)
-    if (!res.ok) {
-      console.warn(`[parcelIngest] ArcGIS returned ${res.status} for ${blklot}`)
-      return null
+    // Fallback: block-level lookup for condo sub-units
+    // Block = first 4 digits of blklot (e.g. 3716 from 3716025)
+    const block = blklot.slice(0, 4)
+    if (!blockGeometryCache.has(block)) {
+      blockGeometryCache.set(
+        block,
+        queryArcGISParcel(`blklot LIKE '${block}%'`)
+      )
     }
-
-    const fc = await res.json()
-    const feature = fc?.features?.[0]
-    if (!feature?.geometry) {
-      console.warn(`[parcelIngest] No geometry for ${blklot}`)
-      return null
+    const blockGeom = await blockGeometryCache.get(block)!
+    if (blockGeom) {
+      console.log(`[parcelIngest] Block fallback: ${blklot} → block ${block}`)
     }
-
-    if (feature.geometry.type === 'MultiPolygon') {
-      return { type: 'Polygon', coordinates: feature.geometry.coordinates[0] }
-    }
-    return { type: 'Polygon', coordinates: feature.geometry.coordinates }
+    return blockGeom
 
   } catch (err) {
     console.warn(`[parcelIngest] Failed for APN ${apn}:`, err)

@@ -1072,17 +1072,25 @@ footer {
 
     <p class="hero-sub">Live permits, planning hearings, business activity, and 311 calls — pulled from city systems, linked to every building, turned into plain-language intelligence you can actually act on.</p>
 
-    <div class="hero-actions">
-      <button class="btn-primary" onclick="document.getElementById('cta').scrollIntoView({behavior:'smooth'})">
-        Get Early Access
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7h8M8 4l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <button class="btn-secondary" onclick="document.getElementById('platform').scrollIntoView({behavior:'smooth'})">
-        See the platform
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7h8M8 4l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:460px;animation:fadeUp .7s .3s ease both;">
+      <div style="display:flex;gap:8px;align-items:center;background:#F7FAF8;padding:7px 7px 7px 22px;border-radius:999px;border:1px solid rgba(17,23,20,.10);box-shadow:0 4px 24px rgba(17,23,20,.07);width:100%;transition:box-shadow .2s;" id="hero-form-wrap">
+        <input type="email" placeholder="Enter your email" required
+          style="flex:1;background:transparent;border:none;outline:none;font-family:'Inter',sans-serif;font-size:.92rem;color:#111714;min-width:0;"
+          onfocus="document.getElementById('hero-form-wrap').style.boxShadow='0 0 0 3px rgba(204,102,51,.12),0 4px 24px rgba(17,23,20,.07)'"
+          onblur="document.getElementById('hero-form-wrap').style.boxShadow='0 4px 24px rgba(17,23,20,.07)'"
+          id="hero-email-input">
+        <button onclick="handleHeroSignup()" style="flex-shrink:0;padding:10px 22px;background:#CC6633;color:#fff;border:none;border-radius:999px;font-family:'Inter',sans-serif;font-size:.88rem;font-weight:500;cursor:pointer;transition:background .2s,transform .15s;white-space:nowrap;" id="hero-submit-btn">
+          Get Early Access →
+        </button>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;">
+        <p style="font-size:.76rem;color:#8FA89A;margin:0;">Early access is free · San Francisco first</p>
+        <a href="https://app.citypulsesf.com" target="_blank" style="font-size:.82rem;font-weight:500;color:#4A5E52;text-decoration:none;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;">
+          See the platform
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M3 7h8M8 4l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
     </div>
-    <p class="hero-note">Early access is free · San Francisco first</p>
   </div>
 
   <!-- City Skyline -->
@@ -1463,7 +1471,7 @@ footer {
   </div>
   <div class="footer-bottom">
     <span>© 2026 Fastcast · San Francisco</span>
-    <span><a href="https://web-five-omega-87.vercel.app" target="_blank">Try the live platform →</a></span>
+    <span><a href="https://app.citypulsesf.com" target="_blank">Try the live platform →</a></span>
   </div>
 </footer>
 
@@ -1473,6 +1481,38 @@ const observer = new IntersectionObserver(entries => {
   entries.forEach(e => { if(e.isIntersecting){ e.target.classList.add('in'); observer.unobserve(e.target); }});
 }, { threshold: 0.08, rootMargin: '0px 0px -32px 0px' });
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// Hero form handler
+async function handleHeroSignup() {
+  const input = document.getElementById('hero-email-input');
+  const btn = document.getElementById('hero-submit-btn');
+  if(!input || !input.value) return;
+  const email = input.value;
+  btn.textContent = 'Sending...';
+  btn.disabled = true; input.disabled = true;
+  try {
+    const res = await fetch('https://formspree.io/f/xkopwzjy', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Accept':'application/json'},
+      body: JSON.stringify({ email, _subject:'CityPulse Early Access Request' })
+    });
+    if(res.ok) {
+      btn.textContent = "You're on the list ✓";
+      btn.style.background = '#2A7A4B';
+      input.value = ''; input.placeholder = "We'll be in touch soon.";
+    } else {
+      btn.textContent = 'Try again'; btn.style.background = '#C0392B';
+      btn.disabled = false; input.disabled = false;
+    }
+  } catch(e) {
+    btn.textContent = 'Try again'; btn.style.background = '#C0392B';
+    btn.disabled = false; input.disabled = false;
+  }
+  setTimeout(() => {
+    btn.textContent = 'Get Early Access →'; btn.style.background = '';
+    input.placeholder = 'Enter your email'; input.disabled = false; btn.disabled = false;
+  }, 5000);
+}
 
 // Pulse line moving dot
 (function(){

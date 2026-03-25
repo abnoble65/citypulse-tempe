@@ -109,43 +109,24 @@ function fetchParcelsInView(map: mapboxgl.Map) {
   }
 
   const bounds = map.getBounds()
-  const geometry = {
-    xmin: bounds.getWest(),
-    ymin: bounds.getSouth(),
-    xmax: bounds.getEast(),
-    ymax: bounds.getNorth(),
-    spatialReference: { wkid: 4326 }
-  }
+  const params = new URLSearchParams({
+    where: '1=1',
+    geometry: `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`,
+    geometryType: 'esriGeometryEnvelope',
+    inSR: '4326',
+    spatialRel: 'esriSpatialRelIntersects',
+    outFields: 'blklot,from_addre,street_nam,street_typ,land_use,shape_area',
+    returnGeometry: 'true',
+    outSR: '4326',
+    resultRecordCount: '200',
+    f: 'geojson',
+  })
 
-  const url = new URL(ARCGIS_PARCELS_URL)
-  url.searchParams.set('geometry', JSON.stringify(geometry))
-  url.searchParams.set('geometryType', 'esriGeometryEnvelope')
-  url.searchParams.set('inSR', '4326')
-  url.searchParams.set('spatialRel', 'esriSpatialRelIntersects')
-  url.searchParams.set('outFields', 'blklot,from_addre,street_nam,street_typ,land_use,shape_area')
-  url.searchParams.set('returnGeometry', 'true')
-  url.searchParams.set('outSR', '4326')
-  url.searchParams.set('resultRecordCount', '200')
-  url.searchParams.set('f', 'json')
-
-  fetch(url.toString())
+  fetch(`${ARCGIS_PARCELS_URL}?${params}`)
     .then((r) => r.json())
-    .then((esriJson) => {
-      if (esriJson.error) return
-      if (!map.getSource(PARCEL_SOURCE_ID)) return
-      const geojson: GeoJSON.FeatureCollection = {
-        type: 'FeatureCollection',
-        features: (esriJson.features ?? []).map((f: any) => ({
-          type: 'Feature',
-          geometry: {
-            type: 'Polygon',
-            coordinates: f.geometry?.rings ?? [],
-          },
-          properties: f.attributes,
-        })),
-      }
-      console.log('[MapView] Parcels loaded:', geojson.features.length)
-      ;(map.getSource(PARCEL_SOURCE_ID) as mapboxgl.GeoJSONSource).setData(geojson)
+    .then((fc) => {
+      if (!fc?.features || !map.getSource(PARCEL_SOURCE_ID)) return
+      ;(map.getSource(PARCEL_SOURCE_ID) as mapboxgl.GeoJSONSource).setData(fc)
     })
     .catch(() => {})
 }
@@ -509,16 +490,8 @@ export function MapView() {
   // Keep inspector showing whichever is more current
   const displayBuilding: BuildingEntity | null = hydratedBuilding ?? selectedBuilding
 
-  // GeoJSON — recomputed when buildings change or parcel geometry arrives
-  const parcelKey = buildings
-    ?.map(b => b.parcel_geometry ? b.building_id : '')
-    .join(',') ?? ''
-
-  const geojson = useMemo(
-    () => buildings ? buildingsToGeoJSON(buildings) : null,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [parcelKey]
-  )
+  // Count of enriched buildings — triggers setData as parcel geometry arrives
+  const enrichedCount = buildings?.filter(b => b.parcel_geometry != null).length ?? 0
 
   // Filter expression — null means show all
   const filterExpr: mapboxgl.Expression | null = useMemo(() => {
@@ -757,23 +730,27 @@ export function MapView() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Update data when buildings load ────────────────────────────────────────
+  // ── Update data when buildings load or enrichment adds parcel geometry ────
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !geojson) return
+    if (!map || !buildings?.length) return
 
-    const applyData = () => {
-      if (map.getSource(SOURCE_ID)) {
-        ;(map.getSource(SOURCE_ID) as mapboxgl.GeoJSONSource).setData(geojson)
-      }
+    const pushData = () => {
+      const src = map.getSource(SOURCE_ID) as mapboxgl.GeoJSONSource
+      if (!src) return
+      const fc = buildingsToGeoJSON(buildings)
+      const nullGeom = fc.features.filter(f => !f.geometry?.coordinates?.length).length
+      console.log(`[pushData] ${fc.features.length} features, ${nullGeom} with empty geometry, ${enrichedCount} enriched`)
+      src.setData(fc)
     }
 
     if (map.loaded()) {
-      applyData()
+      pushData()
     } else {
-      map.once('load', applyData)
+      map.on('load', pushData)
+      return () => { map.off('load', pushData) }
     }
-  }, [geojson])
+  }, [enrichedCount, buildings])
 
   // ── Highlight selected building ─────────────────────────────────────────────
   useEffect(() => {
@@ -797,7 +774,7 @@ export function MapView() {
     map.setPaintProperty(
       LAYER_ID,
       'fill-extrusion-height',
-      viewMode === '2d' ? 0 : ['get', 'height_meters']
+      viewMode === '2d' ? 0 : ['coalesce', ['get', 'height_meters'], 20]
     )
   }, [viewMode])
 

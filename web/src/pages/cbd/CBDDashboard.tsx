@@ -21,7 +21,9 @@ import { COLORS, FONTS } from "../../theme";
 import { isPointInCBD, type CBDBoundaryEntry } from "../../utils/geoFilter";
 import { renderMarkdownBlock } from "../../components/MarkdownText";
 import { CBDLoadingExperience } from "../../components/CBDLoadingExperience";
-import { fetch311ForCBD } from "../../utils/cbdFetch";
+import { fetch311ForCBD, fetchBusinessesForCBD } from "../../utils/cbdFetch";
+import { fetchBusinessRegistrations, type DowntownBusiness } from "../../services/businessRegistrations";
+import { fetchTransitStops, type TransitStop } from "../../services/transitAccess";
 import { callAI } from "../../services/aiProxy";
 import { useLanguage, getLanguageInstruction } from "../../contexts/LanguageContext";
 
@@ -377,6 +379,9 @@ export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
 
   const [stats, setStats] = useState<CBDStats>({ permits: [], threeOneOne: [], evictions: [] });
   const [statsLoading, setStatsLoading] = useState(true);
+  const [businessCount, setBusinessCount] = useState<number | null>(null);
+  const [bizData, setBizData] = useState<DowntownBusiness[]>([]);
+  const [transitData, setTransitData] = useState<TransitStop[]>([]);
   const [aiSummary, setAiSummary] = useState<string>("");
   const [aiLoading, setAiLoading] = useState(false);
   const [mapExpanded, setMapExpanded] = useState(false);
@@ -467,8 +472,67 @@ export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
       setStatsLoading(false);
     });
 
+    // Fetch business count in parallel (non-blocking)
+    fetchBusinessesForCBD(config, { limit: 3000, signal: controller.signal })
+      .then(rows => {
+        const now = new Date().toISOString().split("T")[0];
+        const active = rows.filter(b => !b.endDate || b.endDate >= now);
+        setBusinessCount(active.length);
+      })
+      .catch(() => setBusinessCount(null));
+
+    // Fetch spatial data for correlation insights (non-blocking)
+    fetchBusinessRegistrations(config, { signal: controller.signal })
+      .then(rows => setBizData(rows))
+      .catch(() => setBizData([]));
+    fetchTransitStops(config, { signal: controller.signal })
+      .then(stops => setTransitData(stops))
+      .catch(() => setTransitData([]));
+
     return () => { clearTimeout(timeout); controller.abort(); };
   }, [config, cbdBoundaries]);
+
+  // ── Correlation insights ──────────────────────────────────────────────
+  const insights = useMemo(() => {
+    if (transitData.length === 0 && bizData.length === 0) return null;
+
+    // Grid-based spatial analysis: divide bounding box into ~100m blocks
+    const GRID = 0.001; // ~100m at SF latitude
+    type Cell = { key: string; lat: number; lng: number; transitCount: number; bizCount: number; newBiz90: number; qol311: number };
+    const cells = new Map<string, Cell>();
+    const cellKey = (lat: number, lng: number) => `${Math.round(lat / GRID)},${Math.round(lng / GRID)}`;
+    const getCell = (lat: number, lng: number): Cell => {
+      const k = cellKey(lat, lng);
+      if (!cells.has(k)) cells.set(k, { key: k, lat: Math.round(lat / GRID) * GRID, lng: Math.round(lng / GRID) * GRID, transitCount: 0, bizCount: 0, newBiz90: 0, qol311: 0 });
+      return cells.get(k)!;
+    };
+
+    for (const s of transitData) getCell(s.lat, s.lng).transitCount++;
+    const activeBiz = bizData.filter(b => b.status === "active" && b.coordinates);
+    const cutoff90 = new Date(); cutoff90.setDate(cutoff90.getDate() - 90);
+    const cutoffStr = cutoff90.toISOString().split("T")[0];
+    for (const b of activeBiz) {
+      if (!b.coordinates) continue;
+      const c = getCell(b.coordinates.lat, b.coordinates.lng);
+      c.bizCount++;
+      if (b.openDate >= cutoffStr) c.newBiz90++;
+    }
+    const qolKeywords = ["encampment", "graffiti", "clean", "sidewalk", "block"];
+    for (const r of stats.threeOneOne) {
+      const cat = (r.category ?? "").toLowerCase();
+      if (qolKeywords.some(kw => cat.includes(kw))) getCell(r.lat, r.lng).qol311++;
+    }
+
+    const allCells = [...cells.values()];
+    const avgBiz = allCells.length > 0 ? allCells.reduce((s, c) => s + c.bizCount, 0) / allCells.length : 0;
+    const avg311 = allCells.length > 0 ? allCells.reduce((s, c) => s + c.qol311, 0) / allCells.length : 0;
+
+    const transitRichLowBiz = allCells.filter(c => c.transitCount >= 2 && c.bizCount < avgBiz);
+    const highTransitHigh311 = allCells.filter(c => c.transitCount >= 1 && c.qol311 > avg311 && c.qol311 > 0);
+    const growthCorridors = allCells.filter(c => c.newBiz90 >= 3);
+
+    return { transitRichLowBiz, highTransitHigh311, growthCorridors };
+  }, [transitData, bizData, stats.threeOneOne]);
 
   // Generate AI summary once stats are loaded (regenerates on language change)
   useEffect(() => {
@@ -483,6 +547,18 @@ export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
     const topCats = Object.entries(catCounts).sort(([, a], [, b]) => b - a).slice(0, 5)
       .map(([cat, count]) => `${cat}: ${count}`).join(", ");
 
+    // Build insight context for AI
+    const insightLines: string[] = [];
+    if (insights) {
+      if (insights.transitRichLowBiz.length > 0)
+        insightLines.push(`- Transit-rich but low business activity: ${insights.transitRichLowBiz.length} blocks near 2+ transit stops with below-average business density — potential underperforming zones.`);
+      if (insights.highTransitHigh311.length > 0)
+        insightLines.push(`- High-transit, high-311 quality-of-life hotspots: ${insights.highTransitHigh311.length} blocks on transit corridors with above-average 311 complaints (encampments, graffiti, cleaning).`);
+      if (insights.growthCorridors.length > 0)
+        insightLines.push(`- Business growth corridors: ${insights.growthCorridors.length} blocks with 3+ new business openings in the last 90 days — momentum zones.`);
+    }
+    const insightBlock = insightLines.length > 0 ? `\n\nSPATIAL CORRELATION INSIGHTS:\n${insightLines.join("\n")}` : "";
+
     const prompt = `You are an operations analyst for the ${config.name} Community Benefit District in San Francisco. Write a concise 3-paragraph operational briefing for the executive director and board members.
 
 DATA (last 90 days within CBD boundary):
@@ -490,8 +566,9 @@ DATA (last 90 days within CBD boundary):
 - 311 service requests: ${stats.threeOneOne.length}
 - Top 311 categories: ${topCats || "none"}
 - Eviction notices: ${stats.evictions.length}
+- Active businesses: ${businessCount ?? "unknown"}${insightBlock}
 
-Focus on: permit activity within the district, 311 service request trends, and any notable developments. Be data-driven and actionable. Keep it under 200 words.${getLanguageInstruction(language)}`;
+Focus on: permit activity within the district, 311 service request trends, and any notable developments. If spatial correlation insights are provided, reference them — especially transit-corridor quality-of-life concerns and business growth momentum. Be data-driven and actionable. Keep it under 250 words.${getLanguageInstruction(language)}`;
 
     callAI({
       model: "claude-haiku-4-5-20251001",
@@ -522,12 +599,28 @@ Focus on: permit activity within the district, 311 service request trends, and a
         margin: "0 -16px",
         background: `linear-gradient(180deg, ${accent}0D 0%, transparent 100%)`,
       }}>
-        <h1 style={{
-          fontFamily: FONTS.heading, fontSize: 32, fontWeight: 700,
-          color: COLORS.charcoal, margin: 0, lineHeight: 1.2,
-        }}>
-          {config.name}
-        </h1>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <h1 style={{
+            fontFamily: FONTS.heading, fontSize: 32, fontWeight: 700,
+            color: COLORS.charcoal, margin: 0, lineHeight: 1.2,
+          }}>
+            {config.name}
+          </h1>
+          {(config.logo_url || config.slug === "downtown") && (
+            <a
+              href={config.website_url ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ flexShrink: 0, marginLeft: 16 }}
+            >
+              <img
+                src={config.logo_url || "/images/downtown-sf-logo.png"}
+                alt={`${config.name} logo`}
+                style={{ width: 80, height: 80, objectFit: "contain", borderRadius: 8 }}
+              />
+            </a>
+          )}
+        </div>
         {config.description && (
           <p style={{
             fontFamily: FONTS.body, fontSize: 15, color: COLORS.midGray,
@@ -561,8 +654,68 @@ Focus on: permit activity within the district, 311 service request trends, and a
         <StatCard label="Active Permits" value={stats.permits.length} color={STAT_COLORS.permits} loading={false} />
         <StatCard label="311 Requests (90d)" value={stats.threeOneOne.length} color={STAT_COLORS.threeOneOne} loading={false} />
         <StatCard label="Eviction Notices" value={stats.evictions.length} color={STAT_COLORS.evictions} loading={false} />
-        <StatCard label="Businesses" value="\u2014" color={STAT_COLORS.businesses} loading={false} />
+        <StatCard label="Businesses" value={businessCount ?? "—"} color={STAT_COLORS.businesses} loading={businessCount === null && statsLoading} />
       </div>
+      )}
+
+      {/* ── Correlation Insight Cards ───────────────────────────────── */}
+      {insights && !statsLoading && (insights.transitRichLowBiz.length > 0 || insights.highTransitHigh311.length > 0 || insights.growthCorridors.length > 0) && (
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24, animation: "cp-page-in 0.3s ease-out" }}>
+          {insights.transitRichLowBiz.length > 0 && (
+            <div style={{
+              flex: "1 1 240px", minWidth: 220,
+              background: COLORS.white, borderRadius: 12,
+              border: `1px solid ${COLORS.lightBorder}`, borderLeft: "4px solid #F59E0B",
+              padding: "16px 18px",
+            }}>
+              <div style={{ fontFamily: FONTS.body, fontSize: 10, fontWeight: 700, color: "#F59E0B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                Transit-Rich, Low Business Activity
+              </div>
+              <div style={{ fontFamily: FONTS.body, fontSize: 13, color: COLORS.charcoal, lineHeight: 1.5, marginBottom: 8 }}>
+                {insights.transitRichLowBiz.length} block{insights.transitRichLowBiz.length !== 1 ? "s" : ""} near 2+ transit stops with below-average business density — underperforming given their transit access.
+              </div>
+              <div style={{ fontFamily: FONTS.display, fontSize: 20, fontWeight: 700, color: "#F59E0B" }}>
+                {insights.transitRichLowBiz.length} blocks
+              </div>
+            </div>
+          )}
+          {insights.highTransitHigh311.length > 0 && (
+            <div style={{
+              flex: "1 1 240px", minWidth: 220,
+              background: COLORS.white, borderRadius: 12,
+              border: `1px solid ${COLORS.lightBorder}`, borderLeft: "4px solid #EF4444",
+              padding: "16px 18px",
+            }}>
+              <div style={{ fontFamily: FONTS.body, fontSize: 10, fontWeight: 700, color: "#EF4444", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                High Transit, High 311 Volume
+              </div>
+              <div style={{ fontFamily: FONTS.body, fontSize: 13, color: COLORS.charcoal, lineHeight: 1.5, marginBottom: 8 }}>
+                {insights.highTransitHigh311.length} block{insights.highTransitHigh311.length !== 1 ? "s" : ""} on transit corridors with above-average quality-of-life complaints — encampments, graffiti, cleaning.
+              </div>
+              <div style={{ fontFamily: FONTS.display, fontSize: 20, fontWeight: 700, color: "#EF4444" }}>
+                {insights.highTransitHigh311.length} blocks
+              </div>
+            </div>
+          )}
+          {insights.growthCorridors.length > 0 && (
+            <div style={{
+              flex: "1 1 240px", minWidth: 220,
+              background: COLORS.white, borderRadius: 12,
+              border: `1px solid ${COLORS.lightBorder}`, borderLeft: "4px solid #10B981",
+              padding: "16px 18px",
+            }}>
+              <div style={{ fontFamily: FONTS.body, fontSize: 10, fontWeight: 700, color: "#10B981", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                Business Growth Corridors
+              </div>
+              <div style={{ fontFamily: FONTS.body, fontSize: 13, color: COLORS.charcoal, lineHeight: 1.5, marginBottom: 8 }}>
+                {insights.growthCorridors.length} block{insights.growthCorridors.length !== 1 ? "s" : ""} with 3+ new business openings in the last 90 days — momentum zones.
+              </div>
+              <div style={{ fontFamily: FONTS.display, fontSize: 20, fontWeight: 700, color: "#10B981" }}>
+                {insights.growthCorridors.length} blocks
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── AI Summary ──────────────────────────────────────────────── */}

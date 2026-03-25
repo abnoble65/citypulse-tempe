@@ -29,6 +29,8 @@ export interface CBDPermitRow {
   existingUse: string;
   proposedUse: string;
   month: string;
+  block: string;
+  lot: string;
 }
 
 export interface CBDBusinessRow {
@@ -164,7 +166,7 @@ export async function fetchPermitsForCBD(
 
   const params = new URLSearchParams({
     $where,
-    $select: "permit_number,permit_type_definition,description,status,estimated_cost,revised_cost,street_number,street_name,street_suffix,filed_date,issued_date,completed_date,neighborhoods_analysis_boundaries,existing_use,proposed_use,location",
+    $select: "permit_number,permit_type_definition,description,status,estimated_cost,revised_cost,street_number,street_name,street_suffix,filed_date,issued_date,completed_date,neighborhoods_analysis_boundaries,existing_use,proposed_use,location,block,lot",
     $limit: String(limit),
     $order: "filed_date DESC",
   });
@@ -203,6 +205,8 @@ export async function fetchPermitsForCBD(
       existingUse: r.existing_use ?? "",
       proposedUse: r.proposed_use ?? "",
       month: dt.slice(0, 7),
+      block: r.block ?? "",
+      lot: r.lot ?? "",
     });
   }
 

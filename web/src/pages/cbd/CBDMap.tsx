@@ -6,20 +6,22 @@
  */
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { MapContainer, TileLayer, GeoJSON, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, GeoJSON, Marker, CircleMarker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 import { useCBD } from "../../contexts/CBDContext";
 import { COLORS, FONTS } from "../../theme";
 import { fetch311ForCBD, fetchPermitsForCBD, type CBD311Row, type CBDPermitRow } from "../../utils/cbdFetch";
+import { fetchBusinessRegistrations, type DowntownBusiness } from "../../services/businessRegistrations";
+import { fetchTransitStops, computeTransitScore, type TransitStop } from "../../services/transitAccess";
 
 const MAPBOX_TILE = (token: string) =>
   `https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/{z}/{x}/{y}?access_token=${token}`;
 
 // ── Layer definitions ───────────────────────────────────────────────────
 
-type LayerKey = "permits" | "311" | "boundary";
+type LayerKey = "permits" | "311" | "businesses" | "transit" | "boundary";
 
 interface LayerDef {
   key: LayerKey;
@@ -29,10 +31,40 @@ interface LayerDef {
 }
 
 const LAYERS: LayerDef[] = [
-  { key: "permits",   label: "Building Permits", color: "#3B82F6", defaultOn: true },
-  { key: "311",       label: "311 Requests",      color: "#8B5CF6", defaultOn: true },
-  { key: "boundary",  label: "CBD Boundary",      color: "#E8652D", defaultOn: true },
+  { key: "permits",    label: "Building Permits", color: "#3B82F6", defaultOn: true },
+  { key: "311",        label: "311 Requests",      color: "#8B5CF6", defaultOn: false },
+  { key: "businesses", label: "Businesses",        color: "#10B981", defaultOn: false },
+  { key: "transit",    label: "Transit Stops",     color: "#0EA5E9", defaultOn: false },
+  { key: "boundary",   label: "CBD Boundary",      color: "#E8652D", defaultOn: true },
 ];
+
+// ── Business category colors ────────────────────────────────────────────
+
+const BIZ_CAT_COLORS: Record<string, string> = {
+  "Food & Beverage":       "#F97316",
+  "Retail":                "#8B5CF6",
+  "Professional Services": "#3B82F6",
+  "Arts & Entertainment":  "#EC4899",
+  "Real Estate":           "#F59E0B",
+  "Health & Wellness":     "#10B981",
+  "Other":                 "#9CA3AF",
+};
+
+function mapBizCategory(naics: string): string {
+  const lc = naics.toLowerCase();
+  if (lc.includes("food") || lc.includes("accommodations") || lc.includes("restaurant") || lc.includes("drinking"))
+    return "Food & Beverage";
+  if (lc.includes("retail")) return "Retail";
+  if (lc.includes("professional") || lc.includes("scientific") || lc.includes("technical") || lc.includes("administrative") || lc.includes("financial") || lc.includes("insurance"))
+    return "Professional Services";
+  if (lc.includes("arts") || lc.includes("entertainment") || lc.includes("recreation"))
+    return "Arts & Entertainment";
+  if (lc.includes("real estate") || lc.includes("rental") || lc.includes("leasing") || lc.includes("construction"))
+    return "Real Estate";
+  if (lc.includes("health") || lc.includes("education"))
+    return "Health & Wellness";
+  return "Other";
+}
 
 type DateRange = 30 | 90 | 180;
 
@@ -105,6 +137,45 @@ function permit311Icon(category: string): L.DivIcon {
   return circleIcon(label, color, 18);
 }
 
+// ── Transit SVG icons ────────────────────────────────────────────────────
+
+const MUNI_BUS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a1a2e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="14" rx="3"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="3" x2="12" y2="10"/><circle cx="7" cy="20" r="1.5" fill="#1a1a2e"/><circle cx="17" cy="20" r="1.5" fill="#1a1a2e"/><line x1="7" y1="17" x2="7" y2="18.5"/><line x1="17" y1="17" x2="17" y2="18.5"/></svg>`;
+
+function muniIcon(): L.DivIcon {
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:24px;height:24px;
+      background:#fff;border-radius:5px;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 1px 3px rgba(0,0,0,0.15);
+    ">${MUNI_BUS_SVG}</div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  });
+}
+
+function bartIcon(): L.DivIcon {
+  return L.divIcon({
+    className: '',
+    html: `<div style="
+      width:28px;height:28px;border-radius:50%;
+      background:#009AC7;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 1px 3px rgba(0,0,0,0.15);
+      color:#fff;font-size:8px;font-weight:800;
+      font-family:system-ui,sans-serif;letter-spacing:0.02em;
+      line-height:1;
+    ">BART</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
+function transitIcon(system: 'Muni' | 'BART'): L.DivIcon {
+  return system === 'BART' ? bartIcon() : muniIcon();
+}
+
 function permitIcon(type: string, cost: number): L.DivIcon {
   const t = type.toLowerCase();
   const color = t.includes("new construction") ? "#10B981"
@@ -156,6 +227,8 @@ export function CBDMap() {
 
   const [rows311, setRows311] = useState<CBD311Row[]>([]);
   const [permits, setPermits] = useState<CBDPermitRow[]>([]);
+  const [businesses, setBusinesses] = useState<DowntownBusiness[]>([]);
+  const [transitStops, setTransitStops] = useState<TransitStop[]>([]);
   const [loading, setLoading] = useState(true);
 
   // ── Fetch data ────────────────────────────────────────────────────────
@@ -167,9 +240,13 @@ export function CBDMap() {
     Promise.all([
       fetch311ForCBD(config, { days: dateRange, limit: 3000, signal: controller.signal }),
       fetchPermitsForCBD(config, { days: dateRange, limit: 2000, signal: controller.signal }),
-    ]).then(([r311, rPermit]) => {
+      fetchBusinessRegistrations(config, { signal: controller.signal }).catch(() => [] as DowntownBusiness[]),
+      fetchTransitStops(config, { signal: controller.signal }).catch(() => [] as TransitStop[]),
+    ]).then(([r311, rPermit, rBiz, rTransit]) => {
       setRows311(r311);
       setPermits(rPermit);
+      setBusinesses(rBiz.filter(b => b.status === "active" && b.coordinates));
+      setTransitStops(rTransit);
       setLoading(false);
     }).catch(err => {
       if (err?.name !== "AbortError") console.error("[CBDMap] fetch error:", err);
@@ -186,8 +263,10 @@ export function CBDMap() {
   const counts = useMemo(() => ({
     permits: permits.length,
     "311": rows311.length,
+    businesses: businesses.length,
+    transit: transitStops.length,
     boundary: 1,
-  }), [permits, rows311]);
+  }), [permits, rows311, businesses, transitStops]);
 
   if (!config) return null;
 
@@ -288,7 +367,7 @@ export function CBDMap() {
             <div style={{
               fontFamily: FONTS.body, fontSize: 11, color: COLORS.warmGray, marginTop: 2,
             }}>
-              {permits.length} permits &middot; {rows311.length} requests
+              {permits.length} permits &middot; {rows311.length} requests &middot; {transitStops.length} stops
             </div>
           </div>
 
@@ -406,6 +485,53 @@ export function CBDMap() {
                   {label}
                 </div>
               ))}
+
+              {layersOn.businesses && (
+                <>
+                  <div style={{
+                    fontFamily: FONTS.body, fontSize: 10, fontWeight: 700, color: COLORS.warmGray,
+                    textTransform: "uppercase", letterSpacing: "0.06em",
+                    marginTop: 16, marginBottom: 8,
+                  }}>
+                    Business Categories
+                  </div>
+                  {Object.entries(BIZ_CAT_COLORS).map(([cat, color]) => (
+                    <div key={cat} style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      fontFamily: FONTS.body, fontSize: 11, color: COLORS.midGray,
+                      padding: "3px 0",
+                    }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                      {cat}
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {layersOn.transit && (
+                <>
+                  <div style={{
+                    fontFamily: FONTS.body, fontSize: 10, fontWeight: 700, color: COLORS.warmGray,
+                    textTransform: "uppercase", letterSpacing: "0.06em",
+                    marginTop: 16, marginBottom: 8,
+                  }}>
+                    Transit
+                  </div>
+                  {[
+                    ["Muni Stop", "#0EA5E9"],
+                    ["BART Station", "#009AC7"],
+                  ].map(([label, color]) => (
+                    <div key={label} style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      fontFamily: FONTS.body, fontSize: 11, color: COLORS.midGray,
+                      padding: "3px 0",
+                    }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
+                      {label}
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
         </div>
 
@@ -470,6 +596,62 @@ export function CBDMap() {
                     <strong>{p.address}</strong><br />
                     {p.type} &middot; {fmtCost(p.cost)}<br />
                     <span style={{ color: "#999" }}>{p.filedDate}</span>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+
+            {/* Business markers */}
+            {layersOn.businesses && businesses.slice(0, 3000).map(b => {
+              if (!b.coordinates) return null;
+              const cat = mapBizCategory(b.category);
+              const color = BIZ_CAT_COLORS[cat] ?? "#9CA3AF";
+              return (
+                <CircleMarker
+                  key={b.id}
+                  center={[b.coordinates.lat, b.coordinates.lng]}
+                  radius={5}
+                  pathOptions={{ color: "#fff", weight: 1.5, fillColor: color, fillOpacity: 0.85 }}
+                >
+                  <Popup>
+                    <div style={{ fontFamily: FONTS.body, fontSize: 12, minWidth: 160 }}>
+                      <strong>{b.name}</strong><br />
+                      <span style={{
+                        display: "inline-block", marginTop: 3, marginBottom: 3,
+                        padding: "1px 8px", borderRadius: 8, fontSize: 10, fontWeight: 600,
+                        background: color + "20", color,
+                      }}>
+                        {cat}
+                      </span><br />
+                      <span style={{ color: "#666" }}>{b.address}</span><br />
+                      <span style={{ color: "#999", fontSize: 11 }}>Opened {b.openDate}</span>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
+
+            {/* Transit stop markers */}
+            {layersOn.transit && transitStops.map(s => (
+              <Marker
+                key={s.stopId}
+                position={[s.lat, s.lng]}
+                icon={transitIcon(s.system)}
+              >
+                <Popup>
+                  <div style={{ fontFamily: FONTS.body, fontSize: 12, minWidth: 160 }}>
+                    <strong>{s.name}</strong><br />
+                    <span style={{
+                      display: "inline-block", marginTop: 3, marginBottom: 3,
+                      padding: "1px 8px", borderRadius: 8, fontSize: 10, fontWeight: 600,
+                      background: s.system === "BART" ? "#EAB30820" : "#0EA5E920",
+                      color: s.system === "BART" ? "#EAB308" : "#0EA5E9",
+                    }}>
+                      {s.system}
+                    </span><br />
+                    {s.onStreet && s.atStreet && (
+                      <span style={{ color: "#666" }}>{s.onStreet} &amp; {s.atStreet}</span>
+                    )}
                   </div>
                 </Popup>
               </Marker>
@@ -569,6 +751,25 @@ export function CBDMap() {
                             label="View official record"
                           />
                         )}
+                        {p.block && p.lot && (
+                          <>
+                            <div style={{ borderTop: `1px solid ${COLORS.lightBorder}`, margin: "16px 0 12px" }} />
+                            <a
+                              href={`/property/${p.block.padStart(4, "0")}${p.lot.padStart(3, "0")}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                display: "block", textAlign: "center",
+                                padding: "10px 16px", borderRadius: 8,
+                                background: "#E8652D", color: "#fff",
+                                fontFamily: FONTS.body, fontSize: 13, fontWeight: 700,
+                                textDecoration: "none",
+                              }}
+                            >
+                              Open Property Report
+                            </a>
+                          </>
+                        )}
                       </>
                     );
                   })()}
@@ -615,6 +816,64 @@ export function CBDMap() {
                             href={`https://sf311.org/report/${r.serviceRequestId}`}
                             label="View official record"
                           />
+                        )}
+                      </>
+                    );
+                  })()}
+
+                  {/* ── Transit Access score ──────────── */}
+                  {transitStops.length > 0 && (() => {
+                    const lat = selected.type === "permit" ? selected.data.lat : selected.data.lat;
+                    const lng = selected.type === "permit" ? selected.data.lng : selected.data.lng;
+                    const ts = computeTransitScore(lat, lng, transitStops);
+                    const top3 = ts.nearbyStops.slice(0, 3);
+                    if (ts.score === 0 && top3.length === 0) return null;
+                    const scoreColor = ts.score >= 60 ? "#10B981" : ts.score >= 30 ? "#F59E0B" : "#EF4444";
+                    return (
+                      <>
+                        <div style={{ borderTop: `1px solid ${COLORS.lightBorder}`, margin: "16px 0 12px" }} />
+                        <div style={{
+                          fontFamily: FONTS.body, fontSize: 10, fontWeight: 700, color: COLORS.warmGray,
+                          textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8,
+                        }}>
+                          Transit Access
+                        </div>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 10 }}>
+                          <span style={{
+                            fontFamily: FONTS.display, fontSize: 28, fontWeight: 700,
+                            color: scoreColor, lineHeight: 1,
+                          }}>
+                            {ts.score}
+                          </span>
+                          <span style={{ fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray }}>/100</span>
+                          {ts.bartAccess && (
+                            <span style={{
+                              padding: "2px 8px", borderRadius: 8, fontSize: 10, fontWeight: 700,
+                              background: "#EAB30820", color: "#EAB308", marginLeft: 4,
+                            }}>
+                              BART
+                            </span>
+                          )}
+                        </div>
+                        {top3.length > 0 && (
+                          <div style={{ marginBottom: 4 }}>
+                            {top3.map((ns, i) => (
+                              <div key={i} style={{
+                                display: "flex", alignItems: "center", gap: 8,
+                                padding: "5px 0", borderBottom: `1px solid ${COLORS.lightBorder}`,
+                                fontFamily: FONTS.body, fontSize: 11,
+                              }}>
+                                <span style={{
+                                  width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                                  background: ns.stop.system === "BART" ? "#EAB308" : "#0EA5E9",
+                                }} />
+                                <span style={{ flex: 1, color: COLORS.charcoal }}>{ns.stop.name}</span>
+                                <span style={{ color: COLORS.warmGray, fontSize: 10, whiteSpace: "nowrap" }}>
+                                  {ns.distanceM}m
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </>
                     );
