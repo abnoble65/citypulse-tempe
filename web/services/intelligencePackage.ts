@@ -9,12 +9,13 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const DATASF_BASE = "https://data.sfgov.org/resource";
-const PERMITS_DATASET = "i98e-djp9";
-const ASSESSOR_DATASET = "wv5m-vpq2";
-const EVICTIONS_DATASET = "5cei-gny5";
-const AFFORDABLE_DATASET = "aaxw-2cb8";
-const PIPELINE_DATASET = "6jgi-cpb4";
+// DataSF dataset IDs — stubbed for Tempe fork
+const DATASF_BASE = "";
+const PERMITS_DATASET = "";
+const ASSESSOR_DATASET = "";
+const EVICTIONS_DATASET = "";
+const AFFORDABLE_DATASET = "";
+const PIPELINE_DATASET = "";
 
 const CITYPULSE_BASE = "https://citypulse-bay.vercel.app";
 
@@ -49,9 +50,7 @@ function formatAPN(raw: string): string {
 }
 
 async function fetchJSON<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`DataSF ${res.status}: ${url}`);
-  return res.json() as Promise<T>;
+  return [] as unknown as T;
 }
 
 function sentimentLabel(score: number): string {
@@ -146,50 +145,26 @@ interface SocrataEviction {
   good_samaritan_ends?: string;
 }
 
-async function fetchPermits(address: string) {
-  const [num, ...rest] = address.split(" ");
-  const street = rest.join(" ").replace(/ St$/i, "");
-  const url =
-    `${DATASF_BASE}/${PERMITS_DATASET}.json` +
-    `?$where=street_number='${num}' AND street_name='${street}'` +
-    `&$order=filed_date DESC&$limit=50000`;
-  return fetchJSON<SocrataPermit[]>(url);
+// DataSF fetch functions stubbed for Tempe fork — return empty results.
+
+async function fetchPermits(address: string): Promise<SocrataPermit[]> {
+  return [];
 }
 
 async function fetchAssessor(apn: string): Promise<SocrataAssessor | null> {
-  const clean = normalizeAPN(apn);
-  const url =
-    `${DATASF_BASE}/${ASSESSOR_DATASET}.json` +
-    `?$where=parcel_number='${clean}'&$order=closed_roll_year DESC&$limit=1`;
-  const rows = await fetchJSON<SocrataAssessor[]>(url);
-  return rows[0] ?? null;
+  return null;
 }
 
-async function fetchEvictions(address: string) {
-  const encoded = encodeURIComponent(address.toUpperCase());
-  const twoYearsAgo = new Date();
-  twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-  const since = twoYearsAgo.toISOString().slice(0, 10);
-  const url =
-    `${DATASF_BASE}/${EVICTIONS_DATASET}.json` +
-    `?$where=address like '%25${encoded}%25' AND file_date>='${since}'`;
-  return fetchJSON<SocrataEviction[]>(url);
+async function fetchEvictions(address: string): Promise<SocrataEviction[]> {
+  return [];
 }
 
-async function fetchAffordableHousing(address: string) {
-  const encoded = encodeURIComponent(address.toUpperCase());
-  const url =
-    `${DATASF_BASE}/${AFFORDABLE_DATASET}.json` +
-    `?$where=project_name like '%25${encoded}%25'&$limit=5`;
-  return fetchJSON<Record<string, string>[]>(url);
+async function fetchAffordableHousing(address: string): Promise<Record<string, string>[]> {
+  return [];
 }
 
-async function fetchPipeline(address: string) {
-  const encoded = encodeURIComponent(address.toUpperCase());
-  const url =
-    `${DATASF_BASE}/${PIPELINE_DATASET}.json` +
-    `?$where=nameaddr like '%25${encoded}%25'&$limit=5`;
-  return fetchJSON<Record<string, string>[]>(url);
+async function fetchPipeline(address: string): Promise<Record<string, string>[]> {
+  return [];
 }
 
 // ---------------------------------------------------------------------------

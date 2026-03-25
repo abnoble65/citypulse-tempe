@@ -20,47 +20,8 @@
  * EXPO_PUBLIC_ approach is fine for this use case.
  */
 
-const BASE_URL = 'https://data.sfgov.org/resource';
-const SUPERVISOR_DISTRICT = '3';
-
-/**
- * Approximate WGS-84 bounding box for SF Supervisor District 3.
- * Covers North Beach, Telegraph Hill, Chinatown, Nob Hill, and Russian Hill.
- * Used by fetchZoningDistricts(), which lacks a supervisor_district column and
- * must filter spatially via Socrata's within_box() SoQL function instead.
- */
-const DISTRICT_3_BBOX = {
-  minLat: 37.793,
-  minLon: -122.425,
-  maxLat: 37.810,
-  maxLon: -122.390,
-} as const;
-
-// ── Shared helpers ────────────────────────────────────────────────────────────
-
-function buildHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const appToken = process.env.DATASF_APP_TOKEN;
-  if (appToken) {
-    headers['X-App-Token'] = appToken;
-  }
-  return headers;
-}
-
-async function socrataFetch<T>(datasetId: string, params: URLSearchParams): Promise<T[]> {
-  const url = `${BASE_URL}/${datasetId}.json?${params.toString()}`;
-  const response = await fetch(url, { headers: buildHeaders() });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(
-      `DataSF [${datasetId}] ${response.status} ${response.statusText}` +
-        (body ? `: ${body}` : ''),
-    );
-  }
-
-  return response.json() as Promise<T[]>;
-}
+// DataSF/Socrata API calls stubbed for Tempe fork — returns empty arrays.
+// Original SF implementation removed. Will be replaced with ArcGIS data layer.
 
 // ── 1. Building Permits (i98e-djp9) ──────────────────────────────────────────
 //
@@ -108,12 +69,7 @@ export interface BuildingPermit {
  * @returns      Array of BuildingPermit records ordered by filed_date DESC.
  */
 export async function fetchBuildingPermits(limit = 1000): Promise<BuildingPermit[]> {
-  const params = new URLSearchParams({
-    $where: `supervisor_district='${SUPERVISOR_DISTRICT}'`,
-    $limit: String(limit),
-    $order: 'filed_date DESC',
-  });
-  return socrataFetch<BuildingPermit>('i98e-djp9', params);
+  return [];
 }
 
 // ── 2. SF Development Pipeline (k55i-dnjd) ───────────────────────────────────
@@ -151,10 +107,7 @@ export interface DevelopmentProject {
  * @returns      Array of DevelopmentProject records ordered by current_status_date DESC.
  */
 export async function fetchDevelopmentPipeline(limit = 500): Promise<DevelopmentProject[]> {
-  const params = new URLSearchParams({
-    $limit: String(limit),
-  });
-  return socrataFetch<DevelopmentProject>('k55i-dnjd', params);
+  return [];
 }
 
 // ── 3. Zoning Districts (ibu8-4ccn) ──────────────────────────────────────────
@@ -197,8 +150,5 @@ export interface ZoningDistrict {
  * @returns      Array of ZoningDistrict records ordered by zoning_sim ASC.
  */
 export async function fetchZoningDistricts(limit = 200): Promise<ZoningDistrict[]> {
-  const params = new URLSearchParams({
-    $limit: String(limit),
-  });
-  return socrataFetch<ZoningDistrict>('ibu8-4ccn', params);
+  return [];
 }

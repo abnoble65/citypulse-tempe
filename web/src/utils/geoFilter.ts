@@ -22,43 +22,14 @@ interface NHFeature {
 
 export type BoundaryMap = Map<string, NHFeature>;
 
-// ── Module-level singleton ────────────────────────────────────────────────────
+// DataSF boundary fetch stubbed for Tempe fork — returns empty map.
 
-const GEO_URL =
-  "https://data.sfgov.org/resource/jwn9-ihcz.geojson?$limit=200";
-
-let boundaryCache: BoundaryMap | null = null;
-let loadPromise:  Promise<BoundaryMap> | null = null;
-
-/**
- * Fetches neighborhood boundaries from DataSF and caches them for the session.
- * Safe to call multiple times — only one network request is ever made.
- */
 export function loadNeighborhoodBoundaries(): Promise<BoundaryMap> {
-  if (boundaryCache) return Promise.resolve(boundaryCache);
-  if (loadPromise)   return loadPromise;
-
-  loadPromise = fetch(GEO_URL)
-    .then(r => r.json())
-    .then((geojson: { features: NHFeature[] }) => {
-      const map: BoundaryMap = new Map();
-      for (const f of geojson.features ?? []) {
-        if (f.properties?.name) map.set(f.properties.name, f);
-      }
-      boundaryCache = map;
-      return map;
-    })
-    .catch(() => {
-      loadPromise = null; // allow retry
-      return new Map() as BoundaryMap;
-    });
-
-  return loadPromise;
+  return Promise.resolve(new Map() as BoundaryMap);
 }
 
-/** Fire-and-forget preload — call early to avoid latency on first filter use. */
 export function preloadNeighborhoodBoundaries(): void {
-  loadNeighborhoodBoundaries().catch(() => {});
+  // no-op — DataSF removed for Tempe fork
 }
 
 // ── Ray-casting algorithm ─────────────────────────────────────────────────────

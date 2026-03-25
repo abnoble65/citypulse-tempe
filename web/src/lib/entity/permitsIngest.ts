@@ -123,34 +123,7 @@ export async function fetchPermitRecords(
   apn: string,
   fetchFn: typeof fetch = fetch
 ): Promise<DBIPermitRecord[]> {
-  let url: string;
-  try {
-    url = buildPermitsUrl(apn);
-  } catch (err) {
-    console.error(`[permitsIngest] Cannot build URL for APN ${apn}:`, err);
-    return [];
-  }
-
-  const headers: HeadersInit = { "Content-Type": "application/json" };
-  if (APP_TOKEN) headers["X-App-Token"] = APP_TOKEN;
-
-  let response: Response;
-  try {
-    response = await fetchFn(url, { headers });
-  } catch (err) {
-    console.error(`[permitsIngest] Network error for APN ${apn}:`, err);
-    return [];
-  }
-
-  if (!response.ok) {
-    console.error(
-      `[permitsIngest] Socrata returned ${response.status} for APN ${apn}`
-    );
-    return [];
-  }
-
-  const data: DBIPermitRecord[] = await response.json();
-  return data ?? [];
+  return [];
 }
 
 // ─── TRANSFORM ────────────────────────────────────────────────────────────────

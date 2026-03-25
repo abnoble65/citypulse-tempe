@@ -6,7 +6,6 @@
  */
 
 import type { CBDConfig } from '../contexts/CBDContext';
-import { isPointInCBD, type CBDBoundaryEntry } from '../utils/geoFilter';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,92 +27,13 @@ export interface MonthlyActivity {
   Closures: number;
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const DATASF = 'https://data.sfgov.org/resource';
-
-function getBoundingBox(geojson: { coordinates: number[][][][] }) {
-  let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
-  for (const poly of geojson.coordinates)
-    for (const ring of poly)
-      for (const [lng, lat] of ring) {
-        if (lat < minLat) minLat = lat;
-        if (lat > maxLat) maxLat = lat;
-        if (lng < minLng) minLng = lng;
-        if (lng > maxLng) maxLng = lng;
-      }
-  return { minLat, maxLat, minLng, maxLng };
-}
-
-// ── Fetch ────────────────────────────────────────────────────────────────────
+// ── Fetch (stubbed for Tempe fork — DataSF removed) ─────────────────────────
 
 export async function fetchBusinessRegistrations(
   config: CBDConfig,
   opts: { limit?: number; signal?: AbortSignal } = {},
 ): Promise<DowntownBusiness[]> {
-  if (!config.boundary_geojson) return [];
-
-  const { limit = 5000, signal } = opts;
-  const bb = getBoundingBox(config.boundary_geojson);
-
-  // Fetch active businesses + those closed in the last 13 months (for chart)
-  const thirteenMonthsAgo = new Date();
-  thirteenMonthsAgo.setMonth(thirteenMonthsAgo.getMonth() - 13);
-  const cutoffDate = thirteenMonthsAgo.toISOString().split('T')[0];
-
-  const params = new URLSearchParams({
-    $where: [
-      `within_box(location,${bb.maxLat},${bb.minLng},${bb.minLat},${bb.maxLng})`,
-      `administratively_closed IS NULL`,
-      `location IS NOT NULL`,
-      `city='San Francisco'`,
-      `(dba_end_date IS NULL OR dba_end_date>'${cutoffDate}')`,
-    ].join(' AND '),
-    $select: 'uniqueid,dba_name,ownership_name,full_business_address,naic_code_description,dba_start_date,dba_end_date,location',
-    $limit: String(limit),
-    $order: 'dba_start_date DESC',
-  });
-
-  const t0 = performance.now();
-  const res = await fetch(`${DATASF}/g8m3-pdis.json?${params}`, { signal });
-  if (!res.ok) throw new Error(`DataSF business registrations returned ${res.status}`);
-  const raw: any[] = await res.json();
-  if (!Array.isArray(raw)) return [];
-
-  // Build boundary entry for polygon clipping
-  const boundary: CBDBoundaryEntry = {
-    name: config.name,
-    geometry: config.boundary_geojson as CBDBoundaryEntry['geometry'],
-  };
-
-  const businesses: DowntownBusiness[] = [];
-
-  for (const r of raw) {
-    const coords = r.location?.coordinates;
-    if (!coords || coords.length < 2) continue;
-
-    const lng = coords[0] as number;
-    const lat = coords[1] as number;
-
-    // Clip to exact CBD polygon
-    if (!isPointInCBD(lat, lng, [boundary])) continue;
-
-    const endDate = r.dba_end_date ? (r.dba_end_date as string).split('T')[0] : null;
-    businesses.push({
-      id: r.uniqueid ?? '',
-      name: r.dba_name || r.ownership_name || 'Unknown',
-      address: r.full_business_address ?? '',
-      category: r.naic_code_description || 'Uncategorized',
-      openDate: (r.dba_start_date ?? '').split('T')[0],
-      closeDate: endDate,
-      coordinates: { lat, lng },
-      status: endDate ? 'closed' : 'active',
-    });
-  }
-
-  const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
-  console.log(`[businessRegistrations] ${config.name}: ${raw.length} raw → ${businesses.length} in polygon (${elapsed}s)`);
-  return businesses;
+  return [];
 }
 
 // ── Trend ────────────────────────────────────────────────────────────────────

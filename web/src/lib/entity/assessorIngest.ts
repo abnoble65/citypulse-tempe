@@ -85,40 +85,11 @@ export function buildAssessorUrl(apn: string): string {
   return `${SOCRATA_BASE}/${ASSESSOR_DATASET_ID}.json?${params.toString()}`;
 }
 
-/**
- * Fetch the most recent assessor record for a given APN.
- * Returns null if no record is found or the request fails.
- */
 export async function fetchAssessorRecord(
   apn: string,
   fetchFn: typeof fetch = fetch
 ): Promise<AssessorRecord | null> {
-  const url = buildAssessorUrl(apn);
-  const headers: HeadersInit = { "Content-Type": "application/json" };
-  if (APP_TOKEN) headers["X-App-Token"] = APP_TOKEN;
-
-  let response: Response;
-  try {
-    response = await fetchFn(url, { headers });
-  } catch (err) {
-    console.error(`[assessorIngest] Network error for APN ${apn}:`, err);
-    return null;
-  }
-
-  if (!response.ok) {
-    console.error(
-      `[assessorIngest] Socrata returned ${response.status} for APN ${apn}`
-    );
-    return null;
-  }
-
-  const data: AssessorRecord[] = await response.json();
-  if (!data || data.length === 0) {
-    console.warn(`[assessorIngest] No assessor record found for APN ${apn}`);
-    return null;
-  }
-
-  return data[0];
+  return null;
 }
 
 // ─── TRANSFORM ────────────────────────────────────────────────────────────────

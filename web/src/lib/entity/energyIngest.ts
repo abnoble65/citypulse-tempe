@@ -69,31 +69,7 @@ export async function fetchEnergyRecord(
   apn: string,
   fetchFn: typeof fetch = fetch
 ): Promise<EnergyBenchmarkRecord | null> {
-  const url = buildEnergyUrl(apn);
-  const headers: HeadersInit = { "Content-Type": "application/json" };
-  if (APP_TOKEN) headers["X-App-Token"] = APP_TOKEN;
-
-  let response: Response;
-  try {
-    response = await fetchFn(url, { headers });
-  } catch (err) {
-    console.error(`[energyIngest] Network error for APN ${apn}:`, err);
-    return null;
-  }
-
-  if (!response.ok) {
-    console.error(`[energyIngest] Socrata returned ${response.status} for APN ${apn}`);
-    return null;
-  }
-
-  const data: EnergyBenchmarkRecord[] = await response.json();
-  if (!data || data.length === 0) {
-    // Not all buildings are required to benchmark — this is expected.
-    console.info(`[energyIngest] No energy record for APN ${apn} — building may be exempt.`);
-    return null;
-  }
-
-  return data[0];
+  return null;
 }
 
 // ─── TRANSFORM ────────────────────────────────────────────────────────────────

@@ -38,47 +38,7 @@ export interface TransitScore {
   bartAccess: boolean;
 }
 
-// ── BART stations (hardcoded — not in the SFMTA Socrata dataset) ─────────────
-
-const BART_STATIONS: TransitStop[] = [
-  {
-    stopId: 'BART-EMBR',
-    name: 'Embarcadero BART Station',
-    lat: 37.7930,
-    lng: -122.3968,
-    onStreet: 'MARKET ST',
-    atStreet: 'THE EMBARCADERO',
-    stopType: 'BART',
-    system: 'BART',
-  },
-  {
-    stopId: 'BART-MONT',
-    name: 'Montgomery St BART Station',
-    lat: 37.7894,
-    lng: -122.4013,
-    onStreet: 'MARKET ST',
-    atStreet: 'MONTGOMERY ST',
-    stopType: 'BART',
-    system: 'BART',
-  },
-];
-
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-const DATASF = 'https://data.sfgov.org/resource';
-
-function getBoundingBox(geojson: { coordinates: number[][][][] }) {
-  let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
-  for (const poly of geojson.coordinates)
-    for (const ring of poly)
-      for (const [lng, lat] of ring) {
-        if (lat < minLat) minLat = lat;
-        if (lat > maxLat) maxLat = lat;
-        if (lng < minLng) minLng = lng;
-        if (lng > maxLng) maxLng = lng;
-      }
-  return { minLat, maxLat, minLng, maxLng };
-}
 
 /**
  * Haversine distance between two WGS84 points.
@@ -94,77 +54,21 @@ function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): num
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ── Fetch (CBD-wide, used by CBDMap) ─────────────────────────────────────────
+// ── Fetch (stubbed for Tempe fork — DataSF removed) ─────────────────────────
 
 export async function fetchTransitStops(
   config: CBDConfig,
   opts: { signal?: AbortSignal } = {},
 ): Promise<TransitStop[]> {
-  if (!config.boundary_geojson) return [...BART_STATIONS];
-
-  const bb = getBoundingBox(config.boundary_geojson);
-  const params = new URLSearchParams({
-    $where: `within_box(shape,${bb.maxLat},${bb.minLng},${bb.minLat},${bb.maxLng})`,
-    $select: 'stopid,stopname,latitude,longitude,onstreet,atstreet,serviceplanningstoptype',
-    $limit: '200',
-  });
-
-  const t0 = performance.now();
-  const res = await fetch(`${DATASF}/i28k-bkz6.json?${params}`, { signal: opts.signal });
-  if (!res.ok) throw new Error(`DataSF transit stops returned ${res.status}`);
-  const raw: any[] = await res.json();
-  if (!Array.isArray(raw)) return [...BART_STATIONS];
-
-  const muniStops = parseMuniStops(raw);
-  const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
-  console.log(`[transitAccess] ${config.name}: ${muniStops.length} Muni stops + ${BART_STATIONS.length} BART (${elapsed}s)`);
-
-  return [...muniStops, ...BART_STATIONS];
+  return [];
 }
 
-// ── Fetch (point-based, used by PropertyPage) ────────────────────────────────
-
-/**
- * Fetch Muni stops within 800m (standard half-mile pedestrian shed) of a point.
- * Always includes hardcoded BART stations.
- */
 export async function fetchTransitStopsNear(
   lat: number,
   lng: number,
   opts: { signal?: AbortSignal } = {},
 ): Promise<TransitStop[]> {
-  if (!lat || !lng) return [...BART_STATIONS];
-
-  const params = new URLSearchParams({
-    // within_circle(column, lat, lng, radius_in_meters)
-    $where: `within_circle(shape, ${lat}, ${lng}, 800)`,
-    $select: 'stopid,stopname,latitude,longitude,onstreet,atstreet,serviceplanningstoptype',
-    $limit: '200',
-  });
-
-  const res = await fetch(`${DATASF}/i28k-bkz6.json?${params}`, { signal: opts.signal });
-  if (!res.ok) return [...BART_STATIONS];
-  const raw: any[] = await res.json();
-  if (!Array.isArray(raw)) return [...BART_STATIONS];
-
-  const muniStops = parseMuniStops(raw);
-  console.log(`[transitAccess] near (${lat.toFixed(4)}, ${lng.toFixed(4)}): ${muniStops.length} Muni + ${BART_STATIONS.length} BART`);
-  return [...muniStops, ...BART_STATIONS];
-}
-
-function parseMuniStops(raw: any[]): TransitStop[] {
-  return raw
-    .filter((r: any) => r.latitude && r.longitude)
-    .map((r: any) => ({
-      stopId: r.stopid ?? '',
-      name: r.stopname ?? '',
-      lat: parseFloat(r.latitude),
-      lng: parseFloat(r.longitude),
-      onStreet: r.onstreet ?? '',
-      atStreet: r.atstreet ?? '',
-      stopType: r.serviceplanningstoptype ?? '',
-      system: 'Muni' as const,
-    }));
+  return [];
 }
 
 // ── Transit score ────────────────────────────────────────────────────────────

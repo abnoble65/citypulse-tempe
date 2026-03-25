@@ -5,32 +5,8 @@
  * Rate limits are sufficient for demo use without an app token.
  */
 
-import { fetchWithTimeout, TIMEOUT_DATA } from '../utils/fetchWithTimeout';
-
-const BASE_URL = 'https://data.sfgov.org/resource';
-
-function buildHeaders(): Record<string, string> {
-  return { Accept: 'application/json' };
-}
-
-async function socrataFetch<T>(datasetId: string, params: URLSearchParams, signal?: AbortSignal): Promise<T[]> {
-  const url = `${BASE_URL}/${datasetId}.json?${params.toString()}`;
-  const response = await fetchWithTimeout(url, {
-    headers: buildHeaders(),
-    timeoutMs: TIMEOUT_DATA,
-    signal,
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(
-      `DataSF [${datasetId}] ${response.status} ${response.statusText}` +
-        (body ? `: ${body}` : ''),
-    );
-  }
-
-  return response.json() as Promise<T[]>;
-}
+// DataSF/Socrata API calls stubbed for Tempe fork — returns empty arrays.
+// Original SF implementation removed. Will be replaced with ArcGIS data layer.
 
 export interface BuildingPermit {
   permit_number: string;
@@ -66,21 +42,7 @@ export interface BuildingPermit {
 }
 
 export async function fetchBuildingPermits(district: string, limit = 5000, signal?: AbortSignal): Promise<BuildingPermit[]> {
-  const year = new Date().getFullYear();
-  const startDate = `${year}-01-01T00:00:00.000`;
-  const params = new URLSearchParams({
-    $select: [
-      'permit_number', 'permit_type', 'permit_type_definition',
-      'status', 'status_date', 'filed_date',
-      'street_number', 'street_name', 'street_suffix',
-      'zipcode', 'estimated_cost', 'revised_cost',
-      'description', 'supervisor_district', 'location',
-    ].join(','),
-    $where: `supervisor_district='${district}' AND filed_date >= '${startDate}'`,
-    $limit: String(limit),
-    $order: 'filed_date DESC',
-  });
-  return socrataFetch<BuildingPermit>('i98e-djp9', params, signal);
+  return [];
 }
 
 export interface DevelopmentProject {
@@ -105,10 +67,7 @@ export interface DevelopmentProject {
 }
 
 export async function fetchDevelopmentPipeline(limit = 500, signal?: AbortSignal): Promise<DevelopmentProject[]> {
-  const params = new URLSearchParams({
-    $limit: String(limit),
-  });
-  return socrataFetch<DevelopmentProject>('6jgi-cpb4', params, signal);
+  return [];
 }
 
 export interface ZoningDistrict {
@@ -121,8 +80,7 @@ export interface ZoningDistrict {
 }
 
 export async function fetchZoningDistricts(limit = 200, signal?: AbortSignal): Promise<ZoningDistrict[]> {
-  const params = new URLSearchParams({ $limit: String(limit) });
-  return socrataFetch<ZoningDistrict>('3i4a-hu95', params, signal);
+  return [];
 }
 
 export interface EvictionNotice {
@@ -181,51 +139,12 @@ export interface AssessmentParcel {
   assessor_neighborhood?: string;
 }
 
-/** Returns [olderYear, newerYear] as strings, capped at the dataset's latest roll (2024). */
-function assessmentYears(): [string, string] {
-  const latest = Math.min(new Date().getFullYear() - 1, 2024);
-  return [String(latest - 1), String(latest)];
-}
-
-/**
- * Fetch aggregated assessment stats for two roll years, grouped by use_code.
- * Returns ~10–20 rows — very lightweight.
- */
 export async function fetchAssessmentStats(district: string, signal?: AbortSignal): Promise<AssessmentAggrRow[]> {
-  const [y1, y2] = assessmentYears();
-  const params = new URLSearchParams({
-    $select: [
-      'closed_roll_year', 'use_code',
-      'avg(assessed_land_value) as avg_land',
-      'avg(assessed_improvement_value) as avg_improvement',
-      'sum(assessed_land_value) as sum_land',
-      'sum(assessed_improvement_value) as sum_improvement',
-      'count(*) as count',
-    ].join(','),
-    $where: `closed_roll_year in('${y1}','${y2}') AND supervisor_district='${district}' AND assessed_land_value > 0`,
-    $group: 'closed_roll_year,use_code',
-    $limit: '100',
-  });
-  return socrataFetch<AssessmentAggrRow>('wv5m-vpq2', params, signal);
+  return [];
 }
 
-/**
- * Fetch the top 20 parcels by assessed land value for the most recent roll year.
- * Sorted server-side; client will re-sort by land+improvement total.
- */
 export async function fetchTopAssessedProperties(district: string, signal?: AbortSignal): Promise<AssessmentParcel[]> {
-  const [, y2] = assessmentYears();
-  const params = new URLSearchParams({
-    $select: [
-      'property_location', 'parcel_number', 'use_code', 'use_definition',
-      'assessed_land_value', 'assessed_improvement_value',
-      'analysis_neighborhood', 'assessor_neighborhood',
-    ].join(','),
-    $where: `closed_roll_year='${y2}' AND supervisor_district='${district}' AND assessed_land_value > 500000`,
-    $order: 'assessed_land_value DESC',
-    $limit: '20',
-  });
-  return socrataFetch<AssessmentParcel>('wv5m-vpq2', params, signal);
+  return [];
 }
 
 // ── Affordable Housing Pipeline (MOHCD) ───────────────────────────────────────
@@ -267,12 +186,7 @@ export interface AffordableHousingProject {
 }
 
 export async function fetchAffordableHousingPipeline(district: string, signal?: AbortSignal): Promise<AffordableHousingProject[]> {
-  const params = new URLSearchParams({
-    $where: `supervisor_district='${district}'`,
-    $limit: '200',
-    $order: 'project_status ASC',
-  });
-  return socrataFetch<AffordableHousingProject>('aaxw-2cb8', params, signal);
+  return [];
 }
 
 // ── 311 Service Requests ────────────────────────────────────────────────────
@@ -293,22 +207,7 @@ export interface ThreeOneOneRequest {
 }
 
 export async function fetch311Requests(district: string, limit = 2000, signal?: AbortSignal): Promise<ThreeOneOneRequest[]> {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 90);
-  const dateStr = cutoff.toISOString().split('T')[0];
-
-  const params = new URLSearchParams({
-    $select: [
-      'service_request_id', 'requested_datetime', 'closed_date',
-      'status_description', 'service_name', 'service_subtype',
-      'address', 'lat', 'long', 'supervisor_district',
-      'neighborhoods_sffind_neighborhoods',
-    ].join(','),
-    $where: `supervisor_district='${district}' AND requested_datetime >= '${dateStr}T00:00:00.000'`,
-    $order: 'requested_datetime DESC',
-    $limit: String(limit),
-  });
-  return socrataFetch<ThreeOneOneRequest>('vw6y-z8j6', params, signal);
+  return [];
 }
 
 // ── Community Benefit District Boundaries ──────────────────────────────────
@@ -328,22 +227,9 @@ export interface CBDBoundary {
 }
 
 export async function fetchCBDBoundaries(signal?: AbortSignal): Promise<CBDBoundary[]> {
-  const params = new URLSearchParams({
-    $select: 'community_benefit_district,multipolygon,revenue,established,expiration,sup_districts,annual_report_url',
-    $limit: '50',
-  });
-  return socrataFetch<CBDBoundary>('c28a-f6gs', params, signal);
+  return [];
 }
 
 export async function fetchEvictions(district: string, limit = 1000, signal?: AbortSignal): Promise<EvictionNotice[]> {
-  const cutoff = new Date();
-  cutoff.setFullYear(cutoff.getFullYear() - 2);
-  const dateStr = cutoff.toISOString().split('T')[0]; // "YYYY-MM-DD"
-
-  const params = new URLSearchParams({
-    $where: `supervisor_district=${district} AND file_date > '${dateStr}'`,
-    $limit: String(limit),
-    $order: 'file_date DESC',
-  });
-  return socrataFetch<EvictionNotice>('5cei-gny5', params, signal);
+  return [];
 }
