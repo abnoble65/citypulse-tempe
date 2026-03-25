@@ -50,9 +50,14 @@ export function renderInlineMarkdown(
  *
  * Pass `linkify` to auto-link addresses, neighborhoods, and dollar amounts.
  */
-/** Strip lines that are only "#" or "##" with no heading text (stray markdown artifacts). */
-function stripStrayHashes(text: string): string {
-  return text.replace(/^#{1,3}\s*$/gm, "").replace(/\n{3,}/g, "\n\n");
+/** Normalize markdown so headings are always isolated paragraph blocks. */
+function normalizeMarkdown(text: string): string {
+  return text
+    .replace(/^---$/gm, "")                          // strip horizontal rules
+    .replace(/^#{1,3}\s*$/gm, "")                     // strip stray hashes with no text
+    .replace(/^(#{1,3}\s+.+)$/gm, "\n\n$1\n\n")      // isolate headings into own blocks
+    .replace(/\n{3,}/g, "\n\n")                        // collapse excess newlines
+    .trim();
 }
 
 /** Style for ## section headers inside briefing cards. */
@@ -70,7 +75,7 @@ export function renderMarkdownBlock(
   text: string,
   linkify?: Linkifier,
 ): ReactNode[] {
-  const cleaned = stripStrayHashes(text);
+  const cleaned = normalizeMarkdown(text);
   // Split on double newlines to get paragraphs
   const paragraphs = cleaned.split(/\n\n+/);
   const nodes: ReactNode[] = [];
@@ -80,9 +85,9 @@ export function renderMarkdownBlock(
     const trimmed = para.trim();
     if (!trimmed) continue;
 
-    // Check if this paragraph is a heading-only block (no body text after it)
+    // Check if this paragraph is a heading
     const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)/);
-    if (headingMatch && !trimmed.includes("\n")) {
+    if (headingMatch) {
       const level = headingMatch[1].length;
       if (level <= 2) {
         nodes.push(
