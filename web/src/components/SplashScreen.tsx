@@ -44,7 +44,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
         style={{
           position: "absolute",
           inset: 0,
-          backgroundImage: "url(/splash.png)",
+          backgroundImage: "url(/images/Temp_Abstract.png)",
           backgroundSize: "cover",
           backgroundPosition: "center center",
           transform: phase >= 1 ? "scale(1.05)" : "scale(1.0)",

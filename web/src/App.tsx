@@ -50,7 +50,7 @@ function ChunkLoadingBar() {
       }}>
         <div style={{
           height: "100%",
-          background: "linear-gradient(90deg, #D4643B, #E8845E)",
+          background: "linear-gradient(90deg, #F5A623, #F7BF4A)",
           borderRadius: "0 2px 2px 0",
           animation: "cp-chunk-bar 4s ease-out forwards",
         }} />
@@ -86,8 +86,8 @@ function LoadingOverlay({ loading, onCancel }: { loading: boolean; onCancel?: ()
     }}>
       <style>{`
         @keyframes pulse-glow {
-          0%,100%{transform:scale(1);filter:drop-shadow(0 4px 20px rgba(212,100,59,0.15))}
-          50%{transform:scale(1.06);filter:drop-shadow(0 6px 28px rgba(212,100,59,0.3))}
+          0%,100%{transform:scale(1);filter:drop-shadow(0 4px 20px rgba(245,166,35,0.15))}
+          50%{transform:scale(1.06);filter:drop-shadow(0 6px 28px rgba(245,166,35,0.3))}
         }
         @keyframes dot-bounce {
           0%,80%,100%{opacity:0.3;transform:scale(0.8)}
@@ -104,7 +104,7 @@ function LoadingOverlay({ loading, onCancel }: { loading: boolean; onCancel?: ()
         {[0, 1, 2].map(i => (
           <div key={i} style={{
             width: 10, height: 10, borderRadius: "50%",
-            background: "#D4643B", opacity: 0.3,
+            background: "#F5A623", opacity: 0.3,
             animation: `dot-bounce 1.4s ease-in-out ${i * 0.16}s infinite`,
           }} />
         ))}
@@ -118,16 +118,16 @@ function LoadingOverlay({ loading, onCancel }: { loading: boolean; onCancel?: ()
       <div style={{ width: "min(240px,80vw)", height: 4, background: "#EDE8E3", borderRadius: 2, marginTop: 24, overflow: "hidden" }}>
         <div style={{
           height: "100%",
-          background: "linear-gradient(90deg,#D4643B,#E8845E)",
+          background: "linear-gradient(90deg,#F5A623,#F7BF4A)",
           borderRadius: 2,
           animation: "progress-sweep 14s ease-in-out forwards",
         }} />
       </div>
       {slow && onCancel && (
         <button onClick={onCancel} style={{
-          marginTop: 24, background: "none", border: `1px solid #D4643B`,
+          marginTop: 24, background: "none", border: `1px solid #F5A623`,
           borderRadius: 20, padding: "8px 24px", fontSize: 13, fontWeight: 600,
-          color: "#D4643B", cursor: "pointer", fontFamily: "'Urbanist',sans-serif",
+          color: "#F5A623", cursor: "pointer", fontFamily: "'Urbanist',sans-serif",
         }}>
           Cancel & Go Home
         </button>
