@@ -28,18 +28,21 @@ import { fetchRecentPermits, fetchZoningDistricts } from "../services/tempeApi.j
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TEMPE_CENTER: [number, number] = [33.4255, -111.9400];
-const DEFAULT_ZOOM = 13;
+const DEFAULT_ZOOM = 14;
 
 const TILE_URLS = {
-  dark:      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-  light:     "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-  satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  dark:      "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png",
+  light:     "https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png",
+  satellite: "https://tiles.stadiamaps.com/tiles/alidade_satellite/{z}/{x}/{y}{r}.png",
 };
 type MapStyle = keyof typeof TILE_URLS;
 const MAP_STYLE_LABELS: Record<MapStyle, string> = { dark: "Dark", light: "Light", satellite: "Satellite" };
 const MAP_STYLE_ORDER: MapStyle[] = ["dark", "light", "satellite"];
 
-const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>';
+const TILE_ATTRIBUTION = '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
+/** Cutoff for "recent" permit glow — issued in last 30 days */
+const RECENT_CUTOFF = new Date(Date.now() - 30 * 86_400_000).toISOString().split("T")[0];
 
 // ── Tempe landmark labels ─────────────────────────────────────────────────────
 
@@ -204,10 +207,20 @@ function TileSwitcher({ style }: { style: MapStyle }) {
   );
 }
 
-// ── Map click handler (close panel on map click) ─────────────────────────────
+// ── Map click handler (close panel only on base map canvas click) ─────────────
 
 function MapClickHandler({ onMapClick }: { onMapClick: () => void }) {
-  useMapEvents({ click: onMapClick });
+  useMapEvents({
+    click: (e) => {
+      // Only close panel if the click target is the map canvas itself,
+      // not a marker or polygon (which handle their own clicks via L.DomEvent.stopPropagation)
+      const target = e.originalEvent?.target as HTMLElement | undefined;
+      if (target?.classList?.contains("leaflet-container") ||
+          target?.closest?.(".leaflet-pane")) {
+        onMapClick();
+      }
+    },
+  });
   return null;
 }
 
@@ -460,12 +473,33 @@ export function MapPage({ districtConfig: _districtConfig, onNavigate }: MapPage
                   key={i}
                   positions={ringsToLatLngs(z.geometry!.rings)}
                   pathOptions={{ color, weight: 1.5, opacity: 0.6, fillColor: color, fillOpacity: 0.3 }}
-                  eventHandlers={{ click: (e) => { e.originalEvent.stopPropagation(); setSelected({ type: "zone", data: z }); } }}
+                  eventHandlers={{ click: (e) => { L.DomEvent.stopPropagation(e); setSelected({ type: "zone", data: z }); } }}
                 />
               );
             })}
           </Pane>
         )}
+
+        {/* Permit glow rings for recent permits (last 30 days) */}
+        <Pane name="glow-pane" style={{ zIndex: 440 }}>
+          {filteredPermits.map((p, i) => {
+            const isRecent = p.issuedDate != null && p.issuedDate >= RECENT_CUTOFF;
+            if (!isRecent) return null;
+            const color = CATEGORY_COLORS[classifyPermit(p.permitType)];
+            return (
+              <CircleMarker
+                key={`glow-${i}`}
+                center={[p.lat!, p.lng!]}
+                radius={16}
+                pathOptions={{
+                  color: "transparent", fillColor: color, fillOpacity: 0.15,
+                  weight: 0, opacity: 0,
+                }}
+                interactive={false}
+              />
+            );
+          })}
+        </Pane>
 
         {/* Permit pins */}
         <Pane name="permits-pane" style={{ zIndex: 450 }}>
@@ -481,7 +515,12 @@ export function MapPage({ districtConfig: _districtConfig, onNavigate }: MapPage
                   color: "#fff", fillColor: color, fillOpacity: 0.85,
                   weight: 2, opacity: 0.9,
                 }}
-                eventHandlers={{ click: (e) => { e.originalEvent.stopPropagation(); setSelected({ type: "permit", data: p }); } }}
+                eventHandlers={{
+                  click: (e) => {
+                    L.DomEvent.stopPropagation(e);
+                    setSelected({ type: "permit", data: p });
+                  },
+                }}
               />
             );
           })}
