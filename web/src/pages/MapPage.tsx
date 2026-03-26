@@ -11,10 +11,12 @@ import {
   TileLayer,
   CircleMarker,
   Polygon,
+  Marker,
   Pane,
   useMap,
   useMapEvents,
 } from "react-leaflet";
+import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 import { COLORS, FONTS } from "../theme";
@@ -28,16 +30,45 @@ import { fetchRecentPermits, fetchZoningDistricts } from "../services/tempeApi.j
 const TEMPE_CENTER: [number, number] = [33.4255, -111.9400];
 const DEFAULT_ZOOM = 13;
 
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN ?? "";
+
 const TILE_URLS = {
-  dark:      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-  light:     "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-  satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  dark:      `https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`,
+  light:     `https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`,
+  satellite: `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`,
 };
 type MapStyle = keyof typeof TILE_URLS;
 const MAP_STYLE_LABELS: Record<MapStyle, string> = { dark: "Dark", light: "Light", satellite: "Satellite" };
 const MAP_STYLE_ORDER: MapStyle[] = ["dark", "light", "satellite"];
 
-const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
+const TILE_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+
+// ── Tempe landmark labels ─────────────────────────────────────────────────────
+
+const LANDMARKS: Array<{ name: string; position: [number, number] }> = [
+  { name: "Tempe Town Lake",    position: [33.4285, -111.9172] },
+  { name: "ASU Main Campus",    position: [33.4242, -111.9281] },
+  { name: "Mill Avenue",        position: [33.4262, -111.9397] },
+  { name: "Tempe Marketplace",  position: [33.3978, -111.9089] },
+];
+
+function landmarkIcon(name: string): L.DivIcon {
+  return L.divIcon({
+    className: "",
+    html: `<div style="
+      background: rgba(13,59,110,0.85);
+      color: white;
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      border: 1px solid rgba(245,166,35,0.6);
+      font-family: 'Lexend', sans-serif;
+    ">${name}</div>`,
+    iconAnchor: [0, 0],
+  });
+}
 
 // ── Permit type classification ────────────────────────────────────────────────
 
@@ -167,7 +198,13 @@ function TileSwitcher({ style }: { style: MapStyle }) {
   const map = useMap();
   useEffect(() => { map.invalidateSize(); }, [style, map]);
   return (
-    <TileLayer key={style} url={TILE_URLS[style]} attribution={TILE_ATTRIBUTION} />
+    <TileLayer
+      key={style}
+      url={TILE_URLS[style]}
+      attribution={TILE_ATTRIBUTION}
+      tileSize={512}
+      zoomOffset={-1}
+    />
   );
 }
 
@@ -453,6 +490,16 @@ export function MapPage({ districtConfig: _districtConfig, onNavigate }: MapPage
             );
           })}
         </Pane>
+
+        {/* Landmark labels */}
+        {LANDMARKS.map(lm => (
+          <Marker
+            key={lm.name}
+            position={lm.position}
+            icon={landmarkIcon(lm.name)}
+            interactive={false}
+          />
+        ))}
       </MapContainer>
 
       {/* ── Slide-in Detail Panel ─────────────────────────────────────────── */}
