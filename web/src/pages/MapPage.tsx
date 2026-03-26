@@ -34,9 +34,9 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
 console.log("[MapPage] Mapbox token present:", !!MAPBOX_TOKEN, "length:", MAPBOX_TOKEN.length);
 
 const TILE_URLS = {
-  dark:      `https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`,
-  light:     `https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`,
-  satellite: `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`,
+  dark:      `https://api.mapbox.com/v4/mapbox.dark/{z}/{x}/{y}@2x.png?access_token=${MAPBOX_TOKEN}`,
+  light:     `https://api.mapbox.com/v4/mapbox.light/{z}/{x}/{y}@2x.png?access_token=${MAPBOX_TOKEN}`,
+  satellite: `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.png?access_token=${MAPBOX_TOKEN}`,
 };
 type MapStyle = keyof typeof TILE_URLS;
 const MAP_STYLE_LABELS: Record<MapStyle, string> = { dark: "Dark", light: "Light", satellite: "Satellite" };
@@ -243,6 +243,16 @@ export function MapPage({ districtConfig: _districtConfig, onNavigate }: MapPage
     building: true, engineering: true, water: true, other: true,
   });
   const [selected, setSelected] = useState<SelectedItem | null>(null);
+
+  // Debug: test Mapbox tile fetch
+  useEffect(() => {
+    const token = import.meta.env.VITE_MAPBOX_TOKEN || "";
+    const testUrl = `https://api.mapbox.com/v4/mapbox.light/13/1714/3143@2x.png?access_token=${token}`;
+    console.log("[MapPage] Test tile URL:", testUrl);
+    fetch(testUrl)
+      .then(r => console.log("[MapPage] Tile response status:", r.status))
+      .catch(e => console.log("[MapPage] Tile fetch error:", e));
+  }, []);
 
   useEffect(() => {
     setLoading(true);
