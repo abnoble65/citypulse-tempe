@@ -36,12 +36,12 @@ type PermitCategory = "building" | "engineering" | "water" | "other";
 
 function classifyPermit(permitType: string): PermitCategory {
   const s = permitType.toLowerCase();
-  if (s.includes("building") || s.includes("residential") || s.includes("commercial"))
-    return "building";
+  if (s.includes("water") || s.includes("sewer") || s.includes("fire") || s.includes("drainage"))
+    return "water";
   if (s.includes("engineering") || s.includes("paving") || s.includes("grading"))
     return "engineering";
-  if (s.includes("water") || s.includes("sewer") || s.includes("fire"))
-    return "water";
+  if (s.includes("building") || s.includes("residential") || s.includes("commercial"))
+    return "building";
   return "other";
 }
 
@@ -55,7 +55,7 @@ const CATEGORY_COLORS: Record<PermitCategory, string> = {
 const CATEGORY_LABELS: Record<PermitCategory, string> = {
   building:    "Building",
   engineering: "Engineering / Paving",
-  water:       "Water / Sewer / Fire",
+  water:       "Water / Sewer / Drainage",
   other:       "Other",
 };
 
