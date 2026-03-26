@@ -19,6 +19,15 @@ import {
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+// Fix Leaflet default icon path (broken by bundlers)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl:       "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl:     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
+
 import { COLORS, FONTS } from "../theme";
 import type { DistrictConfig } from "../districts";
 
@@ -31,15 +40,21 @@ const TEMPE_CENTER: [number, number] = [33.4255, -111.9400];
 const DEFAULT_ZOOM = 14;
 
 const TILE_URLS = {
-  dark:      "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png",
-  light:     "https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png",
-  satellite: "https://tiles.stadiamaps.com/tiles/alidade_satellite/{z}/{x}/{y}{r}.png",
+  dark:      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  light:     "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+  satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  topo:      "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
 };
 type MapStyle = keyof typeof TILE_URLS;
-const MAP_STYLE_LABELS: Record<MapStyle, string> = { dark: "Dark", light: "Light", satellite: "Satellite" };
-const MAP_STYLE_ORDER: MapStyle[] = ["dark", "light", "satellite"];
+const MAP_STYLE_LABELS: Record<MapStyle, string> = { dark: "Dark", light: "Light", satellite: "Satellite", topo: "Topo" };
+const MAP_STYLE_ORDER: MapStyle[] = ["dark", "light", "satellite", "topo"];
 
-const TILE_ATTRIBUTION = '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+const TILE_ATTRIBUTIONS: Record<MapStyle, string> = {
+  dark:      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+  light:     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+  satellite: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; Esri',
+  topo:      '&copy; <a href="https://opentopomap.org/">OpenTopoMap</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+};
 
 /** Cutoff for "recent" permit glow — issued in last 30 days */
 const RECENT_CUTOFF = new Date(Date.now() - 30 * 86_400_000).toISOString().split("T")[0];
@@ -202,7 +217,7 @@ function TileSwitcher({ style }: { style: MapStyle }) {
     <TileLayer
       key={style}
       url={TILE_URLS[style]}
-      attribution={TILE_ATTRIBUTION}
+      attribution={TILE_ATTRIBUTIONS[style]}
     />
   );
 }
