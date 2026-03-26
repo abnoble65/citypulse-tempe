@@ -3,9 +3,8 @@ import { NavBar } from "./components/NavBar";
 import { SplashScreen } from "./components/SplashScreen";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Home } from "./pages/Home";
-import { generateBriefing, generateBriefingFromData, generateTempeBriefing } from "./services/briefing";
+import { generateTempeBriefing } from "./services/briefing";
 import type { DistrictData, TempePermitSummary } from "./services/briefing";
-import { aggregateDistrictData, aggregateCitywideData } from "./services/aggregator";
 import { DEFAULT_DISTRICT, DISTRICTS, CITYWIDE_DISTRICT } from "./districts";
 import type { DistrictConfig } from "./districts";
 import { CityPulseLogo } from "./components/Icons";
@@ -232,7 +231,7 @@ export default function App() {
     return initial;
   });
   const [briefingText, setBriefingText]       = useState("");
-  const [aggregatedData, setAggregatedData]   = useState<DistrictData | null>(null);
+  const [aggregatedData]   = useState<DistrictData | null>(null);
   const [tempeSummary, setTempeSummary]       = useState<TempePermitSummary | null>(null);
   const [districtConfig, setDistrictConfig]   = useState<DistrictConfig>(() => {
     try {

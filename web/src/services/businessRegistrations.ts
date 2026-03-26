@@ -30,8 +30,8 @@ export interface MonthlyActivity {
 // ── Fetch (stubbed for Tempe fork — DataSF removed) ─────────────────────────
 
 export async function fetchBusinessRegistrations(
-  config: CBDConfig,
-  opts: { limit?: number; signal?: AbortSignal } = {},
+  _config?: CBDConfig,
+  _opts?: { limit?: number; signal?: AbortSignal },
 ): Promise<DowntownBusiness[]> {
   return [];
 }

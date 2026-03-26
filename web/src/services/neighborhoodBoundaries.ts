@@ -18,13 +18,13 @@ export type GeoFeature = Feature<GeoJSON.MultiPolygon | GeoJSON.Polygon>;
 // DataSF boundary fetches stubbed for Tempe fork — returns empty results.
 
 export async function fetchDistrictBoundaries(
-  districtConfig: DistrictConfig,
+  _districtConfig?: DistrictConfig,
 ): Promise<Map<string, GeoFeature>> {
   return new Map();
 }
 
 export async function fetchSFSupervisorBoundary(
-  districtNumber: string,
+  _districtNumber?: string,
 ): Promise<GeoFeature | null> {
   return null;
 }

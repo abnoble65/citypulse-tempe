@@ -57,16 +57,16 @@ function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): num
 // ── Fetch (stubbed for Tempe fork — DataSF removed) ─────────────────────────
 
 export async function fetchTransitStops(
-  config: CBDConfig,
-  opts: { signal?: AbortSignal } = {},
+  _config?: CBDConfig,
+  _opts?: { signal?: AbortSignal },
 ): Promise<TransitStop[]> {
   return [];
 }
 
 export async function fetchTransitStopsNear(
-  lat: number,
-  lng: number,
-  opts: { signal?: AbortSignal } = {},
+  _lat?: number,
+  _lng?: number,
+  _opts?: { signal?: AbortSignal },
 ): Promise<TransitStop[]> {
   return [];
 }

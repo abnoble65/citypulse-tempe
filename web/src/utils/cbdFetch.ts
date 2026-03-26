@@ -63,22 +63,22 @@ export interface CBD311Row {
 // ── Fetch functions (stubbed for Tempe fork — DataSF removed) ───────────────
 
 export async function fetch311ForCBD(
-  config: CBDConfig,
-  opts: { days?: number; limit?: number; signal?: AbortSignal } = {},
+  _config?: CBDConfig,
+  _opts?: { days?: number; limit?: number; signal?: AbortSignal },
 ): Promise<CBD311Row[]> {
   return [];
 }
 
 export async function fetchPermitsForCBD(
-  config: CBDConfig,
-  opts: { days?: number; limit?: number; signal?: AbortSignal } = {},
+  _config?: CBDConfig,
+  _opts?: { days?: number; limit?: number; signal?: AbortSignal },
 ): Promise<CBDPermitRow[]> {
   return [];
 }
 
 export async function fetchBusinessesForCBD(
-  config: CBDConfig,
-  opts: { limit?: number; signal?: AbortSignal } = {},
+  _config?: CBDConfig,
+  _opts?: { limit?: number; signal?: AbortSignal },
 ): Promise<CBDBusinessRow[]> {
   return [];
 }

@@ -22,10 +22,10 @@ export interface ParcelInfo {
 
 // DataSF parcel lookups stubbed for Tempe fork — returns null.
 
-export async function lookupByAPN(apn: string): Promise<ParcelInfo | null> {
+export async function lookupByAPN(_apn?: string): Promise<ParcelInfo | null> {
   return null;
 }
 
-export async function lookupByAddress(address: string): Promise<ParcelInfo | null> {
+export async function lookupByAddress(_address?: string): Promise<ParcelInfo | null> {
   return null;
 }

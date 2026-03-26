@@ -41,7 +41,7 @@ export interface BuildingPermit {
   data_as_of?: string;
 }
 
-export async function fetchBuildingPermits(district: string, limit = 5000, signal?: AbortSignal): Promise<BuildingPermit[]> {
+export async function fetchBuildingPermits(_district?: string, _limit?: number, _signal?: AbortSignal): Promise<BuildingPermit[]> {
   return [];
 }
 
@@ -66,7 +66,7 @@ export interface DevelopmentProject {
   sponsor?: string;
 }
 
-export async function fetchDevelopmentPipeline(limit = 500, signal?: AbortSignal): Promise<DevelopmentProject[]> {
+export async function fetchDevelopmentPipeline(_limit?: number, _signal?: AbortSignal): Promise<DevelopmentProject[]> {
   return [];
 }
 
@@ -79,7 +79,7 @@ export interface ZoningDistrict {
   url?: string;
 }
 
-export async function fetchZoningDistricts(limit = 200, signal?: AbortSignal): Promise<ZoningDistrict[]> {
+export async function fetchZoningDistricts(_limit?: number, _signal?: AbortSignal): Promise<ZoningDistrict[]> {
   return [];
 }
 
@@ -139,11 +139,11 @@ export interface AssessmentParcel {
   assessor_neighborhood?: string;
 }
 
-export async function fetchAssessmentStats(district: string, signal?: AbortSignal): Promise<AssessmentAggrRow[]> {
+export async function fetchAssessmentStats(_district?: string, _signal?: AbortSignal): Promise<AssessmentAggrRow[]> {
   return [];
 }
 
-export async function fetchTopAssessedProperties(district: string, signal?: AbortSignal): Promise<AssessmentParcel[]> {
+export async function fetchTopAssessedProperties(_district?: string, _signal?: AbortSignal): Promise<AssessmentParcel[]> {
   return [];
 }
 
@@ -185,7 +185,7 @@ export interface AffordableHousingProject {
   ami_undeclared?: string;
 }
 
-export async function fetchAffordableHousingPipeline(district: string, signal?: AbortSignal): Promise<AffordableHousingProject[]> {
+export async function fetchAffordableHousingPipeline(_district?: string, _signal?: AbortSignal): Promise<AffordableHousingProject[]> {
   return [];
 }
 
@@ -206,7 +206,7 @@ export interface ThreeOneOneRequest {
   neighborhoods_sffind_neighborhoods?: string;
 }
 
-export async function fetch311Requests(district: string, limit = 2000, signal?: AbortSignal): Promise<ThreeOneOneRequest[]> {
+export async function fetch311Requests(_district?: string, _limit?: number, _signal?: AbortSignal): Promise<ThreeOneOneRequest[]> {
   return [];
 }
 
@@ -226,10 +226,10 @@ export interface CBDBoundary {
   annual_report_url?: string;
 }
 
-export async function fetchCBDBoundaries(signal?: AbortSignal): Promise<CBDBoundary[]> {
+export async function fetchCBDBoundaries(_signal?: AbortSignal): Promise<CBDBoundary[]> {
   return [];
 }
 
-export async function fetchEvictions(district: string, limit = 1000, signal?: AbortSignal): Promise<EvictionNotice[]> {
+export async function fetchEvictions(_district?: string, _limit?: number, _signal?: AbortSignal): Promise<EvictionNotice[]> {
   return [];
 }

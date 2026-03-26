@@ -1542,7 +1542,7 @@ export async function generateTempeBriefing(
     `Mixed-use zone permits: ${summary.mixedUseCount}`,
     `High-density residential permits: ${summary.multifamilyCount}`,
     `Sample permits:`,
-    ...permits.slice(0, 10).map(p =>
+    ...permits.slice(0, 10).map((p: any) =>
       `  - ${p.address} | ${p.permitType} | ${p.zone} | $${(p.estimatedCost || 0).toLocaleString()} | ${p.issuedDate ?? "pending"}`
     ),
   ].join("\n");

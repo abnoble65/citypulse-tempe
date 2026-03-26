@@ -192,9 +192,6 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
     );
   }
 
-  const activeNeighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
-  const locationLabel = activeNeighborhood ? activeNeighborhood.name : districtConfig.label;
-
   // Tempe stats from ArcGIS permit data
   const stats = tempeSummary
     ? [
