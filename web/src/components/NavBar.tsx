@@ -68,7 +68,7 @@ function LiveBadge() {
 
 /* ── NavBar ──────────────────────────────────────────────────────────────── */
 
-export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) {
+export function NavBar({ activePage, onNavigate, districtConfig: _districtConfig }: NavBarProps) {
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== "undefined" && window.innerWidth < 640,
   );
@@ -81,7 +81,6 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
   }, []);
 
   const activeGroup = NAV_GROUPS.find(g => g.pages.includes(activePage)) ?? NAV_GROUPS[0];
-  const districtBadge = districtConfig.label;
 
   /* ── Desktop ─────────────────────────────────────────────────────────── */
   if (!isMobile) {
@@ -148,19 +147,10 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
 
         </div>
 
-        {/* District badge + live indicator + language */}
+        {/* Live indicator + language */}
         <div style={{ flexShrink: 0, marginLeft: 12, display: "flex", alignItems: "center", gap: 8 }}>
           <LiveBadge />
           <LanguageSelector />
-          <span style={{
-            background: COLORS.cream, color: COLORS.charcoal,
-            padding: "5px 12px", borderRadius: 20,
-            fontSize: 11, fontWeight: 600, fontFamily: FONTS.body,
-            border: `1px solid ${COLORS.lightBorder}`,
-            letterSpacing: "0.01em", whiteSpace: "nowrap",
-          }}>
-            {districtBadge}
-          </span>
         </div>
       </nav>
     );
@@ -198,15 +188,6 @@ export function NavBar({ activePage, onNavigate, districtConfig }: NavBarProps) 
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <LiveBadge />
             <LanguageSelector />
-            <span style={{
-              background: COLORS.cream, color: COLORS.charcoal,
-              padding: "4px 10px", borderRadius: 20,
-              fontSize: 10, fontWeight: 600, fontFamily: FONTS.body,
-              border: `1px solid ${COLORS.lightBorder}`,
-              whiteSpace: "nowrap",
-            }}>
-              {districtBadge}
-            </span>
           </div>
         </div>
 
