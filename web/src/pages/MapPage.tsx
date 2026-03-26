@@ -1283,8 +1283,8 @@ export function MapPage({ districtConfig, onNavigate }: MapPageProps) {
                           </div>
                         )}
                         <RecordLink
-                          href="https://data.sfgov.org/Housing-and-Buildings/Eviction-Notices/5cei-gny5"
-                          label="View eviction records on DataSF"
+                          href="https://www.tempe.gov/government/community-development"
+                          label="View records on Tempe.gov"
                         />
                       </>
                     );

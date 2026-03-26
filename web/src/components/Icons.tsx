@@ -5,27 +5,15 @@ interface IconProps {
   color?: string;
 }
 
-export function CityPulseLogo({ size = 56, bg = COLORS.orange, fg = COLORS.white }: { size?: number; bg?: string; fg?: string }) {
-  const s = size;
-  const pad = s * 0.15;
-  const inner = s - pad * 2;
+export function CityPulseLogo({ size = 56 }: { size?: number; bg?: string; fg?: string }) {
   return (
-    <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`}>
-      <rect width={s} height={s} rx={s * 0.22} fill={bg} />
-      <g transform={`translate(${pad}, ${pad})`} fill="none" stroke={fg} strokeLinecap="round" strokeLinejoin="round">
-        <g strokeWidth={Math.max(1, s * 0.025)}>
-          <path d={`M${inner*0.12} ${inner*0.62} L${inner*0.17} ${inner*0.15} L${inner*0.22} ${inner*0.62}`} />
-          <path d={`M${inner*0.29} ${inner*0.62} L${inner*0.29} ${inner*0.2} Q${inner*0.35} ${inner*0.08} ${inner*0.41} ${inner*0.2} L${inner*0.41} ${inner*0.62}`} />
-          <path d={`M${inner*0.48} ${inner*0.62} L${inner*0.48} ${inner*0.35} L${inner*0.60} ${inner*0.35} L${inner*0.60} ${inner*0.62}`} />
-          <path d={`M${inner*0.65} ${inner*0.62} L${inner*0.65} ${inner*0.45} L${inner*0.75} ${inner*0.45} L${inner*0.75} ${inner*0.62}`} />
-          <path d={`M${inner*0.80} ${inner*0.62} L${inner*0.80} ${inner*0.32} Q${inner*0.84} ${inner*0.25} ${inner*0.88} ${inner*0.32} L${inner*0.88} ${inner*0.62}`} />
-        </g>
-        <path
-          d={`M0 ${inner*0.78} L${inner*0.2} ${inner*0.78} L${inner*0.28} ${inner*0.68} L${inner*0.36} ${inner*0.88} L${inner*0.44} ${inner*0.72} L${inner*0.50} ${inner*0.78} L${inner} ${inner*0.78}`}
-          strokeWidth={Math.max(1.2, s * 0.03)}
-          opacity="0.85"
-        />
-      </g>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width={size} height={size}>
+      <rect width="32" height="32" rx="7" fill="#0D3B6E"/>
+      <rect x="6" y="7" width="20" height="4" rx="1.5" fill="white"/>
+      <rect x="14" y="11" width="4" height="14" rx="1.5" fill="white"/>
+      <polyline points="6,22 10,22 12,16 16,28 20,18 22,22 26,22"
+        fill="none" stroke="#F5A623" strokeWidth="1.8"
+        strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
 }

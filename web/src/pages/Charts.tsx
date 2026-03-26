@@ -945,7 +945,7 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
               color: COLORS.midGray, fontSize: 14, fontFamily: FONTS.body,
               lineHeight: 1.65, marginBottom: 28,
             }}>
-              The DataSF data source may be temporarily unavailable. Try generating a new briefing.
+              The data source may be temporarily unavailable. Try generating a new briefing.
             </p>
             <button onClick={() => onNavigate("Home")} style={{
               background: COLORS.orange, color: COLORS.white, border: "none",

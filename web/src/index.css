@@ -14,7 +14,7 @@ html, body {
 }
 
 body {
-  background: #1A3A4A;
+  background: #0D3B6E;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -33,12 +33,12 @@ button:active {
 }
 
 input:focus {
-  border-color: #E8611A !important;
-  box-shadow: 0 0 0 3px rgba(232, 97, 26, 0.1);
+  border-color: #1B5FA8 !important;
+  box-shadow: 0 0 0 3px rgba(27, 95, 168, 0.1);
 }
 
 ::selection {
-  background: rgba(232, 97, 26, 0.15);
+  background: rgba(27, 95, 168, 0.15);
 }
 
 /* ── Page fade-in on navigation ─────────────────────────── */

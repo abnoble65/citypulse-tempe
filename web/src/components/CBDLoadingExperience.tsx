@@ -155,7 +155,7 @@ export function CBDLoadingExperience({
           }}>
             {displayCount > 0
               ? `${displayCount.toLocaleString()} requests analyzed`
-              : "Connecting to DataSF\u2026"}
+              : "Connecting to Tempe ArcGIS\u2026"}
           </div>
         </div>
 

@@ -257,7 +257,7 @@ export function Signals({ aggregatedData, districtConfig }: SignalsProps) {
           fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,
           marginBottom: lastUpdated ? 8 : 36,
         }}>
-          Powered by live DataSF permit activity and development pipeline data.
+          Powered by live Tempe ArcGIS permit and development data.
         </p>
         {lastUpdated && (
           <p style={{

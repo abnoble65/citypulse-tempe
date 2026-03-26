@@ -24,7 +24,7 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
       display: "flex", flexDirection: "column", alignItems: "center",
       padding: "80px 24px 60px",
     }}>
-      <div style={{ marginBottom: 40, filter: "drop-shadow(0 6px 24px rgba(232,97,26,0.2))" }}>
+      <div style={{ marginBottom: 40, filter: "drop-shadow(0 6px 24px rgba(13,59,110,0.2))" }}>
         <CityPulseLogo size={72} />
       </div>
 
@@ -52,12 +52,12 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
         onClick={() => onGenerate(DEFAULT_DISTRICT)}
         disabled={loading}
         style={{
-          background: loading ? COLORS.warmGray : "#E8611A",
+          background: loading ? COLORS.warmGray : COLORS.orange,
           color: COLORS.white, border: "none", borderRadius: 32,
           padding: "18px 48px", fontSize: 18, fontWeight: 700,
           cursor: loading ? "not-allowed" : "pointer",
           fontFamily: "'Urbanist', sans-serif",
-          boxShadow: loading ? "none" : "0 6px 28px rgba(232,97,26,0.3)",
+          boxShadow: loading ? "none" : "0 6px 28px rgba(13,59,110,0.3)",
           transition: "transform 0.2s, box-shadow 0.2s, background 0.3s",
           letterSpacing: "0.01em", opacity: loading ? 0.6 : 1,
         }}>

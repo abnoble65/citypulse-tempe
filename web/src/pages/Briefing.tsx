@@ -2,12 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { COLORS, FONTS } from "../theme";
 import { renderMarkdownBlock } from "../components/MarkdownText";
 import { linkifyText } from "../utils/linkifyBriefing";
-import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { generateBriefingFromData, generateBriefingOverview, getCachedBriefingOverview } from "../services/briefing";
 import type { DistrictData, TempePermitSummary } from "../services/briefing";
-import { NeighborhoodHero } from "../components/NeighborhoodHero";
-import { SupervisorAvatar } from "../components/SupervisorAvatar";
 import { supabase } from "../services/supabase";
 import type { DistrictConfig } from "../districts";
 import { useLanguage } from "../contexts/LanguageContext";
@@ -215,14 +212,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
-      <FilterBar districtConfig={districtConfig} selected={filter} onSelect={setFilter} />
-      <NeighborhoodHero districtConfig={districtConfig} selected={filter} aggregatedData={aggregatedData} />
       <div style={{ maxWidth: 820, margin: "0 auto", padding: "clamp(32px, 6vw, 52px) 24px" }}>
-        {districtConfig.number !== "0" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
-            <SupervisorAvatar districtNumber={districtConfig.number} size={60} showName={true} onClick={() => onNavigate("Home")} />
-          </div>
-        )}
         <SectionLabel text="The Briefing" />
         <h2 style={{
           fontFamily: "'Urbanist', sans-serif",
@@ -231,7 +221,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
           lineHeight: 1.12, letterSpacing: "-0.02em",
           marginBottom: 8,
         }}>
-          Tempe urban intelligence, powered by live ArcGIS data.
+          Tempe Intelligence Briefing
 
         </h2>
         <p style={{

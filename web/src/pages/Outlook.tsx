@@ -402,7 +402,7 @@ export function Outlook({ aggregatedData, districtConfig }: OutlookProps) {
           fontFamily: FONTS.body, fontSize: 13, color: COLORS.warmGray,
           marginBottom: lastUpdated ? 8 : 36,
         }}>
-          Powered by live DataSF permit activity and development pipeline data.
+          Powered by live Tempe ArcGIS permit and development data.
         </p>
         {lastUpdated && (
           <p style={{
@@ -649,7 +649,7 @@ export function Outlook({ aggregatedData, districtConfig }: OutlookProps) {
             fontFamily: FONTS.body, fontSize: 12, color: COLORS.warmGray,
             textAlign: "center", paddingBottom: 8,
           }}>
-            {formatLastUpdated(lastUpdated)} · Data from DataSF
+            {formatLastUpdated(lastUpdated)} · Data from Tempe ArcGIS
           </p>
         )}
       </div>

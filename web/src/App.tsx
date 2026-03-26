@@ -61,7 +61,7 @@ function ChunkLoadingBar() {
 }
 
 const LOADING_MESSAGES = [
-  "Connecting to DataSF…",
+  "Connecting to Tempe ArcGIS…",
   "Pulling live permit data…",
   "Analyzing development pipeline…",
   "Generating AI briefing…",
@@ -114,7 +114,7 @@ function LoadingOverlay({ loading, onCancel }: { loading: boolean; onCancel?: ()
         {slow ? "Taking longer than expected…" : LOADING_MESSAGES[msgIndex]}
       </p>
       <p style={{ fontFamily: "'Lexend',sans-serif", fontSize: 13, color: "#B0A89E", marginTop: 10 }}>
-        {slow ? "DataSF may be slow right now" : "This may take a few seconds"}
+        {slow ? "The data source may be slow right now" : "This may take a few seconds"}
       </p>
       <div style={{ width: "min(240px,80vw)", height: 4, background: "#EDE8E3", borderRadius: 2, marginTop: 24, overflow: "hidden" }}>
         <div style={{

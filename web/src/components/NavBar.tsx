@@ -76,7 +76,7 @@ const GROUP_ICONS: Record<string, (props: { size?: number }) => React.ReactEleme
 function LiveBadge() {
   return (
     <span
-      title="CityPulse pulls live data from DataSF, SF Planning, and other city sources"
+      title="CityPulse pulls live data from Tempe ArcGIS and other city sources"
       style={{
         display: "inline-flex", alignItems: "center", gap: 4,
         fontSize: 9, fontWeight: 700, fontFamily: FONTS.body,
