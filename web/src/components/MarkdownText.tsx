@@ -64,10 +64,10 @@ function normalizeMarkdown(text: string): string {
 const SECTION_HEADING_STYLE: React.CSSProperties = {
   fontFamily: "'Urbanist', sans-serif",
   fontSize: 16, fontWeight: 800,
-  color: "#1a1a2e",
+  color: COLORS.charcoal,
   marginTop: 20, marginBottom: 8,
   paddingBottom: 6,
-  borderBottom: "2px solid rgba(232,101,45,0.18)",
+  borderBottom: "2px solid rgba(27,95,168,0.18)",
   letterSpacing: "-0.01em",
 };
 

@@ -22,10 +22,10 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
       minHeight: "100vh",
       background: COLORS.cream,
       display: "flex", flexDirection: "column", alignItems: "center",
-      padding: "80px 24px 60px",
+      padding: "48px 24px 60px",
     }}>
-      <div style={{ marginBottom: 40, filter: "drop-shadow(0 6px 24px rgba(13,59,110,0.2))" }}>
-        <CityPulseLogo size={72} />
+      <div style={{ marginBottom: 28, filter: "drop-shadow(0 6px 24px rgba(13,59,110,0.2))" }}>
+        <CityPulseLogo size={64} />
       </div>
 
       <h1 style={{
@@ -43,7 +43,7 @@ export function Home({ onGenerate, loading, error }: HomeProps) {
       <p style={{
         color: COLORS.midGray, fontSize: 17,
         textAlign: "center", maxWidth: 440,
-        lineHeight: 1.6, marginBottom: 48, fontFamily: FONTS.body,
+        lineHeight: 1.6, marginBottom: 32, fontFamily: FONTS.body,
       }}>
         Live permit, planning, and development intelligence for Tempe, AZ.
       </p>
