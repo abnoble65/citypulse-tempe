@@ -3,8 +3,8 @@ import { NavBar } from "./components/NavBar";
 import { SplashScreen } from "./components/SplashScreen";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Home } from "./pages/Home";
-import { generateBriefing, generateBriefingFromData } from "./services/briefing";
-import type { DistrictData } from "./services/briefing";
+import { generateBriefing, generateBriefingFromData, generateTempeBriefing } from "./services/briefing";
+import type { DistrictData, TempePermitSummary } from "./services/briefing";
 import { aggregateDistrictData, aggregateCitywideData } from "./services/aggregator";
 import { DEFAULT_DISTRICT, DISTRICTS, CITYWIDE_DISTRICT } from "./districts";
 import type { DistrictConfig } from "./districts";
@@ -233,6 +233,7 @@ export default function App() {
   });
   const [briefingText, setBriefingText]       = useState("");
   const [aggregatedData, setAggregatedData]   = useState<DistrictData | null>(null);
+  const [tempeSummary, setTempeSummary]       = useState<TempePermitSummary | null>(null);
   const [districtConfig, setDistrictConfig]   = useState<DistrictConfig>(() => {
     try {
       const saved = localStorage.getItem("citypulse_district");
@@ -302,21 +303,11 @@ export default function App() {
     const controller = new AbortController();
     abortRef.current = controller;
     setLoading(true);
-    const load = districtConfig.number === "0"
-      ? aggregateCitywideData(controller.signal)
-      : aggregateDistrictData(districtConfig, controller.signal);
-    load
-      .then(async data => {
+    generateTempeBriefing(language)
+      .then(({ text, summary }) => {
         if (controller.signal.aborted) return;
-        setAggregatedData(data);
-        if (!briefingText) {
-          try {
-            const text = await generateBriefingFromData(data, districtConfig, undefined, language);
-            if (!controller.signal.aborted) setBriefingText(text);
-          } catch (err) {
-            console.warn("[app] auto-briefing generation failed:", err);
-          }
-        }
+        setBriefingText(text);
+        setTempeSummary(summary);
       })
       .catch(err => {
         if (err?.name === "AbortError") return;
@@ -343,10 +334,10 @@ export default function App() {
     history.pushState(null, "", pathFromPage("Briefing"));
     setPage("Briefing");
     try {
-      const { text, data } = await generateBriefing(district, language);
+      const { text, summary } = await generateTempeBriefing(language);
       if (controller.signal.aborted) return;
       setBriefingText(text);
-      setAggregatedData(data);
+      setTempeSummary(summary);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "An unexpected error occurred.");
@@ -361,11 +352,11 @@ export default function App() {
   const renderPage = () => {
     switch (page) {
       case "Home":
-        return <Home onNavigate={navigate} onGenerate={handleGenerate} loading={loading} error={error} aggregatedData={aggregatedData} />;
+        return <Home onNavigate={navigate} onGenerate={handleGenerate} loading={loading} error={error} />;
       case "MorningGlance":
         return <MorningGlance aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={navigate} />;
       case "Briefing":
-        return <Briefing briefingText={briefingText} aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={navigate} />;
+        return <Briefing briefingText={briefingText} aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={navigate} tempeSummary={tempeSummary} />;
       case "Charts":
         return <Charts aggregatedData={aggregatedData} districtConfig={districtConfig} onNavigate={navigate} />;
       case "Signals":
@@ -387,7 +378,7 @@ export default function App() {
       case "CBDIndex":
         return <CBDIndex />;
       default:
-        return <Home onNavigate={navigate} onGenerate={handleGenerate} loading={loading} error={error} aggregatedData={aggregatedData} />;
+        return <Home onNavigate={navigate} onGenerate={handleGenerate} loading={loading} error={error} />;
     }
   };
 

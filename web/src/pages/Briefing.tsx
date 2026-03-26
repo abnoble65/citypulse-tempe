@@ -5,7 +5,7 @@ import { linkifyText } from "../utils/linkifyBriefing";
 import { FilterBar } from "../components/FilterBar";
 import { SectionLabel } from "../components/SectionLabel";
 import { generateBriefingFromData, generateBriefingOverview, getCachedBriefingOverview } from "../services/briefing";
-import type { DistrictData } from "../services/briefing";
+import type { DistrictData, TempePermitSummary } from "../services/briefing";
 import { NeighborhoodHero } from "../components/NeighborhoodHero";
 import { SupervisorAvatar } from "../components/SupervisorAvatar";
 import { supabase } from "../services/supabase";
@@ -29,6 +29,7 @@ interface BriefingProps {
   aggregatedData: DistrictData | null;
   districtConfig: DistrictConfig;
   onNavigate: (page: string) => void;
+  tempeSummary?: TempePermitSummary | null;
 }
 
 function formatOverviewTimestamp(iso: string | null): string | null {
@@ -44,7 +45,7 @@ function formatOverviewTimestamp(iso: string | null): string | null {
     : `Updated ${d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
 }
 
-export function Briefing({ briefingText, aggregatedData, districtConfig, onNavigate }: BriefingProps) {
+export function Briefing({ briefingText, aggregatedData, districtConfig, onNavigate, tempeSummary }: BriefingProps) {
   const { language } = useLanguage();
   const [filter, setFilter]             = useState(districtConfig.allLabel);
   const [localText, setLocalText]       = useState(briefingText);
@@ -171,7 +172,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
     );
   }
 
-  if (!aggregatedData) {
+  if (!aggregatedData && !tempeSummary) {
     return (
       <div style={{ background: COLORS.cream, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ textAlign: "center", padding: "48px 32px", maxWidth: 380 }}>
@@ -197,17 +198,20 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
   const activeNeighborhood = districtConfig.neighborhoods.find(n => n.name === filter);
   const locationLabel = activeNeighborhood ? activeNeighborhood.name : districtConfig.label;
 
-  // Use zip-scoped permit stats when a neighborhood is selected.
-  const ps = activeNeighborhood
-    ? (aggregatedData.permit_summary.by_zip?.[activeNeighborhood.zip] ?? aggregatedData.permit_summary)
-    : aggregatedData.permit_summary;
-  const pip = aggregatedData.pipeline_summary;
-
-  const stats = [
-    { num: ps.total.toLocaleString(),                                         label: "Active Permits",   bg: COLORS.orangePale },
-    { num: `$${(ps.total_estimated_cost_usd / 1_000_000).toFixed(1)}M`,      label: "Est. Total Value", bg: COLORS.softAmber  },
-    { num: pip.net_pipeline_units.toLocaleString(),                           label: "Pipeline Units",   bg: COLORS.softGreen  },
-  ];
+  // Tempe stats from ArcGIS permit data
+  const stats = tempeSummary
+    ? [
+        { num: tempeSummary.totalPermits.toLocaleString(),                                  label: "Permits (90 days)", bg: COLORS.orangePale },
+        { num: `$${(tempeSummary.totalEstimatedValue / 1_000_000).toFixed(1)}M`,            label: "Est. Total Value",  bg: COLORS.softAmber  },
+        { num: tempeSummary.mixedUseCount.toLocaleString(),                                 label: "Mixed-Use",         bg: COLORS.softGreen  },
+      ]
+    : aggregatedData
+      ? [
+          { num: aggregatedData.permit_summary.total.toLocaleString(),                                         label: "Active Permits",   bg: COLORS.orangePale },
+          { num: `$${(aggregatedData.permit_summary.total_estimated_cost_usd / 1_000_000).toFixed(1)}M`,      label: "Est. Total Value", bg: COLORS.softAmber  },
+          { num: aggregatedData.pipeline_summary.net_pipeline_units.toLocaleString(),                           label: "Pipeline Units",   bg: COLORS.softGreen  },
+        ]
+      : [];
 
   return (
     <div style={{ background: COLORS.cream, minHeight: "100vh" }}>
@@ -227,7 +231,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
           lineHeight: 1.12, letterSpacing: "-0.02em",
           marginBottom: 8,
         }}>
-          {locationLabel} urban intelligence, powered by live DataSF data.
+          Tempe urban intelligence, powered by live ArcGIS data.
 
         </h2>
         <p style={{
@@ -311,7 +315,7 @@ export function Briefing({ briefingText, aggregatedData, districtConfig, onNavig
                       <span style={{
                         fontFamily: "'Urbanist', sans-serif", fontSize: 18,
                         fontWeight: 800, color: "#1a1a2e", letterSpacing: "-0.01em",
-                      }}>District Overview</span>
+                      }}>Tempe Overview</span>
                     </div>
                     <div style={{
                       fontFamily: FONTS.body, fontSize: 15.5,

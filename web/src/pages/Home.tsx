@@ -1,54 +1,30 @@
-import { useState, lazy, Suspense } from "react";
 import { COLORS, FONTS } from "../theme";
 import { CityPulseLogo } from "../components/Icons";
-import { SupervisorAvatar } from "../components/SupervisorAvatar";
-import { SupervisorProfileCard } from "../components/SupervisorProfileCard";
-import { getProfile } from "../data/supervisorProfiles";
-import { DISTRICTS, DEFAULT_DISTRICT, CITYWIDE_DISTRICT } from "../districts";
+import { DEFAULT_DISTRICT } from "../districts";
 import type { DistrictConfig } from "../districts";
-import type { DistrictData } from "../services/aggregator";
-
-const SFDistrictMapLazy = lazy(() =>
-  import("../components/SFDistrictMap").then(m => ({ default: m.SFDistrictMap }))
-);
 
 interface HomeProps {
   onNavigate: (page: string) => void;
   onGenerate: (district: DistrictConfig) => void;
   loading:    boolean;
   error:      string | null;
-  aggregatedData?: DistrictData | null;
 }
 
-/** Current SF Board of Supervisors (2025) */
-const SUPERVISORS: Record<string, string> = {
-  "1":  "Connie Chan",
-  "2":  "Stephen Sherrill",
-  "3":  "Danny Sauter",
-  "4":  "Alan Wong",
-  "5":  "Bilal Mahmood",
-  "6":  "Matt Dorsey",
-  "7":  "Myrna Melgar",
-  "8":  "Rafael Mandelman",
-  "9":  "Jackie Fielder",
-  "10": "Shamann Walton",
-  "11": "Chyanne Chen",
-};
+const SUGGESTION_CHIPS = [
+  "What's being built near Tempe Town Lake?",
+  "Show recent multifamily permits",
+  "Where is development accelerating?",
+];
 
-const DISTRICT_LIST = Object.values(DISTRICTS);
-
-export function Home({ onGenerate, loading, error, aggregatedData }: HomeProps) {
-  const [selectedDistrict, setSelectedDistrict] = useState<DistrictConfig>(DEFAULT_DISTRICT);
-  const [hoveredDistrict,  setHoveredDistrict]  = useState<string | null>(null);
-
+export function Home({ onGenerate, loading, error }: HomeProps) {
   return (
     <div style={{
       minHeight: "100vh",
       background: COLORS.cream,
       display: "flex", flexDirection: "column", alignItems: "center",
-      padding: "60px 24px",
+      padding: "80px 24px 60px",
     }}>
-      <div style={{ marginBottom: 40, filter: "drop-shadow(0 6px 24px rgba(212,100,59,0.2))" }}>
+      <div style={{ marginBottom: 40, filter: "drop-shadow(0 6px 24px rgba(232,97,26,0.2))" }}>
         <CityPulseLogo size={72} />
       </div>
 
@@ -67,233 +43,25 @@ export function Home({ onGenerate, loading, error, aggregatedData }: HomeProps) 
       <p style={{
         color: COLORS.midGray, fontSize: 17,
         textAlign: "center", maxWidth: 440,
-        lineHeight: 1.6, marginBottom: 44, fontFamily: FONTS.body,
+        lineHeight: 1.6, marginBottom: 48, fontFamily: FONTS.body,
       }}>
         Live permit, planning, and development intelligence for Tempe, AZ.
       </p>
 
-      {/* SF District reference map — circular */}
-      <div className="cp-district-map-circle">
-        <Suspense fallback={<div style={{ width: "100%", height: "100%", background: COLORS.cream, borderRadius: "50%" }} />}>
-          <SFDistrictMapLazy
-            selectedDistrict={selectedDistrict.number}
-            onSelectDistrict={num => {
-              if (num === "0") {
-                setSelectedDistrict(CITYWIDE_DISTRICT);
-              } else {
-                setSelectedDistrict(DISTRICTS[num] ?? DEFAULT_DISTRICT);
-              }
-            }}
-            disabled={loading}
-          />
-        </Suspense>
-      </div>
-
-      {/* District selector */}
-      <div style={{ width: "100%", maxWidth: 860, marginBottom: 36 }}>
-        <p style={{
-          fontFamily: FONTS.body, fontSize: 12, fontWeight: 700,
-          color: COLORS.warmGray, textTransform: "uppercase",
-          letterSpacing: "0.06em", marginBottom: 14, textAlign: "center",
-        }}>
-          Select a Supervisor District
-        </p>
-
-        {/* Row 1: Citywide hero card — full width, above the grid */}
-        {(() => {
-          const isSelected = selectedDistrict.number === "0";
-          const isHovered  = hoveredDistrict === "0";
-          return (
-            <button
-              onClick={() => setSelectedDistrict(CITYWIDE_DISTRICT)}
-              onMouseEnter={() => setHoveredDistrict("0")}
-              onMouseLeave={() => setHoveredDistrict(null)}
-              disabled={loading}
-              style={{
-                width: "100%",
-                minHeight: 160,
-                position: "relative",
-                background: isSelected
-                  ? "linear-gradient(135deg, #FBEADE 0%, #F6D9C2 100%)"
-                  : isHovered
-                  ? "#F5F0EB"
-                  : "#FAF7F3",
-                border: `1px solid ${isSelected ? COLORS.orange : isHovered ? "#D9CFC8" : "#EDE8E3"}`,
-                borderRadius: 20,
-                padding: "28px 32px",
-                cursor: loading ? "not-allowed" : "pointer",
-                textAlign: "left",
-                display: "flex", alignItems: "center", gap: 26,
-                transition: "all 0.15s ease",
-                boxShadow: isSelected
-                  ? "0 8px 32px rgba(212,100,59,0.22)"
-                  : isHovered
-                  ? "0 4px 14px rgba(0,0,0,0.07)"
-                  : "0 1px 4px rgba(0,0,0,0.04)",
-                transform: isHovered && !isSelected ? "translateY(-2px)" : "none",
-                opacity: loading ? 0.6 : 1,
-                marginBottom: 8,
-              }}
-            >
-              {isSelected && (
-                <div style={{
-                  position: "absolute", top: 14, right: 16,
-                  fontFamily: FONTS.body, fontSize: 11, fontWeight: 700,
-                  color: COLORS.white, background: COLORS.orange,
-                  borderRadius: 10, padding: "4px 12px",
-                  letterSpacing: "0.04em",
-                }}>✓ Selected</div>
-              )}
-
-              {/* Fastcast logo — left side, mix-blend-mode:multiply removes white bg */}
-              <img
-                src="/images/fastcast-logo.jpg"
-                alt="Fastcast"
-                style={{
-                  width: 48, height: 48, borderRadius: 8,
-                  objectFit: "contain",
-                  flexShrink: 0, display: "block",
-                  mixBlendMode: "multiply",
-                }}
-              />
-
-              <div style={{ flex: 1 }}>
-                <div style={{
-                  fontFamily: FONTS.body, fontSize: 10, fontWeight: 800,
-                  color: COLORS.orange, letterSpacing: "0.12em",
-                  textTransform: "uppercase", marginBottom: 6,
-                }}>
-                  Start here
-                </div>
-                <div style={{
-                  fontFamily: "'Urbanist', sans-serif",
-                  fontSize: 32, fontWeight: 800,
-                  color: isSelected ? COLORS.orange : COLORS.charcoal,
-                  letterSpacing: "-0.025em", lineHeight: 1.05, marginBottom: 7,
-                }}>
-                  SF Citywide
-                </div>
-                <div style={{
-                  fontFamily: FONTS.body, fontSize: 14,
-                  color: isSelected ? COLORS.orange : "#8A7E76",
-                  lineHeight: 1.45, marginBottom: 14,
-                }}>
-                  All 11 Supervisor Districts · Complete city intelligence
-                </div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {["Permits", "Pipeline", "Planning", "Evictions", "Assessments"].map(tag => (
-                    <span key={tag} style={{
-                      fontFamily: FONTS.body, fontSize: 10, fontWeight: 600,
-                      color: isSelected ? COLORS.orange : "#7A6E68",
-                      background: "rgba(212,100,59,0.10)",
-                      borderRadius: 6, padding: "3px 9px",
-                    }}>{tag}</span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Mayor portrait — right side */}
-              <img
-                src="/images/mayor-lurie-stylized.png"
-                alt="Mayor Daniel Lurie"
-                style={{
-                  width: 88, height: 88, borderRadius: "50%",
-                  objectFit: "cover", objectPosition: "center top",
-                  flexShrink: 0, display: "block",
-                  border: `1.5px solid ${COLORS.lightBorder}`,
-                  boxShadow: "0 2px 8px rgba(61,56,50,0.12)",
-                }}
-              />
-            </button>
-          );
-        })()}
-
-        {/* Row 2+: District grid — 3 fixed cols desktop, 2 cols mobile */}
-        <div className="cp-district-grid">
-          {DISTRICT_LIST.map(d => {
-            const isSelected = selectedDistrict.number === d.number;
-            const isHovered  = hoveredDistrict === d.number;
-            const supervisor = SUPERVISORS[d.number] ?? "";
-            return (
-              <button
-                key={d.number}
-                onClick={() => setSelectedDistrict(d)}
-                onMouseEnter={() => setHoveredDistrict(d.number)}
-                onMouseLeave={() => setHoveredDistrict(null)}
-                disabled={loading}
-                style={{
-                  background: isSelected ? COLORS.orangePale : COLORS.white,
-                  border: `1.5px solid ${isSelected ? COLORS.orange : COLORS.lightBorder}`,
-                  borderRadius: 14,
-                  padding: "12px 16px",
-                  cursor: loading ? "not-allowed" : "pointer",
-                  textAlign: "left",
-                  transition: "all 0.15s ease",
-                  boxShadow: isSelected
-                    ? "0 4px 16px rgba(212,100,59,0.12)"
-                    : isHovered
-                    ? "0 4px 14px rgba(0,0,0,0.08)"
-                    : "0 1px 4px rgba(0,0,0,0.04)",
-                  transform: isHovered && !isSelected ? "translateY(-2px)" : "none",
-                  opacity: loading ? 0.6 : 1,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div>
-                    <div style={{
-                      fontFamily: "'Urbanist',sans-serif",
-                      fontSize: 24, fontWeight: 800,
-                      color: isSelected ? COLORS.orange : COLORS.charcoal,
-                      lineHeight: 1, marginBottom: 4,
-                      letterSpacing: "-0.02em",
-                    }}>{d.number}</div>
-                    <div style={{
-                      fontFamily: FONTS.body, fontSize: 11,
-                      color: isSelected ? COLORS.charcoal : COLORS.warmGray,
-                      fontWeight: 500, lineHeight: 1.3,
-                    }}>
-                      {d.label}
-                      {supervisor && (
-                        <span style={{ color: isSelected ? COLORS.orange : COLORS.warmGray }}>
-                          {" · "}Sup. {supervisor}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <SupervisorAvatar districtNumber={d.number} size={52} />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Supervisor profile card */}
-      {selectedDistrict.number !== "0" && (
-        <div style={{ marginTop: 28, marginBottom: 28, maxWidth: 520, width: "100%" }}>
-          <SupervisorProfileCard
-            profile={getProfile(selectedDistrict.number)}
-            districtConfig={selectedDistrict}
-            aggregatedData={aggregatedData}
-            defaultExpanded={false}
-          />
-        </div>
-      )}
-
       <button
-        onClick={() => onGenerate(selectedDistrict)}
+        onClick={() => onGenerate(DEFAULT_DISTRICT)}
         disabled={loading}
         style={{
-          background: loading ? COLORS.warmGray : COLORS.orange,
+          background: loading ? COLORS.warmGray : "#E8611A",
           color: COLORS.white, border: "none", borderRadius: 32,
-          padding: "16px 40px", fontSize: 16, fontWeight: 700,
+          padding: "18px 48px", fontSize: 18, fontWeight: 700,
           cursor: loading ? "not-allowed" : "pointer",
-          fontFamily: FONTS.heading,
-          boxShadow: loading ? "none" : "0 4px 20px rgba(212,100,59,0.25)",
+          fontFamily: "'Urbanist', sans-serif",
+          boxShadow: loading ? "none" : "0 6px 28px rgba(232,97,26,0.3)",
           transition: "transform 0.2s, box-shadow 0.2s, background 0.3s",
           letterSpacing: "0.01em", opacity: loading ? 0.6 : 1,
         }}>
-        {loading ? "Generating…" : `Generate ${selectedDistrict.label} Briefing →`}
+        {loading ? "Generating…" : "Generate Tempe Briefing →"}
       </button>
 
       {error && (
@@ -305,6 +73,32 @@ export function Home({ onGenerate, loading, error, aggregatedData }: HomeProps) 
           {error}
         </div>
       )}
+
+      <div style={{
+        display: "flex", flexWrap: "wrap", gap: 10,
+        justifyContent: "center", marginTop: 36, maxWidth: 520,
+      }}>
+        {SUGGESTION_CHIPS.map(chip => (
+          <button
+            key={chip}
+            onClick={() => onGenerate(DEFAULT_DISTRICT)}
+            disabled={loading}
+            style={{
+              background: COLORS.white,
+              border: `1px solid ${COLORS.lightBorder}`,
+              borderRadius: 20, padding: "10px 18px",
+              fontSize: 13, fontWeight: 500,
+              color: COLORS.charcoal,
+              cursor: loading ? "not-allowed" : "pointer",
+              fontFamily: FONTS.body,
+              transition: "all 0.15s ease",
+              opacity: loading ? 0.5 : 1,
+            }}
+          >
+            {chip}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

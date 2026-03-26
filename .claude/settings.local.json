@@ -7,7 +7,10 @@
       "Bash(vercel:*)",
       "WebFetch(domain:www.streetlightdata.com)",
       "Bash(npx tsc:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(node -e \"require\\(''./src/services/tempeApi.js''\\)\")",
+      "Bash(node --input-type=module -e \"import\\(''./src/services/tempeApi.js''\\).then\\(m => console.log\\(''OK — exports:'', Object.keys\\(m\\).join\\('', ''\\)\\)\\)\")",
+      "Bash(node --input-type=module -e \":*)"
     ]
   }
 }

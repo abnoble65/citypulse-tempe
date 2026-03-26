@@ -1447,3 +1447,129 @@ Each paragraph should be 2–3 sentences max. Write for a busy reader scanning o
     return { overview: ctx, generatedAt: null };
   }
 }
+
+// ── Tempe ArcGIS-backed briefing ────────────────────────────────────────────
+
+// @ts-ignore — JS module, types handled via JSDoc in tempeApi.js
+import { fetchRecentPermits } from './tempeApi.js';
+
+/** Summary stats derived from Tempe permit data, used by Briefing page stat cards. */
+export interface TempePermitSummary {
+  totalPermits: number;
+  totalEstimatedValue: number;
+  topPermitTypes: Array<{ type: string; count: number }>;
+  topZones: Array<{ zone: string; count: number }>;
+  mixedUseCount: number;
+  multifamilyCount: number;
+}
+
+function summarizeTempePermits(permits: any[]): TempePermitSummary {
+  const typeCounts: Record<string, number> = {};
+  const zoneCounts: Record<string, number> = {};
+  let totalEstimatedValue = 0;
+  let mixedUseCount = 0;
+  let multifamilyCount = 0;
+
+  for (const p of permits) {
+    const type = p.permitType || "Unknown";
+    typeCounts[type] = (typeCounts[type] ?? 0) + 1;
+
+    const zone = p.zone || "Unknown";
+    zoneCounts[zone] = (zoneCounts[zone] ?? 0) + 1;
+
+    totalEstimatedValue += p.estimatedCost || 0;
+
+    const zoneLower = zone.toLowerCase();
+    if (zoneLower.startsWith("mu-")) mixedUseCount++;
+    if (zoneLower.startsWith("r-3") || zoneLower.startsWith("r-4") || zoneLower.startsWith("r-5")) multifamilyCount++;
+  }
+
+  const topPermitTypes = Object.entries(typeCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .map(([type, count]) => ({ type, count }));
+
+  const topZones = Object.entries(zoneCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .map(([zone, count]) => ({ zone, count }));
+
+  return { totalPermits: permits.length, totalEstimatedValue, topPermitTypes, topZones, mixedUseCount, multifamilyCount };
+}
+
+const TEMPE_BRIEFING_SYSTEM = `You are CityPulse, an urban intelligence analyst for Tempe, Arizona. Your audience is city staff, council members, and civic leaders. Produce a professional briefing in exactly four sections with these headings: THE BRIEFING, THE SIGNAL, THE ZONING CONTEXT, THE OUTLOOK. Total length 450-600 words. Write in confident prose, no bullet points. Use specific numbers from the data.
+
+Within THE BRIEFING section, use ## sub-headers:
+- ## Permit Activity
+- ## Zoning & Development
+- ## Mixed-Use & Multifamily
+Only include sections where data exists. Each section should be 2-3 sentences.
+
+Never mention San Francisco, supervisors, districts, evictions, or any SF-specific concepts. This is Tempe, AZ data only.${ANTI_HALLUCINATION_RULES}`;
+
+let _tempeBriefingCache: string | null = null;
+let _tempeSummaryCache: TempePermitSummary | null = null;
+
+/**
+ * Generate a Tempe briefing from live ArcGIS permit data.
+ * Returns both the AI-generated text and the permit summary for stat cards.
+ */
+export async function generateTempeBriefing(
+  lang: AppLanguage = "en",
+): Promise<{ text: string; summary: TempePermitSummary }> {
+  if (_tempeBriefingCache && _tempeSummaryCache) {
+    return { text: _tempeBriefingCache, summary: _tempeSummaryCache };
+  }
+
+  const t0 = performance.now();
+  const permits = await fetchRecentPermits(90);
+  console.log(`[tempe-briefing] fetched ${permits.length} permits in ${(performance.now() - t0).toFixed(0)}ms`);
+
+  const summary = summarizeTempePermits(permits);
+  _tempeSummaryCache = summary;
+
+  if (permits.length === 0) {
+    const fallback = "## Tempe — Data Snapshot\n\n*No recent permit data available. Check back later or verify the ArcGIS endpoint.*";
+    _tempeBriefingCache = fallback;
+    return { text: fallback, summary };
+  }
+
+  const dataBlock = [
+    `Total permits (last 90 days): ${summary.totalPermits}`,
+    `Total estimated project value: $${(summary.totalEstimatedValue / 1_000_000).toFixed(1)}M`,
+    `Top permit types: ${summary.topPermitTypes.map(t => `${t.type} (${t.count})`).join(", ")}`,
+    `Most active zones: ${summary.topZones.map(z => `${z.zone} (${z.count})`).join(", ")}`,
+    `Mixed-use zone permits: ${summary.mixedUseCount}`,
+    `High-density residential permits: ${summary.multifamilyCount}`,
+    `Sample permits:`,
+    ...permits.slice(0, 10).map(p =>
+      `  - ${p.address} | ${p.permitType} | ${p.zone} | $${(p.estimatedCost || 0).toLocaleString()} | ${p.issuedDate ?? "pending"}`
+    ),
+  ].join("\n");
+
+  try {
+    const message = await callAI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2000,
+      system: TEMPE_BRIEFING_SYSTEM + getLanguageInstruction(lang),
+      messages: [{ role: 'user', content: dataBlock }],
+    });
+    console.log(`[tempe-briefing] AI generation: ${(performance.now() - t0).toFixed(0)}ms total`);
+
+    const block = message.content[0];
+    if (block.type !== 'text') throw new Error(`Unexpected response type: ${block.type}`);
+    _tempeBriefingCache = block.text;
+    return { text: block.text, summary };
+  } catch (err) {
+    console.warn('[tempe-briefing] AI unavailable, returning data-only fallback:', err);
+    const fallback = `## Tempe — Data Snapshot\n\n*AI-generated narrative is temporarily unavailable. Here is a summary of the live data:*\n\n**Permits (last 90 days):** ${summary.totalPermits}\n**Estimated total value:** $${(summary.totalEstimatedValue / 1_000_000).toFixed(1)}M\n**Top permit types:** ${summary.topPermitTypes.map(t => `${t.type} (${t.count})`).join(", ")}\n**Most active zones:** ${summary.topZones.map(z => `${z.zone} (${z.count})`).join(", ")}`;
+    _tempeBriefingCache = fallback;
+    return { text: fallback, summary };
+  }
+}
+
+/** Clear the Tempe briefing cache (e.g. on manual refresh). */
+export function clearTempeBriefingCache(): void {
+  _tempeBriefingCache = null;
+  _tempeSummaryCache = null;
+}
