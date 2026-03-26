@@ -30,19 +30,16 @@ import { fetchRecentPermits, fetchZoningDistricts } from "../services/tempeApi.j
 const TEMPE_CENTER: [number, number] = [33.4255, -111.9400];
 const DEFAULT_ZOOM = 13;
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
-console.log("[MapPage] Mapbox token present:", !!MAPBOX_TOKEN, "length:", MAPBOX_TOKEN.length);
-
 const TILE_URLS = {
-  dark:      `https://api.mapbox.com/v4/mapbox.dark/{z}/{x}/{y}@2x.png?access_token=${MAPBOX_TOKEN}`,
-  light:     `https://api.mapbox.com/v4/mapbox.light/{z}/{x}/{y}@2x.png?access_token=${MAPBOX_TOKEN}`,
-  satellite: `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.png?access_token=${MAPBOX_TOKEN}`,
+  dark:      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  light:     "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+  satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
 };
 type MapStyle = keyof typeof TILE_URLS;
 const MAP_STYLE_LABELS: Record<MapStyle, string> = { dark: "Dark", light: "Light", satellite: "Satellite" };
 const MAP_STYLE_ORDER: MapStyle[] = ["dark", "light", "satellite"];
 
-const TILE_ATTRIBUTION = '&copy; <a href="https://www.mapbox.com/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>';
 
 // ── Tempe landmark labels ─────────────────────────────────────────────────────
 
@@ -203,8 +200,6 @@ function TileSwitcher({ style }: { style: MapStyle }) {
       key={style}
       url={TILE_URLS[style]}
       attribution={TILE_ATTRIBUTION}
-      tileSize={512}
-      zoomOffset={-1}
     />
   );
 }
@@ -238,21 +233,11 @@ export function MapPage({ districtConfig: _districtConfig, onNavigate }: MapPage
   const [zones, setZones]     = useState<TempeZone[]>([]);
   const [loading, setLoading] = useState(true);
   const [showZoning, setShowZoning] = useState(false);
-  const [mapStyle, setMapStyle] = useState<MapStyle>("light");
+  const [mapStyle, setMapStyle] = useState<MapStyle>("dark");
   const [activeFilters, setActiveFilters] = useState<Record<PermitCategory, boolean>>({
     building: true, engineering: true, water: true, other: true,
   });
   const [selected, setSelected] = useState<SelectedItem | null>(null);
-
-  // Debug: test Mapbox tile fetch
-  useEffect(() => {
-    const token = import.meta.env.VITE_MAPBOX_TOKEN || "";
-    const testUrl = `https://api.mapbox.com/v4/mapbox.light/13/1714/3143@2x.png?access_token=${token}`;
-    console.log("[MapPage] Test tile URL:", testUrl);
-    fetch(testUrl)
-      .then(r => console.log("[MapPage] Tile response status:", r.status))
-      .catch(e => console.log("[MapPage] Tile fetch error:", e));
-  }, []);
 
   useEffect(() => {
     setLoading(true);
