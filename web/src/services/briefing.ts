@@ -395,7 +395,7 @@ export async function generateGovHeadlines(
       max_tokens: 256,
       messages: [{
         role: 'user',
-        content: `For each of the following San Francisco government actions, write one plain-language headline a resident would understand (max 80 chars each). Return as a JSON array of strings only.\n\n${JSON.stringify(items.map(i => i.title))}`,
+        content: `For each of the following Tempe government actions, write one plain-language headline a resident would understand (max 80 chars each). Return as a JSON array of strings only.\n\n${JSON.stringify(items.map(i => i.title))}`,
       }],
     });
 
@@ -591,8 +591,8 @@ export function getCachedConcerns(
 function briefingSystemPrompt(district: DistrictConfig): string {
   const sup = getSupervisorName(district.number);
   const locale = district.number === '0'
-    ? 'all of San Francisco'
-    : `San Francisco ${district.label}${sup ? ` (Supervisor ${sup})` : ''}`;
+    ? 'all of Tempe'
+    : `Tempe ${district.label}${sup ? ` (${sup})` : ''}`;
   return `You are CityPulse, an urban intelligence analyst specializing in ${locale}. Your role is to synthesize permit activity, development pipeline data, and zoning context into clear, narrative-driven briefings for urban planners, developers, and municipal clients. Always produce exactly four sections with these exact headings: THE BRIEFING, THE SIGNAL, THE ZONING CONTEXT, THE OUTLOOK. Total length 450-600 words. Write in confident prose, no bullet points. Use specific numbers from the data.
 
 Within THE BRIEFING section, structure your analysis with clear ## section headers. Use ## for each sub-section. Suggested sections:
@@ -607,16 +607,16 @@ Only include sections where data exists. Each section should be 2-3 sentences.${
 function signalsSystemPrompt(district: DistrictConfig): string {
   const sup = getSupervisorName(district.number);
   const locale = district.number === '0'
-    ? 'all of San Francisco'
-    : `San Francisco ${district.label}${sup ? ` (Supervisor ${sup})` : ''}`;
+    ? 'all of Tempe'
+    : `Tempe ${district.label}${sup ? ` (${sup})` : ''}`;
   return `You are an urban planning analyst for ${locale}. Analyze permit and development data and identify key signals and trends. Always return valid JSON only — no markdown, no prose, no code fences.${ANTI_HALLUCINATION_RULES}`;
 }
 
 function outlookSystemPrompt(district: DistrictConfig): string {
   const sup = getSupervisorName(district.number);
   const locale = district.number === '0'
-    ? 'all of San Francisco'
-    : `San Francisco ${district.label}${sup ? ` (Supervisor ${sup})` : ''}`;
+    ? 'all of Tempe'
+    : `Tempe ${district.label}${sup ? ` (${sup})` : ''}`;
   return `You are an urban planning analyst for ${locale}. Analyze permit and development data and produce a forward-looking outlook. Always return valid JSON only — no markdown, no prose, no code fences.${ANTI_HALLUCINATION_RULES}`;
 }
 
@@ -1040,7 +1040,7 @@ ${shadowProjects.map(p => `- ${p.address}: ${p.shadow_details ?? p.project_descr
 
   const isCitywide = district.number === '0' && !focus;
   const citywideOutlookTask = isCitywide
-    ? `TASK: Generate a forward-looking outlook for all of San Francisco based on the data above. Identify the biggest risks and opportunities across all districts. Highlight where multiple districts face similar challenges. Flag the displacement trifecta (rising assessed values + elevated evictions + low affordable ratio) wherever it appears across districts.`
+    ? `TASK: Generate a forward-looking outlook for all of Tempe based on the data above. Identify the biggest risks and opportunities across all districts. Highlight where multiple districts face similar challenges. Flag the displacement trifecta (rising assessed values + elevated evictions + low affordable ratio) wherever it appears across districts.`
     : null;
 
   const promptData = isCitywide
@@ -1149,8 +1149,8 @@ IMPORTANT: ${shadowTotal > 0 ? `Include one risk about shadow impact (☀️ ico
 function concernsSystemPrompt(district: DistrictConfig): string {
   const sup = getSupervisorName(district.number);
   const locale = district.number === '0'
-    ? 'all of San Francisco'
-    : `San Francisco ${district.label}${sup ? ` (Supervisor ${sup})` : ''}`;
+    ? 'all of Tempe'
+    : `Tempe ${district.label}${sup ? ` (${sup})` : ''}`;
   return `You are an urban planning analyst for ${locale}. Analyze permit and development data and identify key public concerns for residents. Always return valid JSON only — no markdown, no prose, no code fences.${ANTI_HALLUCINATION_RULES}`;
 }
 

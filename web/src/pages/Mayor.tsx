@@ -388,7 +388,7 @@ export function Mayor({ districtConfig }: MayorProps) {
             color: COLORS.orange, textTransform: "uppercase",
             letterSpacing: "0.08em", marginBottom: 8,
           }}>
-            Mayor of San Francisco
+            Mayor of Tempe
           </div>
           <h1 style={{
             fontFamily: "'Urbanist', sans-serif",

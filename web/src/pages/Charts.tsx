@@ -1183,7 +1183,7 @@ export function Charts({ aggregatedData, districtConfig, onNavigate }: ChartsPro
 
         {/* Row 2b: District comparison (citywide mode only) */}
         {isCitywide && !selectedZip && (
-          <ChartCard title="Permits by District — All San Francisco" style={{ marginBottom: 24 }}>
+          <ChartCard title="Permits by District — All Tempe" style={{ marginBottom: 24 }}>
             <DistrictComparisonChart ps={aggregatedData.permit_summary} byDistrict={aggregatedData.by_district} />
           </ChartCard>
         )}

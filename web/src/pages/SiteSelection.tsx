@@ -413,7 +413,7 @@ function SiteNotesPanel({
     lat: site.lat,
     lng: site.lng,
     parcel_apn: site.blklot,
-    district: "District 3",
+    district: "Tempe",
     active_layers: ["parcels", "permits"],
   };
 
@@ -533,7 +533,7 @@ export function SiteSelection(_props: SiteSelectionProps) {
       const projectsFetch = supabase
         .from("projects")
         .select("address,district,lat,lng,parcel_apn,block,lot,zoning,action,shadow_flag")
-        .ilike("district", "%District 3%")
+        .ilike("district", "%Tempe%")
         .not("lat", "is", null)
         .not("lng", "is", null);
 
@@ -684,7 +684,7 @@ export function SiteSelection(_props: SiteSelectionProps) {
         max_tokens: 200,
         messages: [{
           role: "user",
-          content: `You are a commercial real estate analyst for San Francisco District 3. Provide a brief site assessment (3-4 sentences) for this parcel:
+          content: `You are a commercial real estate analyst for Tempe, AZ. Provide a brief site assessment (3-4 sentences) for this parcel:
 
 Address: ${site.address}
 APN: ${site.blklot}
@@ -813,7 +813,7 @@ Focus on development potential, zoning implications, and any risks. Be concise a
           }}>
             {searchedOnce
               ? "No sites match your criteria. Try broadening your search."
-              : 'Click "Find Sites" to search District 3 for matching parcels.'}
+              : 'Click "Find Sites" to search Tempe for matching parcels.'}
           </div>
         )}
 

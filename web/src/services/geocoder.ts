@@ -25,7 +25,7 @@ function saveCache(cache: Record<string, LatLng>): void {
 async function geocodeOne(address: string): Promise<LatLng | null> {
   try {
     const params = new URLSearchParams({
-      SingleLine: `${address}, San Francisco, CA`,
+      SingleLine: `${address}, Tempe, AZ`,
       f: 'json',
       maxLocations: '1',
       outFields: '',

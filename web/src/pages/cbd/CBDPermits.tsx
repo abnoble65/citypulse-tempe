@@ -178,7 +178,7 @@ export function CBDPermits() {
       .sort(([, a], [, b]) => b - a)
       .map(([t, n]) => `${t}: ${n}`).join(", ");
 
-    const prompt = `You are a development analyst for the ${config.name} Community Benefit District in San Francisco. Summarize the 3-5 most notable permit filings by cost and significance. Be specific with addresses and dollar amounts. Write 2-3 concise paragraphs.
+    const prompt = `You are a development analyst for the ${config.name} business district in Tempe, AZ. Summarize the 3-5 most notable permit filings by cost and significance. Be specific with addresses and dollar amounts. Write 2-3 concise paragraphs.
 
 DATA (last 12 months within ${config.name}):
 - Total permits: ${permits.length}

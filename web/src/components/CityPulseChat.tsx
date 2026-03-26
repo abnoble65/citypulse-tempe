@@ -15,10 +15,10 @@ const SESSION_KEY = "citypulse_chat_history";
 const MAX_HISTORY = 30; // messages kept in sessionStorage
 
 const STARTER_QUESTIONS = [
-  "Are evictions rising in the Mission?",
-  "What's being built near Dolores Park?",
-  "How does District 3 compare to District 6?",
-  "What did the Board of Supervisors vote on recently?",
+  "What's being built near Mill Avenue?",
+  "What are the latest permit trends in Tempe?",
+  "What developments are planned near Tempe Town Lake?",
+  "What did the Tempe City Council vote on recently?",
 ];
 
 // ── sessionStorage helpers ─────────────────────────────────────────────────────

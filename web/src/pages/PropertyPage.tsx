@@ -173,7 +173,7 @@ async function fetchBusinessesAtAddress(address: string, signal?: AbortSignal): 
   if (!streetNum || !streetName) return [];
   // Match street number at start + street name substring for precision
   const params = new URLSearchParams({
-    $where: `starts_with(full_business_address, '${streetNum} ') AND upper(full_business_address) LIKE '%${streetName.replace(/'/g, "''")}%' AND dba_end_date IS NULL AND city='San Francisco'`,
+    $where: `starts_with(full_business_address, '${streetNum} ') AND upper(full_business_address) LIKE '%${streetName.replace(/'/g, "''")}%' AND dba_end_date IS NULL AND city='Tempe'`,
     $select: "dba_name,naic_code_description,dba_start_date,full_business_address",
     $order: "dba_start_date DESC",
     $limit: "30",
@@ -241,7 +241,7 @@ export function PropertyPage({ apn }: { apn: string }) {
         max_tokens: 100,
         messages: [{
           role: "user",
-          content: `You are a real estate analyst. In ONE sentence, summarize the redevelopment potential of this San Francisco property:
+          content: `You are a real estate analyst. In ONE sentence, summarize the redevelopment potential of this Tempe, AZ property:
 Address: ${b.address} | Use: ${b.use} | Zoning: ${b.zoning} | Built: ${b.yearBuilt} | Stories: ${b.stories}
 Assessed value: ${fmtCurrency(b.assessedValue)} | Active permits: ${p.length} | 311 complaints (90d): ${totalComplaints} | Active businesses: ${biz.length} | Transit score: ${transit ? computeTransitScore(b.lat, b.lng, stops).score : 0}/100
 Be specific and factual. No hedge words.`,

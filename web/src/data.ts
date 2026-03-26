@@ -7,7 +7,7 @@ export interface Neighborhood {
 }
 
 export const NEIGHBORHOODS: Neighborhood[] = [
-  { name: "All District 3", zip: null, Icon: DistrictIcon },
+  { name: "All Tempe", zip: null, Icon: DistrictIcon },
   { name: "North Beach", zip: "94133", Icon: CoitTowerIcon },
   { name: "Financial District", zip: "94111", Icon: TransamericaIcon },
   { name: "Chinatown", zip: "94108", Icon: ChinatownGateIcon },

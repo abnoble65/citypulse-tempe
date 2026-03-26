@@ -144,7 +144,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
             textShadow: "0 1px 10px rgba(0,0,0,0.5)",
           }}
         >
-          Urban Intelligence · San Francisco
+          Urban Intelligence · Tempe
         </p>
 
         {/* Pulse heartbeat line */}

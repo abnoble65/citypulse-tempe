@@ -29,9 +29,9 @@ export function useLanguage(): LanguageContextValue {
 /** Language instruction appended to every AI prompt when language !== "en". */
 export function getLanguageInstruction(lang: AppLanguage): string {
   if (lang === "zh")
-    return "\n\nWrite your entire response in Traditional Chinese (繁體中文), appropriate for Cantonese-speaking San Francisco residents. Use clear, accessible language.";
+    return "\n\nWrite your entire response in Traditional Chinese (繁體中文). Use clear, accessible language.";
   if (lang === "es")
-    return "\n\nWrite your entire response in Spanish (Español), appropriate for San Francisco's Latino community. Use clear, accessible language.";
+    return "\n\nWrite your entire response in Spanish (Español), appropriate for Tempe's Latino community. Use clear, accessible language.";
   return "";
 }
 

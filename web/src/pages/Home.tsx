@@ -61,7 +61,7 @@ export function Home({ onGenerate, loading, error, aggregatedData }: HomeProps) 
       }}>
         CityPulse
         <br />
-        <span style={{ color: COLORS.orange }}>San Francisco</span>
+        <span style={{ color: COLORS.orange }}>Tempe</span>
       </h1>
 
       <p style={{
@@ -69,7 +69,7 @@ export function Home({ onGenerate, loading, error, aggregatedData }: HomeProps) 
         textAlign: "center", maxWidth: 440,
         lineHeight: 1.6, marginBottom: 44, fontFamily: FONTS.body,
       }}>
-        Live permit, planning, and development intelligence across all 11 SF Supervisor Districts.
+        Live permit, planning, and development intelligence for Tempe, AZ.
       </p>
 
       {/* SF District reference map — circular */}

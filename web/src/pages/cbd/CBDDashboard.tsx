@@ -559,7 +559,7 @@ export function CBDDashboard({ onNavigate }: CBDDashboardProps) {
     }
     const insightBlock = insightLines.length > 0 ? `\n\nSPATIAL CORRELATION INSIGHTS:\n${insightLines.join("\n")}` : "";
 
-    const prompt = `You are an operations analyst for the ${config.name} Community Benefit District in San Francisco. Write a concise 3-paragraph operational briefing for the executive director and board members.
+    const prompt = `You are an operations analyst for the ${config.name} business district in Tempe, AZ. Write a concise 3-paragraph operational briefing for the executive director and board members.
 
 DATA (last 90 days within CBD boundary):
 - Active building permits: ${stats.permits.length}

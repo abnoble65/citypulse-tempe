@@ -14,7 +14,7 @@ html, body {
 }
 
 body {
-  background: #FAF8F5;
+  background: #F5F2EE;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -33,12 +33,12 @@ button:active {
 }
 
 input:focus {
-  border-color: #D4643B !important;
-  box-shadow: 0 0 0 3px rgba(212, 100, 59, 0.1);
+  border-color: #E8611A !important;
+  box-shadow: 0 0 0 3px rgba(232, 97, 26, 0.1);
 }
 
 ::selection {
-  background: rgba(212, 100, 59, 0.15);
+  background: rgba(232, 97, 26, 0.15);
 }
 
 /* ── Page fade-in on navigation ─────────────────────────── */
@@ -107,7 +107,7 @@ input:focus {
 
 /* District map: cream background so water/gaps blend with page */
 .cp-district-map-circle .leaflet-container {
-  background: #FAF8F5;
+  background: #F5F2EE;
 }
 
 /* Neighborhood boundary polygons (Leaflet SVG paths) */
@@ -138,7 +138,7 @@ input:focus {
   border: 1px solid rgba(0,0,0,0.07);
   box-shadow: 0 4px 20px rgba(0,0,0,0.07);
   flex-shrink: 0;
-  background: #FAF8F5;
+  background: #F5F2EE;
 }
 
 @media (max-width: 767px) {

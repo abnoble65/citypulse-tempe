@@ -130,7 +130,7 @@ export function CBDIndex() {
             fontFamily: FONTS.body, fontSize: 15, color: COLORS.warmGray,
             maxWidth: 480, margin: "0 auto", lineHeight: 1.6,
           }}>
-            Real-time civic intelligence for San Francisco's Community Benefit Districts
+            Real-time civic intelligence for Tempe's business districts
           </p>
         </div>
 

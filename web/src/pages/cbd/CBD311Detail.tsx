@@ -158,7 +158,7 @@ export function CBD311Detail() {
       }
     }
 
-    const prompt = `You are a 311 data analyst for the ${config.name} CBD in San Francisco. Provide a concise 2-paragraph response time analysis. Focus on categories with slow resolution and specific addresses that are outliers. Be data-driven with specific numbers.
+    const prompt = `You are a 311 data analyst for the ${config.name} district in Tempe, AZ. Provide a concise 2-paragraph response time analysis. Focus on categories with slow resolution and specific addresses that are outliers. Be data-driven with specific numbers.
 
 DATA:
 - Total requests: ${rawRows.length} (last 6 months)

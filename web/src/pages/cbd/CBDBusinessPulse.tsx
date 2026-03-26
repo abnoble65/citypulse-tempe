@@ -220,7 +220,7 @@ export function CBDBusinessPulse() {
       ? "all business categories"
       : `the **${insightFilter}** category specifically`;
 
-    const prompt = `You are a commercial analyst for the ${config.name} Community Benefit District in San Francisco. Analyze business registration data for ${categoryScope}. Write 2-3 paragraphs highlighting trends, activity clusters, and areas of concern.
+    const prompt = `You are a commercial analyst for the ${config.name} business district in Tempe, AZ. Analyze business registration data for ${categoryScope}. Write 2-3 paragraphs highlighting trends, activity clusters, and areas of concern.
 
 DATA:
 - Active businesses (${insightFilter}): ${subset.length}

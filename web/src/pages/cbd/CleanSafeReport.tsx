@@ -347,7 +347,7 @@ export function CleanSafeReport() {
       .map(([cat, days]) => `${cat}: ${(days.reduce((s, d) => s + d, 0) / days.length).toFixed(1)} days avg`)
       .join(", ");
 
-    const prompt = `You are an operations analyst for the ${config.name} Community Benefit District in San Francisco. Analyze the 311 service request data. Identify patterns, hotspots, resolution performance, and trends. Provide 3 specific actionable recommendations with addresses. Be concise and data-driven.
+    const prompt = `You are an operations analyst for the ${config.name} business district in Tempe, AZ. Analyze the 311 service request data. Identify patterns, hotspots, resolution performance, and trends. Provide 3 specific actionable recommendations with addresses. Be concise and data-driven.
 
 DATA (last 12 months within ${config.name} CBD boundary):
 - Total 311 requests: ${rows311.length}
